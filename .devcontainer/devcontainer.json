@@ -1,0 +1,45 @@
+{
+  "name": "Rust Development",
+  "image": "rust",
+  "customizations": {
+    "vscode": {
+      "settings": {},
+      "extensions": [
+		"rust-lang.rust-analyzer",
+		"rogalmic.bash-debug",
+		"serayuzgur.crates",
+		"esbenp.prettier-vscode",
+		"shakram02.bash-beautify",
+		"vadimcn.vscode-lldb"
+	]
+    }
+  },
+  "features": {
+    "ghcr.io/devcontainers-contrib/features/zsh-plugins:0": {
+		"plugins": "ssh-agent npm",
+		"omzPlugins": "https://github.com/zsh-users/zsh-autosuggestions",
+		"username": "vscode"
+	},
+    "ghcr.io/devcontainers/features/azure-cli:1": {
+		"installBicep": true,
+		"version": "latest"
+	},
+    "ghcr.io/devcontainers/features/python:1": {
+		"installTools": true,
+		"version": "latest"
+	},
+    "ghcr.io/lukewiwa/features/shellcheck:0": {
+		"version": "stable"
+	},
+    "ghcr.io/devcontainers/features/github-cli:1": {
+		"installDirectlyFromGitHubRelease": true,
+		"version": "latest"
+	},
+	"ghcr.io/eitsupi/devcontainer-features/jq-likes:1": {
+		"jqVersion": "os-provided",
+		"yqVersion": "latest",
+		"gojqVersion": "latest"
+	}
+  },
+  "postCreateCommand": ". ./.devcontainer/devsecrets.sh setup"
+}
