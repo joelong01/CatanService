@@ -4,22 +4,21 @@
 //
 //  rust wants modules in the same directory declared.
 mod cosmos_db;
+mod games_service;
 mod shared;
 mod user_service;
-mod games_service;
-
-
 
 // dependencies...
 use actix_cors::Cors;
-use actix_web::{web::{self}, App, HttpServer};
-use cosmos_db::cosmosdb::get_cosmos_secrets;
-use games_service::games;
-use log::{trace};
-use once_cell::sync::OnceCell;
-use user_service::users;
-use std::env;
+use actix_web::{web, App, HttpServer};
 
+use games_service::{catanws, games};
+use log::trace;
+use once_cell::sync::OnceCell;
+use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
+use shared::models::CatanSecrets;
+use std::env;
+use user_service::users;
 
 /**
  *  Code to pick a port in a threadsafe way -- either specified in an environment variable named COSMOS_RUST_SAMPLE_PORT
@@ -64,17 +63,20 @@ async fn main() -> std::io::Result<()> {
     env::set_var("RUST_LOG", "actix_web=trace,actix_server=trace,rust=trace");
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
-
     let port: String = safe_set_port!();
-    // this looks up env variables and puts them into a rust structt - if they aren't set, we error out
-    let secrets = get_cosmos_secrets();
-    match secrets {
-        Ok(secrets) => trace!("Secrets found.  Account: {:?}", secrets.account),
-        Err(error) => panic!("Failed to get secrets: {}\n\
+    // this looks up env variables and puts them into a rust structt - if they aren't set, we panic
+    let secrets = match CatanSecrets::load_from_env() {
+        Ok(s) => {
+            trace!("Secrets found.  Account: {:?}", s.cosmos_account);
+            s
+        },
+        Err(error) => panic!(
+            "Failed to get secrets: {}\n\
                               If you are running in a dev container for the \
-                              first time, you need to restart VS Code.", error),
-    }
-    
+                              first time, you need to restart VS Code.",
+            error
+        ),
+    };
 
     // normally you would set the RUST_LOG environment variable in the process that this app is running in, and then
     // you'd have this code that checks for it and errors out if it doesn't exist.  this value is set above, so it will
@@ -86,25 +88,34 @@ async fn main() -> std::io::Result<()> {
     }
 
     //
+    //  SSL support
+    let mut builder = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
+    builder
+        .set_private_key_file(secrets.ssl_key_location, SslFiletype::PEM)
+        .unwrap();
+    builder
+        .set_certificate_chain_file(secrets.ssl_cert_location)
+        .unwrap();
+
+    //
     // set up the HttpServer
 
     HttpServer::new(|| {
-        App::new()
-            .wrap(Cors::permissive())
-            .service(
-                web::scope("/api").service(
-                    web::scope("/v1")
-                        .route("/users", web::get().to(users::list_users))
-                        .route("/users", web::post().to(users::create))
-                        .route("/users/{id}", web::delete().to(users::delete))
-                        .route("/users/{id}", web::get().to(users::find_user_by_id))
-                        .route("/setup", web::post().to(users::setup))
-                        .route("/games/{game_type}", web::post().to(games::new_game))
-                        .route("/games", web::get().to(games::supported_games))
-                ),
-            )
+        App::new().wrap(Cors::permissive()).service(
+            web::scope("/api").service(
+                web::scope("/v1")
+                    .route("/users", web::get().to(users::list_users))
+                    .route("/users", web::post().to(users::create))
+                    .route("/users/{id}", web::delete().to(users::delete))
+                    .route("/users/{id}", web::get().to(users::find_user_by_id))
+                    .route("/setup", web::post().to(users::setup))
+                    .route("/games/{game_type}", web::post().to(games::new_game))
+                    .route("/games", web::get().to(games::supported_games))
+                    .route("/ws", web::get().to(catanws::ws_index)),
+            ),
+        )
     })
-    .bind(format!("0.0.0.0:{}", port))?
+    .bind_openssl(format!("0.0.0.0:{}", port), builder)?
     .run()
     .await
 }

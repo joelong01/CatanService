@@ -5,6 +5,8 @@ use azure_core::StatusCode;
  */
 use azure_data_cosmos::CosmosEntity;
 use serde::{Deserialize, Serialize};
+use std::env;
+use anyhow::{Context, Result};
 
 
 /**
@@ -83,10 +85,29 @@ pub struct ServiceResponse {
  *  holds them so that they are more convinient to use
  */
 #[derive(Debug, Serialize, Deserialize)]
-pub struct CosmosSecrets {
-    pub token: String,
-    pub account: String,
+pub struct CatanSecrets {
+    pub cosmos_token: String,
+    pub cosmos_account: String,
+    pub ssl_key_location: String,
+    pub ssl_cert_location: String
 }
+
+impl CatanSecrets {
+    pub fn load_from_env() -> Result<Self> {
+        let cosmos_token = env::var("COSMOS_AUTH_TOKEN").context("COSMOS_AUTH_TOKEN not found in environment")?;
+        let cosmos_account = env::var("COSMOS_ACCOUNT_NAME").context("COSMOS_ACCOUNT_NAME not found in environment")?;
+        let ssl_key_location = env::var("SSL_KEY_FILE").context("SSL_KEY_FILE not found in environment")?;
+        let ssl_cert_location = env::var("SSL_CERT_FILE").context("SSL_CERT_FILE not found in environment")?;
+
+        Ok(Self {
+            cosmos_token,
+            cosmos_account,
+            ssl_key_location,
+            ssl_cert_location,
+        })
+    }
+}
+
 
 /**
  *  Information about a game - expect this to grow as we write code

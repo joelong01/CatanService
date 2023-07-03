@@ -3,11 +3,9 @@
  */
 
 use crate::log_return_err;
-use crate::shared::models::{CosmosSecrets, User};
-use anyhow::Result;
+use crate::shared::models::{CatanSecrets, User};
 use azure_core::error::{ErrorKind, Result as AzureResult};
 use log::error;
-
 use azure_data_cosmos::prelude::{
     AuthorizationToken, CollectionClient, CosmosClient, DatabaseClient, Query, QueryCrossPartition,
 };
@@ -42,18 +40,6 @@ fn public_client(account: &str, token: &str) -> CosmosClient {
     CosmosClient::new(account, auth_token)
 }
 
-/**
- *  load the secrets from environment variables and store them in a CosmosSecrets struct
- */
-pub fn get_cosmos_secrets() -> Result<CosmosSecrets, Box<dyn std::error::Error>> {
-    let token = std::env::var("COSMOS_AUTH_TOKEN")
-        .map_err(|_| "Set env variable COSMOS_AUTH_TOKEN first!")?;
-
-    let account = std::env::var("COSMOS_ACCOUNT_NAME")
-        .map_err(|_| "Set env variable COSMOS_ACCOUNT_NAME first!")?;
-
-    Ok(CosmosSecrets { token, account })
-}
 
 /**
  *  this is the scruct that contains methods to manipulate cosmosdb.  the idea is to be able to write code like
@@ -66,9 +52,9 @@ pub fn get_cosmos_secrets() -> Result<CosmosSecrets, Box<dyn std::error::Error>>
 
 impl UserDb {
     pub async fn new(database_name: &str, collection_name: &str) -> Self {
-        match get_cosmos_secrets() {
+        match CatanSecrets::load_from_env() {
             Ok(secrets) => {
-                let client = public_client(secrets.account.as_str(), secrets.token.as_str());
+                let client = public_client(secrets.cosmos_account.as_str(), secrets.cosmos_token.as_str());
                 let database = client.database_client(database_name.to_string());
                 let collection = database.collection_client(collection_name.to_string());
                 Self {
@@ -253,9 +239,9 @@ mod tests {
         env_logger::init();
         let _ = env_logger::builder().is_test(true).try_init();
         // load secrets
-        let secrets = get_cosmos_secrets();
+        let secrets = CatanSecrets::load_from_env();
         match secrets {
-            Ok(secrets) => trace!("Secrets found.  Account: {:?}", secrets.account),
+            Ok(secrets) => trace!("Secrets found.  Account: {:?}", secrets.cosmos_account),
             Err(error) => panic!("Failed to get secrets: {}", error),
         }
         let db_name = "user-test-db";

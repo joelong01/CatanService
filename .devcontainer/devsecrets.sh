@@ -33,7 +33,7 @@ function get_real_path() {
         realpath "$file"
         return 0
     fi
-    
+
     file=".devcontainer/$file"
     if [[ -f $file ]]; then
         realpath "$file"
@@ -45,10 +45,11 @@ function get_real_path() {
 
 # a this is a config file in json format where we use jq to find/store settings
 REQUIRED_REPO_SECRETS=$(get_real_path "required-secrets.json")
-
 LOCAL_SECRETS_SET_FILE="$HOME/.localIndividualDevSecrets.sh"
-
 USE_GITHUB_USER_SECRETS=$(jq -r '.options.useGitHubUserSecrets' "$REQUIRED_REPO_SECRETS" 2>/dev/null)
+SSL_KEY_FILE="$HOME/catan_ssl_key.pem"
+SSL_CERT_FILE="$HOME/catan_ssl_cert.pem"
+
 
 # collect_secrets function
 #
@@ -69,7 +70,7 @@ function collect_secrets() {
     local length     # the length of the json array
     json_array=$1
     length=$(echo "$json_array" | jq '. | length')
-    
+
     # Iterate through the array
     for ((i = 0; i < length; i++)); do
         # Extract JSON properties
@@ -79,7 +80,7 @@ function collect_secrets() {
         environmentVariable=$(echo "$json_array" | jq -r ".[$i].environmentVariable")
         description=$(echo "$json_array" | jq -r ".[$i].description")
         shellscript=$(echo "$json_array" | jq -r ".[$i].shellscript")
-        
+
         # check to make sure that if shellscript is set that the file exists
         if [[ -n "$shellscript" && ! -f "$shellscript" ]]; then
             echo_error "ERROR: $shellscript specified in $REQUIRED_REPO_SECRETS does not exist."
@@ -90,13 +91,13 @@ function collect_secrets() {
         # Check if the environment variable is set in the local secrets file
         local secret_entry
         secret_entry=$(grep "^$environmentVariable=" "$LOCAL_SECRETS_SET_FILE" 2>/dev/null |
-        sed 's/^.*=\(.*\)$/\1/; s/\\\([^"]\|$\)/\1/g; s/^"\(.*\)"$/\1/' 2>/dev/null)
-        
+            sed 's/^.*=\(.*\)$/\1/; s/\\\([^"]\|$\)/\1/g; s/^"\(.*\)"$/\1/' 2>/dev/null)
+
         if [[ -n "$secret_entry" ]]; then
             # Get the value from the secret_entry
             local value
             value=$(echo "$secret_entry" | cut -d'=' -f2)
-            
+
             # Set the environment variable with the key and value from the file
             export "$environmentVariable=$value"
         else
@@ -108,7 +109,7 @@ function collect_secrets() {
                 # If shellscript is empty, prompt the user for the value using the description
                 echo -n "Enter $description: "
                 read -r value
-                
+
                 # Set the environment variable to the value entered
                 export "$environmentVariable=$value"
             fi
@@ -123,7 +124,7 @@ function collect_secrets() {
 function build_save_secrets_script() {
     # found a bug in the VS Code shell beautify where making this a string that gets appended to
     # breaks the formatting. this form does not.
-       cat <<EOF >"$LOCAL_SECRETS_SET_FILE"
+    cat <<EOF >"$LOCAL_SECRETS_SET_FILE"
 #!/bin/bash
 # if we are running in codespaces, we don't load the local environment
 if [[ \$CODESPACES == true ]]; then
@@ -162,7 +163,7 @@ EOF
 # which in current GitHub, resets the secret to be valid in only the specified repos
 # assumes that every secret has an environment variable set with the correct value
 function save_in_codespaces() {
-    
+
     local repos               # the repos the secret is available in
     local url                 # the url to get the secret's repos
     local environmentVariable # the name of the secret
@@ -171,43 +172,43 @@ function save_in_codespaces() {
     local current_repo        # the repo of the current project
     local json_array          # renamed $1: a json array of secrets (environmentVariable, description, and shellscript)
     local length              # the length of the json array
-    
+
     json_array=$1
     length=$(echo "$json_array" | jq '. | length')
     current_repo=$(git config --get remote.origin.url | sed -e 's|^https://github.com/||' | sed -e 's|.git$||')
-    
+
     gh_pat=$(gh auth token)
     length=$(echo "$json_array" | jq '. | length')
     for ((i = 0; i < length; i++)); do
         environmentVariable=$(echo "$json_array" | jq -r ".[$i].environmentVariable")
-        eval "val=\"\$${environmentVariable}\""  # eval can be used in both bash and zsh to perform indirect reference
+        eval "val=\"\$${environmentVariable}\"" # eval can be used in both bash and zsh to perform indirect reference
         url="https://api.github.com/user/codespaces/secrets/$environmentVariable/repositories"
-        
+
         # this curl syntax will allow us to get the resonse and the response code
         response=$(curl -s -w "%{http_code}" -H "Authorization: Bearer $gh_pat" "$url")
         response_code=${response: -3}
         response=${response:0:${#response}-3}
-        
+
         # if the secret is not set, we'll get a 404 back.  then the repo is just the current repo
         case $response_code in
-            "404")
-                repos="$current_repo"
+        "404")
+            repos="$current_repo"
             ;;
-            "200")
-                # a 2xx indicates that the user secret already exists.  get the repos that the secret is valid in.
-                repos=$(echo "$response" | jq '.repositories[].full_name' | paste -sd ",")
-                # Check if current_repo already exists in repos, and if not then add it
-                # if you don't do this, the gh secret set api will give an error
-                if [[ $repos != *"$current_repo"* ]]; then
-                    repos+=",\"$current_repo\""
-                fi
+        "200")
+            # a 2xx indicates that the user secret already exists.  get the repos that the secret is valid in.
+            repos=$(echo "$response" | jq '.repositories[].full_name' | paste -sd ",")
+            # Check if current_repo already exists in repos, and if not then add it
+            # if you don't do this, the gh secret set api will give an error
+            if [[ $repos != *"$current_repo"* ]]; then
+                repos+=",\"$current_repo\""
+            fi
             ;;
-            *)
-                echo_error "unknown error calling $url"
-                echo_error "Secret=$environmentVariable value=$val in repos=$repos"
+        *)
+            echo_error "unknown error calling $url"
+            echo_error "Secret=$environmentVariable value=$val in repos=$repos"
             ;;
         esac
-        
+
         # set the secret -- we always do this as the value might have changed...we can't check the value
         # using the current GH api.
         gh secret set "$environmentVariable" --user --app codespaces --repos "$repos" --body "$val"
@@ -220,12 +221,12 @@ function save_in_codespaces() {
 #   2. reconstruct and overwrite the $LOCAL_SECRETS_SET_FILE
 #   3. source the $LOCAL_SECRETS_SET_FILE
 function update_secrets {
-    
+
     # check the last modified date of the env file file and if it is gt the last modified time of the config file
     # we have no work to do
     local local_file_modified
     local required_file_modified
-    
+
     if [[ -f "$LOCAL_SECRETS_SET_FILE" ]]; then
         if [[ $(uname) == "Darwin" ]]; then
             local_file_modified=$(stat -f "%m" "$LOCAL_SECRETS_SET_FILE")
@@ -238,8 +239,7 @@ function update_secrets {
         local_file_modified=0
         required_file_modified=$(stat -c "%Y" "$REQUIRED_REPO_SECRETS")
     fi
-    
-    
+
     if [[ $local_file_modified -ge $required_file_modified ]]; then
         echo_info "Using existing $LOCAL_SECRETS_SET_FILE"
         echo_info "Update $REQUIRED_REPO_SECRETS if you want more secrets!"
@@ -247,42 +247,40 @@ function update_secrets {
         source "$LOCAL_SECRETS_SET_FILE"
         return 0
     fi
-    
-    
-    
+
     # we require GitHub login if GitHub secrets are being used. there might be other reasons outside the pervue of this
     # this script to login to GitHub..
     if [[ $USE_GITHUB_USER_SECRETS == "true" ]]; then
         login_to_github
     fi
-    
+
     # load the secrets file to get the array of secrets
     local json_secrets_array # a json array of secrets loaded from the $REQUIRED_REPO_SECRETS file
-    
+
     json_secrets_array=$(jq '.secrets' "$REQUIRED_REPO_SECRETS")
-    
+
     # iterate through the JSON and get values for each secret
     # when this returns each secret will have an environment variable set
     collect_secrets "$json_secrets_array"
-    
+
     # build, save, and source the local secrets script
     build_save_secrets_script "$json_secrets_array"
-    
+
     # if the user wants to use codespaces secrets, iterate through the json array
     # and store the secret in CodeSpaces user secrets, adding the current repo
     if [[ "$USE_GITHUB_USER_SECRETS" == "true" ]]; then
         save_in_codespaces "$json_secrets_array"
     fi
-    
+
 }
 
 # see if the user is logged into GitHub with the scopes necessary to use Codespaces secrets.
 #  not, log them in.
 function login_to_github() {
-    
+
     export GH_AUTH_STATUS
     GH_AUTH_STATUS=$(gh auth status 2>&1)
-    
+
     # there are three interesting cases coming back in GH_AUTH_STATUS
     # 1. logged in with the correct scopes
     # 2. logged in, but with the wrong scopes
@@ -293,17 +291,17 @@ function login_to_github() {
     else
         USER_LOGGED_IN=true
     fi
-    
+
     # find the number of secrets to test if we have the write scopes for our github login
     # if they are not logged in, this fails and SECRET_COUNT is empty
     SECRET_COUNT=$(gh api -H "Accept: application/vnd.github+json" /user/codespaces/secrets | jq -r .total_count)
-    
+
     # without secrets, the SECRET_COUNT is 0 if they are logged in with the right permissions. so if it is empty...
     if [[ -z $SECRET_COUNT ]] && [[ $USER_LOGGED_IN == true ]]; then
         echo_warning "Refreshing GitHub Token to request codespace:secrets scope"
         gh auth refresh --scopes user,repo,codespace:secrets
     fi
-    
+
     # ""You are not logged into any GitHub hosts. Run gh auth login to authenticate.""
     # is the message returned for gh auth status when the user isn't signed in
     # it is possible that github could change this in the future, which would break
@@ -312,7 +310,7 @@ function login_to_github() {
         gh auth login --scopes user,repo,codespace:secrets
         GH_AUTH_STATUS=$(gh auth status 2>&1)
     fi
-    
+
     # this just echos a nice message to the user...GitLabs should have a --json option for this!
     # we also *want* expansion/globbing here to find the check, so disable SC2086 for this one line
     #shellcheck disable=SC2086
@@ -331,21 +329,20 @@ function initial_setup() {
     local startup_line
     local this_script
     this_script=$(get_real_path devsecrets.sh)
-    
+
     startup_line="source $this_script update"
     # Check if the startup line exists in the .bashrc file
     if ! grep -q "${startup_line}" "$HOME"/.bashrc; then
         # If it doesn't exist, append the line to the .bashrc file
         echo "${startup_line}" >>"$HOME"/.bashrc
     fi
-    
+
     # Check if the startup line exists in the .zshrc file
     if ! grep -q "${startup_line}" "$HOME"/.zshrc; then
         # If it doesn't exist, append the line to the .bashrc file
         echo "${startup_line}" >>"$HOME"/.zshrc
     fi
-    
-    
+
     # if there isn't a json file, create a default one
     if [[ ! -f $REQUIRED_REPO_SECRETS ]]; then
         echo '{
@@ -355,6 +352,20 @@ function initial_setup() {
     "secrets": []
         }' >"$REQUIRED_REPO_SECRETS"
     fi
+}
+
+#
+# check a self signed cert and if it doesn't exist, create one
+
+function find_or_create_ssl_cert() {
+    if [[ ! -f "$SSL_KEY_FILE" || ! -f "$SSL_CERT_FILE" ]]; then
+        echo_info "creating SSL information in $HOME"
+        openssl req -x509 -newkey rsa:4096 -keyout "$SSL_KEY_FILE" -out "$SSL_CERT_FILE" -days 365 \
+            -nodes -subj "/C=US/ST=Washington/L=Woodinville/O=github.com/OU=joelong01/CN=catan_rust"
+    else
+        echo_info "Found SSL cert information in $SSL_KEY_FILE and $SSL_CERT_FILE"
+    fi
+
 }
 
 function show_help() {
@@ -369,22 +380,28 @@ function show_help() {
 }
 # this is where code execution starts
 case "$1" in
-    help)
-        show_help
+help)
+    show_help
     ;;
-    update)
-        update_secrets
+update)
+    echo_info "running update"
+    update_secrets
+    find_or_create_ssl_cert
     ;;
-    setup)
-        initial_setup
+setup)
+    initial_setup
+    find_or_create_ssl_cert
     ;;
-    reset)
-        rm "$LOCAL_SECRETS_SET_FILE" 2>/dev/null
-        update_secrets
-        # code for resetting the terminal goes here
+reset)
+    rm "$LOCAL_SECRETS_SET_FILE" 2>/dev/null
+    rm "$SSL_KEY_FILE" 2>/dev/null
+    rm "$SSL_CERT_FILE" 2>/dev/null
+    update_secrets
+    find_or_create_ssl_cert
+    # code for resetting the terminal goes here
     ;;
-    *)
-        echo "Invalid option: $1"
-        show_help
+*)
+    echo "Invalid option: $1"
+    show_help
     ;;
 esac
