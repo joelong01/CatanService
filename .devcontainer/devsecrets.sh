@@ -90,8 +90,8 @@ function collect_secrets() {
         fi
         # Check if the environment variable is set in the local secrets file
         local secret_entry
-        secret_entry=$(grep "^$environmentVariable=" "$LOCAL_SECRETS_SET_FILE" 2>/dev/null |
-            sed 's/^.*=\(.*\)$/\1/; s/\\\([^"]\|$\)/\1/g; s/^"\(.*\)"$/\1/' 2>/dev/null)
+        secret_entry=$(grep -q "^$environmentVariable=" "$LOCAL_SECRETS_SET_FILE" 2>/dev/null &&
+            sed 's/^.*=\(.*\)$/\1/; s/\\\([^"]\|$\)/\1/g; s/^"\(.*\)"$/\1/' "$LOCAL_SECRETS_SET_FILE" >/dev/null 2>&1)
 
         if [[ -n "$secret_entry" ]]; then
             # Get the value from the secret_entry

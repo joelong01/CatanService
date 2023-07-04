@@ -210,8 +210,8 @@ impl UserDb {
     /**
      *  an api that finds a user by the id in the cosmosdb users collection.
      */
-    pub async fn find_user(&self, user_id: &str) -> AzureResult<User> {
-        let query = format!(r#"SELECT * FROM c WHERE c.id = '{}'"#, user_id);
+    pub async fn find_user(&self, prop: &str, val: &str) -> AzureResult<User> {
+        let query = format!(r#"SELECT * FROM c WHERE c.{} = '{}'"#, prop, val);
         match self.execute_query(&query).await {
             Ok(users) => {
                 if !users.is_empty() {
@@ -227,13 +227,12 @@ impl UserDb {
 #[cfg(test)]
 mod tests {
 
-    use std::iter;
 
     use crate::shared::utility::get_id;
 
     use super::*;
     use log::trace;
-    use rand::Rng;
+
     #[tokio::test]
     async fn test_e2e() {
         env_logger::init();
@@ -257,7 +256,7 @@ mod tests {
         for user in users {
             let user_clone = user.clone();
             match user_db.create_user(user_clone).await {
-                Ok(..) => trace!("created user {}", user.id),
+                Ok(..) => trace!("created user {}", user.email),
                 Err(e) => panic!("failed to create user.  err: {}", e),
             }
         }
@@ -272,9 +271,9 @@ mod tests {
         };
 
         if let Some(first_user) = users.first() {
-            let u = user_db.find_user(&first_user.id).await;
+            let u = user_db.find_user("id", first_user.id.as_ref().unwrap()).await;
             match u {
-                Ok(found_user) => trace!("found user with id: {}", found_user.id),
+                Ok(found_user) => trace!("found user with email: {}", found_user.email),
                 Err(e) => panic!("failed to find user that we just inserted. error: {}", e),
             }
         } else {
@@ -283,10 +282,10 @@ mod tests {
         //
         //  delete all the users
         for user in users {
-            let result = user_db.delete_user(&user.id).await;
+            let result = user_db.delete_user(&user.id.unwrap()).await;
             match result {
                 Ok(_) => {
-                    trace!("deleted user with id: {}", &user.id);
+                    trace!("deleted user with email: {}", &user.email);
                 }
                 Err(e) => {
                     panic!("failed to delete user. error: {:#?}", e)
@@ -308,24 +307,26 @@ mod tests {
     }
 
     fn create_users() -> Vec<User> {
-        let mut rng = rand::thread_rng();
         let mut users = Vec::new();
 
-        for _ in 0..4 {
-            let id = get_id();
-            let name: String = iter::repeat(())
-                .map(|()| rng.sample(rand::distributions::Alphanumeric))
-                .map(char::from)
-                .take(10) // Adjust as needed.
-                .collect();
-            let email = format!("{}@example.com", name);
+        for i in 1..=5 {
+            let user = User {
+                partition_key: Some(1),
+                id: Some(get_id()),
+                password_hash: None,
+                password: Some(format!("long_password_that_is_ a test {}", i)),
+                email: format!("test{}@example.com", i),
+                first_name: format!("Test{}", i),
+                last_name: format!("User{}", i),
+                display_name: format!("Test User{}", i),
+                picture_url: format!("https://example.com/pic{}.jpg", i),
+                foreground_color: format!("#00000{}", i),
+                background_color: format!("#FFFFFF{}", i),
+                games_played: Some(10 * i as u16),
+                games_won: Some(5 * i as u16),
+            };
 
-            users.push(User {
-                id,
-                partition_key: 1,
-                email,
-                name,
-            });
+            users.push(user);
         }
 
         users

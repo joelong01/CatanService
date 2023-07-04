@@ -8,17 +8,21 @@ mod games_service;
 mod shared;
 mod user_service;
 
+use actix::Actor;
 // dependencies...
 use actix_cors::Cors;
-use actix_web::{web, App, HttpServer};
+use actix_web::{web::{self, Data}, App, HttpServer};
 
-use games_service::{catanws, games};
+use games_service::{
+    catanws::{self, Broker},
+    games,
+};
 use log::trace;
 use once_cell::sync::OnceCell;
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
 use shared::models::CatanSecrets;
 use std::env;
-use user_service::users;
+use user_service::{middleware::{AppState, TestFlag}, users};
 
 /**
  *  Code to pick a port in a threadsafe way -- either specified in an environment variable named COSMOS_RUST_SAMPLE_PORT
@@ -69,7 +73,7 @@ async fn main() -> std::io::Result<()> {
         Ok(s) => {
             trace!("Secrets found.  Account: {:?}", s.cosmos_account);
             s
-        },
+        }
         Err(error) => panic!(
             "Failed to get secrets: {}\n\
                               If you are running in a dev container for the \
@@ -97,23 +101,31 @@ async fn main() -> std::io::Result<()> {
         .set_certificate_chain_file(secrets.ssl_cert_location)
         .unwrap();
 
-    //
-    // set up the HttpServer
+    let broker_addr = Broker::new().start();
 
-    HttpServer::new(|| {
-        App::new().wrap(Cors::permissive()).service(
-            web::scope("/api").service(
-                web::scope("/v1")
-                    .route("/users", web::get().to(users::list_users))
-                    .route("/users", web::post().to(users::create))
-                    .route("/users/{id}", web::delete().to(users::delete))
-                    .route("/users/{id}", web::get().to(users::find_user_by_id))
-                    .route("/setup", web::post().to(users::setup))
-                    .route("/games/{game_type}", web::post().to(games::new_game))
-                    .route("/games", web::get().to(games::supported_games))
-                    .route("/ws", web::get().to(catanws::ws_index)),
-            ),
-        )
+    //
+    // set up the HttpServer - pass in the broker service as part of App data
+
+    HttpServer::new(move || {
+        App::new()
+            .app_data(Data::new(AppState::new()))
+            .app_data(broker_addr.clone())
+            .wrap(Cors::permissive())
+            .wrap(TestFlag)
+            .service(
+                web::scope("/api").service(
+                    web::scope("/v1")
+                        .route("/users", web::get().to(users::list_users))
+                        .route("/users", web::post().to(users::register))
+                        .route("/users/{id}", web::delete().to(users::delete))
+                        .route("/users/{id}", web::get().to(users::find_user_by_id))
+                        .route("/users/login", web::post().to(users::login))
+                        .route("/setup", web::post().to(users::setup))
+                        .route("/games/{game_type}", web::post().to(games::new_game))
+                        .route("/games", web::get().to(games::supported_games))
+                        .route("/ws/{user_id}", web::get().to(catanws::ws_index)),
+                ),
+            )
     })
     .bind_openssl(format!("0.0.0.0:{}", port), builder)?
     .run()
