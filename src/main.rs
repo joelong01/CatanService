@@ -20,13 +20,12 @@ use games_service::{
     catanws::{self, Broker},
     games,
 };
-use log::trace;
+
 use once_cell::sync::OnceCell;
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
-use shared::models::CatanSecrets;
 use std::env;
 use user_service::{
-    middleware::{ContextMiddleWare, ServiceContext},
+    middleware::{ContextMiddleWare, ServiceContext, CATAN_ENV},
     users,
 };
 
@@ -67,44 +66,20 @@ macro_rules! safe_set_port {
  */
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    //
-    //   turn on max logging by setting web, server, and rust to trace level logging
-
-    env::set_var("RUST_LOG", "actix_web=trace,actix_server=trace,rust=trace");
+    // Access CATAN_SECRETS to force initialization and potentially panic.
+    print!("env_logger set with {:#?}", CATAN_ENV.rust_log);
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
     let port: String = safe_set_port!();
-    // this looks up env variables and puts them into a rust structt - if they aren't set, we panic
-    let secrets = match CatanSecrets::load_from_env() {
-        Ok(s) => {
-            trace!("Secrets found.  Account: {:?}", s.cosmos_account);
-            s
-        }
-        Err(error) => panic!(
-            "Failed to get secrets: {}\n\
-                              If you are running in a dev container for the \
-                              first time, you need to restart VS Code.",
-            error
-        ),
-    };
-
-    // normally you would set the RUST_LOG environment variable in the process that this app is running in, and then
-    // you'd have this code that checks for it and errors out if it doesn't exist.  this value is set above, so it will
-    // always be set, but this is here for completeness
-    let rust_log = env::var("RUST_LOG");
-    match rust_log {
-        Ok(value) => trace!("RUST_LOG: {}", value),
-        Err(_) => trace!("RUST_LOG is not set"),
-    }
 
     //
     //  SSL support
     let mut builder = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
     builder
-        .set_private_key_file(secrets.ssl_key_location, SslFiletype::PEM)
+        .set_private_key_file(CATAN_ENV.ssl_key_location.to_owned(), SslFiletype::PEM)
         .unwrap();
     builder
-        .set_certificate_chain_file(secrets.ssl_cert_location)
+        .set_certificate_chain_file(CATAN_ENV.ssl_cert_location.to_owned())
         .unwrap();
 
     let broker_addr = Broker::new().start();

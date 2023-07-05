@@ -90,15 +90,13 @@ function collect_env() {
             continue
         fi
         # Check if the environment variable is set in the local secrets file
-        local secret_entry
-        secret_entry=$(grep "^$environmentVariable=" "$LOCAL_REQUIRED_ENV_FILE" 2>/dev/null |
-            sed 's/^.*=\(.*\)$/\1/; s/\\\([^"]\|$\)/\1/g; s/^"\(.*\)"$/\1/')
+        local value
+        value=$(grep "^$environmentVariable=" "$LOCAL_REQUIRED_ENV_FILE" 2>/dev/null | sed 's/^[^=]*=//')
+        value="${value%\"}" # Remove trailing quote
+        value="${value#\"}" # Remove leading quote
 
-        if [[ -n "$secret_entry" ]]; then
+        if [[ -n "$value" ]]; then
             # Get the value from the secret_entry
-            local value
-            value=$(echo "$secret_entry" | cut -d'=' -f2)
-
             # Set the environment variable with the key and value from the file
             export "$environmentVariable=$value"
         else

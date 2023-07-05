@@ -73,15 +73,18 @@ pub struct ServiceResponse {
  *  holds them so that they are more convinient to use
  */
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct CatanSecrets {
+pub struct CatanEnvironmentVariables {
     pub cosmos_token: String,
     pub cosmos_account: String,
     pub ssl_key_location: String,
     pub ssl_cert_location: String,
     pub login_secret_key: String,
+    pub database_name: String,
+    pub container_name: String,
+    pub rust_log: String,
 }
 
-impl CatanSecrets {
+impl CatanEnvironmentVariables {
     pub fn load_from_env() -> Result<Self> {
         let cosmos_token =
             env::var("COSMOS_AUTH_TOKEN").context("COSMOS_AUTH_TOKEN not found in environment")?;
@@ -93,21 +96,35 @@ impl CatanSecrets {
             env::var("SSL_CERT_FILE").context("SSL_CERT_FILE not found in environment")?;
         let login_secret_key =
             env::var("LOGIN_SECRET_KEY").context("LOGIN_SECRET_KEY not found in environment")?;
+        let database_name = env::var("CATAN_USER_DATABASE_NAME")
+            .context("CATAN_USER_DATABASE_NAME not found in environment")?;
+        let container_name = env::var("CATAN_USER_CONTAINER_NAME")
+            .context("CATAN_USER_CONTAINER_NAME not found in environment")?;
+        let rust_log = env::var("RUST_LOG").context("RUST_LOG not found in environment")?;
+
         Ok(Self {
             cosmos_token,
             cosmos_account,
             ssl_key_location,
             ssl_cert_location,
             login_secret_key,
+            database_name,
+            container_name,
+            rust_log,
         })
     }
-    pub fn default() -> Self {
+}
+impl Default for CatanEnvironmentVariables {
+    fn default() -> Self {
         Self {
             cosmos_token: "".to_owned(),
             cosmos_account: "".to_owned(),
             ssl_key_location: "".to_owned(),
             ssl_cert_location: "".to_owned(),
             login_secret_key: "".to_owned(),
+            database_name: "Users-Database".to_owned(),
+            container_name: "User-Container".to_owned(),
+            rust_log: "actix_web=trace,actix_server=trace,rust=trace".to_owned(),
         }
     }
 }

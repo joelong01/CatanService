@@ -21,10 +21,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .await?;
     let mut pass = 0;
     let mut fail = 0;
-    
+
     match check_response(
-        result, 
-        StatusCode::OK, 
+        result,
+        StatusCode::OK,
         "{\"message\":\"database: user-test-db collection: user-test-collection created\",\"status\":200,\"body\":\"\"}".to_string()
     ).await {
         Ok(true) => pass += 1,
@@ -33,8 +33,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
             println!("unexpected error setting up the database");
         }
     }
-    
-    
 
     // Perform user registration
     let register_url = base_url.join("users")?;
@@ -50,7 +48,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         "games_played": 10,
         "games_won": 1
     });
-     result = client
+    result = client
         .post(register_url)
         .header("is_test", "true")
         .header(header::CONTENT_TYPE, "application/json")
@@ -59,10 +57,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .await?;
 
     if result.status() != StatusCode::OK {
-        panic!(
-            "Registration failed with status: {:?}",
-            result.status()
-        );
+        panic!("Registration failed with status: {:?}", result.status());
     }
 
     let response_body = result.text().await?;
@@ -88,7 +83,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-async fn check_response(response: Response, expected_code: StatusCode, expected_value: String) -> Result<bool, reqwest::Error> {
+async fn check_response(
+    response: Response,
+    expected_code: StatusCode,
+    expected_value: String,
+) -> Result<bool, reqwest::Error> {
     if response.status() != expected_code {
         return Ok(false);
     }
@@ -101,6 +100,3 @@ async fn check_response(response: Response, expected_code: StatusCode, expected_
 
     Ok(true)
 }
-
-
-

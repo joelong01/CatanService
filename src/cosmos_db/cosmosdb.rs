@@ -50,12 +50,9 @@ fn public_client(account: &str, token: &str) -> CosmosClient {
 
 impl UserDb {
     pub async fn new(context: &RequestContext) -> Self {
-        let client = public_client(
-            &context.secrets.cosmos_account,
-            &context.secrets.cosmos_token,
-        );
-        let database_name = context.database.clone();
-        let collection_name = context.collection.clone();
+        let client = public_client(&context.env.cosmos_account, &context.env.cosmos_token);
+        let database_name = context.database_name.clone();
+        let collection_name = context.env.container_name.clone();
 
         let database = client.database_client(database_name.clone());
         let collection = database.collection_client(collection_name.clone());
@@ -222,9 +219,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_e2e() {
+        let context = RequestContext::create(true);
         env_logger::init();
         let _ = env_logger::builder().is_test(true).try_init();
-        let context = RequestContext::create(true);
 
         // create the database -- note this will DELETE the database as well
         let user_db = UserDb::new(&context).await;

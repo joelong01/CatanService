@@ -5,7 +5,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
  * a User document in CosmosDb
  */
 use crate::cosmos_db::cosmosdb::UserDb;
-use crate::shared::models::{CatanSecrets, Claims, Credentials, ServiceResponse, User};
+use crate::shared::models::{
+    CatanEnvironmentVariables, Claims, Credentials, ServiceResponse, User,
+};
 use crate::shared::utility::get_id;
 use actix_web::web::Data;
 use actix_web::{web, HttpRequest, HttpResponse};
@@ -38,8 +40,8 @@ pub async fn setup(data: Data<ServiceContext>) -> HttpResponse {
         Ok(..) => {
             let response = ServiceResponse {
                 message: format!(
-                    "database: {} collection: {} created",
-                    request_context.database, request_context.collection
+                    "database: {} container: {} created",
+                    request_context.database_name, request_context.env.container_name
                 ),
                 status: StatusCode::Ok,
                 body: "".to_owned(),
@@ -173,7 +175,7 @@ pub async fn login(creds: web::Json<Credentials>, data: Data<ServiceContext>) ->
             exp: expire_duration,
         };
 
-        let secrets = CatanSecrets::load_from_env().expect("Error loading secrets");
+        let secrets = CatanEnvironmentVariables::load_from_env().expect("Error loading secrets");
         let token_result = encode(
             &Header::new(Algorithm::HS512),
             &claims,
@@ -340,7 +342,7 @@ fn create_http_response(status_code: StatusCode, message: String, body: String) 
 }
 
 fn check_jwt(req: HttpRequest) -> Result<Claims, HttpResponse> {
-    let secrets = CatanSecrets::load_from_env().expect("Error loading secrets");
+    let secrets = CatanEnvironmentVariables::load_from_env().expect("Error loading secrets");
     let headers = req.headers();
     match headers.get("Authorization") {
         Some(value) => {
