@@ -1,3 +1,9 @@
+/**
+ *  this file contains the middleware that injects ServiceContext into the Request.  The data in RequestContext is the
+ *  configuration data necessary for the Service to run -- the secrets loaded from the environment, hard coded strings,
+ *  etc.
+ *
+ */
 use actix_service::{Service, Transform};
 use actix_web::web::Data;
 use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error};
@@ -5,12 +11,19 @@ use futures::future::{ok, Ready};
 use std::sync::Mutex;
 use std::task::{Context, Poll};
 
-use crate::shared::utility::{COLLECTION_NAME, DATABASE_NAME};
+use crate::shared::models::CatanSecrets;
 
-pub struct TestFlag;
+/**
+ *  Hard coded names for the Database and the Collection. These should be private to this file and only accessed
+ *  via RequestContext
+ */
+const DATABASE_NAME: &'static str = "Users-db";
+const COLLECTION_NAME: &'static str = "User-Container";
 
-// This trait is required for middleware
-impl<S, B> Transform<S, ServiceRequest> for TestFlag
+pub struct ContextMiddleWare;
+
+// This trait is required for middleware (*defined* what it means to be middleware)
+impl<S, B> Transform<S, ServiceRequest> for ContextMiddleWare
 where
     S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
     S::Future: 'static,
@@ -48,6 +61,40 @@ where
     fn call(&self, req: ServiceRequest) -> Self::Future {
         // fetch is_test flag from the header
         let is_test = req.headers().contains_key("is_test");
+
+        let app_state = req.app_data::<Data<ServiceContext>>().unwrap().clone();
+        {
+            let mut request_info = app_state.context.lock().unwrap();
+            *request_info = RequestContext::create(is_test);
+        }
+
+        self.service.call(req)
+    }
+}
+
+#[derive(Clone)]
+pub struct RequestContext {
+    pub is_test: bool,
+    pub database: String,
+    pub collection: String,
+    pub secrets: CatanSecrets,
+}
+
+impl RequestContext {
+    fn new(
+        is_test: bool,
+        database: String,
+        collection: String,
+        catan_secrets: &CatanSecrets,
+    ) -> Self {
+        Self {
+            is_test,
+            database,
+            collection,
+            secrets: catan_secrets.clone(),
+        }
+    }
+    pub fn create(is_test: bool) -> Self {
         let (database, collection) = if is_test {
             (
                 "user-test-db".to_string(),
@@ -57,44 +104,28 @@ where
             (DATABASE_NAME.to_string(), COLLECTION_NAME.to_string())
         };
 
-        let app_state = req.app_data::<Data<AppState>>().unwrap().clone();
-        {
-            let mut request_info = app_state.request_info.lock().unwrap();
-            *request_info = RequestInfo::new(is_test, database, collection);
-        }
-
-        self.service.call(req)
-    }
-}
-
-#[derive(Clone)]
-pub struct RequestInfo {
-    pub is_test: bool,
-    pub database: String,
-    pub collection: String,
-}
-
-impl RequestInfo {
-    fn new(is_test: bool, database: String, collection: String) -> Self {
+        let catan_secrets = CatanSecrets::load_from_env().unwrap(); // this panic's if not succesful
         Self {
             is_test,
             database,
             collection,
+            secrets: catan_secrets,
         }
     }
 }
 
-pub struct AppState {
-    pub request_info: Mutex<RequestInfo>,
+pub struct ServiceContext {
+    pub context: Mutex<RequestContext>,
 }
 
-impl AppState {
+impl ServiceContext {
     pub fn new() -> Self {
         Self {
-            request_info: Mutex::new(RequestInfo::new(
+            context: Mutex::new(RequestContext::new(
                 false,
                 DATABASE_NAME.to_string(),
                 COLLECTION_NAME.to_string(),
+                &CatanSecrets::default(),
             )),
         }
     }

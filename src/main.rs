@@ -11,7 +11,10 @@ mod user_service;
 use actix::Actor;
 // dependencies...
 use actix_cors::Cors;
-use actix_web::{web::{self, Data}, App, HttpServer};
+use actix_web::{
+    web::{self, Data},
+    App, HttpServer,
+};
 
 use games_service::{
     catanws::{self, Broker},
@@ -22,7 +25,10 @@ use once_cell::sync::OnceCell;
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
 use shared::models::CatanSecrets;
 use std::env;
-use user_service::{middleware::{AppState, TestFlag}, users};
+use user_service::{
+    middleware::{ContextMiddleWare, ServiceContext},
+    users,
+};
 
 /**
  *  Code to pick a port in a threadsafe way -- either specified in an environment variable named COSMOS_RUST_SAMPLE_PORT
@@ -108,10 +114,10 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(move || {
         App::new()
-            .app_data(Data::new(AppState::new()))
+            .app_data(Data::new(ServiceContext::new()))
             .app_data(broker_addr.clone())
             .wrap(Cors::permissive())
-            .wrap(TestFlag)
+            .wrap(ContextMiddleWare)
             .service(
                 web::scope("/api").service(
                     web::scope("/v1")

@@ -97,7 +97,7 @@ function run_tests() {
 
 
   status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location "$SERVER_URI/users" -H 'is_test: true')
-  check_response "$status" 401 "No Authorization Header" "looking for users. negative test"
+  check_response "$status" 401 "no Authorization Header" "looking for users. negative test"
 
   status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location "$SERVER_URI/users" \
     --header 'is_test: true' \

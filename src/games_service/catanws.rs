@@ -106,7 +106,7 @@ pub async fn ws_index(
 }
 
 //
-//  
+//
 
 // define in your messages section
 pub struct ClientMessage {
@@ -123,7 +123,9 @@ impl Handler<ClientMessage> for Broker {
 
     fn handle(&mut self, msg: ClientMessage, _ctx: &mut Self::Context) {
         if let Some(addr) = self.clients.get(&msg.id) {
-            addr.do_send(ServerMessage { msg: msg.msg.clone() });
+            addr.do_send(ServerMessage {
+                msg: msg.msg.clone(),
+            });
         }
     }
 }
@@ -145,7 +147,9 @@ impl Handler<BroadcastMessage> for Broker {
 
     fn handle(&mut self, msg: BroadcastMessage, _ctx: &mut Self::Context) {
         for addr in self.clients.values() {
-            addr.do_send(ServerMessage { msg: msg.msg.clone() });
+            addr.do_send(ServerMessage {
+                msg: msg.msg.clone(),
+            });
         }
     }
 }
@@ -169,4 +173,3 @@ impl Handler<ServerMessage> for CatanWebSocket {
         ctx.text(msg.msg);
     }
 }
-

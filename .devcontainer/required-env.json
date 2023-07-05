@@ -1,0 +1,64 @@
+{
+    "options": {
+        "useGitHubUserSecrets": false
+    },
+    "secrets": [
+        {
+            "environmentVariable": "COSMOS_ACCOUNT_NAME",
+            "description": "the Cosmosdb account name",
+            "shellscript": "",
+            "default": "players-account"
+        },
+
+        {
+            "environmentVariable": "COSMOS_RESOURCEGROUP",
+            "description": "the resource group for the Cosmos User Database",
+            "shellscript": "",
+            "default": "CosmosDb_test"
+        },
+        {
+            "environmentVariable": "COSMOS_AUTH_TOKEN",
+            "description": "the Cosmosdb authentication token (look for 'Keys' in the Azure Portal)",
+            "shellscript": ".devcontainer/get_cosmos_auth_token.sh",
+            "default": ""
+        },
+        {
+            "environmentVariable": "SSL_KEY_FILE",
+            "description": "the file containing the SSL key",
+            "shellscript": "",
+            "default": "$HOME/catan_ssl_key.pem"
+        },
+        {
+            "environmentVariable": "SSL_CERT_FILE",
+            "description": "the file containing the SSL certificate",
+            "shellscript": "",
+            "default": "$HOME/catan_ssl_cert.pem"
+        },
+        {
+            "environmentVariable": "LOGIN_SECRET_KEY",
+            "description": "the secret key used for login",
+            "shellscript": ".devcontainer/secret_key.sh",
+            "default": ""
+        },
+        {
+            "environmentVariable": "RUST_LOG",
+            "description": "the settings for rust logger",
+            "shellscript": "",
+            "default": "actix_web=trace,actix_server=trace,rust=trace"
+        },
+
+        {
+            "environmentVariable": "CATAN_USER_DATABASE_NAME",
+            "description": "the name of the User database",
+            "shellscript": "",
+            "default": "Users-db"
+        },
+
+        {
+            "environmentVariable": "CATAN_USER_CONTAINER_NAME",
+            "description": "the name of the User container",
+            "shellscript": "",
+            "default": "User-Container"
+        }
+    ]
+}

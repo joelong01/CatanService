@@ -1,14 +1,8 @@
-use crate::shared::{utility::{
-    get_id}, models::ServiceResponse};
-use actix_web::{HttpResponse, Responder,  web::Path};
+use crate::shared::{models::ServiceResponse, utility::get_id};
+use actix_web::{web::Path, HttpResponse, Responder};
 use azure_core::StatusCode;
 
-use crate::shared::models::{
-    GameData, SupportedGames, CatanGames
-};
-
-
-
+use crate::shared::models::{CatanGames, GameData, SupportedGames};
 
 pub async fn new_game(game_type: Path<CatanGames>) -> impl Responder {
     let game_type = game_type.into_inner();
@@ -18,7 +12,7 @@ pub async fn new_game(game_type: Path<CatanGames>) -> impl Responder {
             status: StatusCode::BadRequest,
             body: "".to_owned(),
         };
-       return HttpResponse::BadRequest()
+        return HttpResponse::BadRequest()
             .content_type("application/json")
             .json(response);
     }
@@ -29,12 +23,10 @@ pub async fn new_game(game_type: Path<CatanGames>) -> impl Responder {
 }
 
 pub async fn supported_games() -> impl Responder {
-    let games = SupportedGames{
+    let games = SupportedGames {
         catan_games: vec![CatanGames::Regular],
-
     };
     HttpResponse::Ok()
         .content_type("application/json")
         .json(games)
 }
-

@@ -1,11 +1,10 @@
 /**
  *  this is the class that calls directly to CosmosDb --
  */
-
 use crate::log_return_err;
-use crate::shared::models::{CatanSecrets, User};
+use crate::shared::models::User;
+use crate::user_service::middleware::RequestContext;
 use azure_core::error::{ErrorKind, Result as AzureResult};
-use log::error;
 use azure_data_cosmos::prelude::{
     AuthorizationToken, CollectionClient, CosmosClient, DatabaseClient, Query, QueryCrossPartition,
 };
@@ -40,7 +39,6 @@ fn public_client(account: &str, token: &str) -> CosmosClient {
     CosmosClient::new(account, auth_token)
 }
 
-
 /**
  *  this is the scruct that contains methods to manipulate cosmosdb.  the idea is to be able to write code like
  *
@@ -51,32 +49,23 @@ fn public_client(account: &str, token: &str) -> CosmosClient {
  */
 
 impl UserDb {
-    pub async fn new(database_name: &str, collection_name: &str) -> Self {
-        match CatanSecrets::load_from_env() {
-            Ok(secrets) => {
-                let client = public_client(secrets.cosmos_account.as_str(), secrets.cosmos_token.as_str());
-                let database = client.database_client(database_name.to_string());
-                let collection = database.collection_client(collection_name.to_string());
-                Self {
-                    // I have my token and my account name
-                    client: Some(client),
-                    database: Some(database),
-                    users_collection: Some(collection),
-                    database_name: database_name.to_string(),
-                    collection_name: collection_name.to_string(),
-                }
-            }
-            Err(..) => {
-                error!("{}",
-                "Error getting cosmos secrets.  if they have been set with devsecrets.sh, you need to restart vscode!");
-                Self {
-                    client: None,
-                    database: None,
-                    users_collection: None,
-                    database_name: "".to_string(),
-                    collection_name: "".to_string(),
-                }
-            }
+    pub async fn new(context: &RequestContext) -> Self {
+        let client = public_client(
+            &context.secrets.cosmos_account,
+            &context.secrets.cosmos_token,
+        );
+        let database_name = context.database.clone();
+        let collection_name = context.collection.clone();
+
+        let database = client.database_client(database_name.clone());
+        let collection = database.collection_client(collection_name.clone());
+
+        Self {
+            client: Some(client),
+            database: Some(database),
+            users_collection: Some(collection),
+            database_name,
+            collection_name,
         }
     }
 
@@ -125,10 +114,9 @@ impl UserDb {
             Ok(..) => {
                 info!("\tCreated {} collection", self.collection_name);
                 Ok(())
-            },
+            }
             Err(e) => log_return_err!(e),
         }
-
     }
     /**
      *  this will return *all* (non paginated) Users in the collection
@@ -227,7 +215,6 @@ impl UserDb {
 #[cfg(test)]
 mod tests {
 
-
     use crate::shared::utility::get_id;
 
     use super::*;
@@ -237,16 +224,10 @@ mod tests {
     async fn test_e2e() {
         env_logger::init();
         let _ = env_logger::builder().is_test(true).try_init();
-        // load secrets
-        let secrets = CatanSecrets::load_from_env();
-        match secrets {
-            Ok(secrets) => trace!("Secrets found.  Account: {:?}", secrets.cosmos_account),
-            Err(error) => panic!("Failed to get secrets: {}", error),
-        }
-        let db_name = "user-test-db";
-        let collection_name = "user-test-collection";
+        let context = RequestContext::create(true);
+
         // create the database -- note this will DELETE the database as well
-        let user_db = UserDb::new(db_name, collection_name).await;
+        let user_db = UserDb::new(&context).await;
         match user_db.setupdb().await {
             Ok(..) => trace!("created test db and collection"),
             Err(e) => panic!("failed to setup database and collection {}", e),
@@ -271,7 +252,9 @@ mod tests {
         };
 
         if let Some(first_user) = users.first() {
-            let u = user_db.find_user("id", first_user.id.as_ref().unwrap()).await;
+            let u = user_db
+                .find_user("id", first_user.id.as_ref().unwrap())
+                .await;
             match u {
                 Ok(found_user) => trace!("found user with email: {}", found_user.email),
                 Err(e) => panic!("failed to find user that we just inserted. error: {}", e),

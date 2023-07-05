@@ -41,5 +41,5 @@
 		"gojqVersion": "latest"
 	}
   },
-  "postCreateCommand": ". ./.devcontainer/devsecrets.sh setup"
+  "postCreateCommand": ". ./.devcontainer/collect-env.sh setup"
 }

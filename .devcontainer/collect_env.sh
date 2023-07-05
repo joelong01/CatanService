@@ -3,10 +3,10 @@
 # 1. Load the local environment from local.env
 # 2. Login to GitHub with the proper scope
 # 3. Login to Azure, optionally with a service principal
-# 4. Setup the secrets
+# 4. Setup the environment
 
 # this protects the readonly variables from trying to be set again -- this would happen if the
-# dev runs ./devsecrets.sh reset
+# dev runs ./collect_env.sh reset
 
 RED=$(tput setaf 1)
 GREEN=$(tput setaf 2)
@@ -23,8 +23,8 @@ function echo_info() {
     printf "${GREEN}%s${NORMAL}\n" "${*}"
 }
 #
-#   it is an easy mistake to run ./devsecrets.sh setup from the devcontainer directory instead of the project
-#   directory.  to make this work, we have to get the real paths to the required-secrets.json and the actual
+#   it is an easy mistake to run ./collect_env.sh setup from the devcontainer directory instead of the project
+#   directory.  to make this work, we have to get the real paths to the required-env.json and the actual
 #   script itself
 function get_real_path() {
     local file
@@ -44,18 +44,17 @@ function get_real_path() {
 }
 
 # a this is a config file in json format where we use jq to find/store settings
-REQUIRED_REPO_SECRETS=$(get_real_path "required-secrets.json")
-LOCAL_SECRETS_SET_FILE="$HOME/.localIndividualDevSecrets.sh"
-USE_GITHUB_USER_SECRETS=$(jq -r '.options.useGitHubUserSecrets' "$REQUIRED_REPO_SECRETS" 2>/dev/null)
+REQUIRED_REPO_ENV_VARS=$(get_real_path "required-env.json")
+LOCAL_REQUIRED_ENV_FILE="$HOME/.localDevEnv.sh"
+USE_GITHUB_USER_SECRETS=$(jq -r '.options.useGitHubUserSecrets' "$REQUIRED_REPO_ENV_VARS" 2>/dev/null)
 SSL_KEY_FILE="$HOME/catan_ssl_key.pem"
 SSL_CERT_FILE="$HOME/catan_ssl_cert.pem"
 
-
-# collect_secrets function
+# collect_env function
 #
 #   $1 contains a JSON array
 #   1.	iterate through the array
-#   2.	check a file called $ LOCAL_SECRETS_SET_FILE to see if there is text in the form “KEY=VALUE”
+#   2.	check a file called $LOCAL_REQUIRED_ENV_FILE to see if there is text in the form “KEY=VALUE”
 #       where KEY is the environment variable name (use sed for this)
 #           a.	if the value is set in the file, set an environment variable with this key and value
 #           b.	continue to the next array element
@@ -64,7 +63,7 @@ SSL_CERT_FILE="$HOME/catan_ssl_cert.pem"
 #   5.	it should set the environment variable to the value entered
 #   6.	if the script is called, the script will set the environment variable
 #
-function collect_secrets() {
+function collect_env() {
     # Parse the JSON input
     local json_array # renamed $1: a json array of secrets (environmentVariable, description, and shellscript)
     local length     # the length of the json array
@@ -77,21 +76,23 @@ function collect_secrets() {
         local environmentVariable # the name of the environment variable
         local description
         local shellscript # a shellscript that will provide information to the user to collect the needed value
+        local default
         environmentVariable=$(echo "$json_array" | jq -r ".[$i].environmentVariable")
         description=$(echo "$json_array" | jq -r ".[$i].description")
         shellscript=$(echo "$json_array" | jq -r ".[$i].shellscript")
+        default=$(echo "$json_array" | jq -r ".[$i].default")
 
         # check to make sure that if shellscript is set that the file exists
         if [[ -n "$shellscript" && ! -f "$shellscript" ]]; then
-            echo_error "ERROR: $shellscript specified in $REQUIRED_REPO_SECRETS does not exist."
+            echo_error "ERROR: $shellscript specified in $REQUIRED_REPO_ENV_VARS does not exist."
             echo_error "$environmentVariable will not be set."
             echo_error "Note:  \$PWD=$PWD"
             continue
         fi
         # Check if the environment variable is set in the local secrets file
         local secret_entry
-        secret_entry=$(grep -q "^$environmentVariable=" "$LOCAL_SECRETS_SET_FILE" 2>/dev/null &&
-            sed 's/^.*=\(.*\)$/\1/; s/\\\([^"]\|$\)/\1/g; s/^"\(.*\)"$/\1/' "$LOCAL_SECRETS_SET_FILE" >/dev/null 2>&1)
+        secret_entry=$(grep "^$environmentVariable=" "$LOCAL_REQUIRED_ENV_FILE" 2>/dev/null |
+            sed 's/^.*=\(.*\)$/\1/; s/\\\([^"]\|$\)/\1/g; s/^"\(.*\)"$/\1/')
 
         if [[ -n "$secret_entry" ]]; then
             # Get the value from the secret_entry
@@ -106,25 +107,32 @@ function collect_secrets() {
                 #shellcheck disable=SC1090
                 source "$shellscript"
             else
-                # If shellscript is empty, prompt the user for the value using the description
-                echo -n "Enter $description: "
+                # If shellscript is empty, prompt the user for the value using the description and the default
+                echo -n "Enter $description: $default"
                 read -r value
 
                 # Set the environment variable to the value entered
-                export "$environmentVariable=$value"
+
+                if [[ -n $value ]]; then
+                    echo_warning "setting $environmentVariable=$value"
+                    export "$environmentVariable=$value"
+                else
+                    echo_warning "setting $environmentVariable=$default"
+                    export "$environmentVariable=$default"
+                fi
             fi
         fi
     done
 }
 
-# build_save_secrets_script function
+# build_set_env_script function
 # this builds the script that is called by update_secrets.sh that sets the secrets
 # $1 contains a JSON array
 
-function build_save_secrets_script() {
+function build_set_env_script() {
     # found a bug in the VS Code shell beautify where making this a string that gets appended to
     # breaks the formatting. this form does not.
-    cat <<EOF >"$LOCAL_SECRETS_SET_FILE"
+    cat <<EOF >"$LOCAL_REQUIRED_ENV_FILE"
 #!/bin/bash
 # if we are running in codespaces, we don't load the local environment
 if [[ \$CODESPACES == true ]]; then
@@ -148,25 +156,25 @@ EOF
         description=$(echo "$json_array" | jq -r ".[$i].description")
         toWrite+="# $description\nexport $environmentVariable\n$environmentVariable=\"$val\"\n"
     done
-    echo -e "$toWrite" >>"$LOCAL_SECRETS_SET_FILE"
+    echo -e "$toWrite" >>"$LOCAL_REQUIRED_ENV_FILE"
     # we don't have to worry about sourcing this when in CodeSpaces as the script will exit if
     # CODESPACES == true.  the shellcheck disable is there to tell the linter to not worry about
     # linting the script that we are sourcing
     # shellcheck disable=1090
-    source "$LOCAL_SECRETS_SET_FILE"
+    source "$LOCAL_REQUIRED_ENV_FILE"
 }
 
 # function save_in_codespaces()
 # $1 contains a JSON array of secrets
-# go through that array and save the secret in Codespaces User Secrets
-# makes sure that if the secret already exists *add* the current repo to the repo list instead of just updating it
-# which in current GitHub, resets the secret to be valid in only the specified repos
-# assumes that every secret has an environment variable set with the correct value
+# go through that array and save the environment variable in Codespaces User Secrets
+# makes sure that if the environment variable already exists *add* the current repo to the repo list instead of just updating it
+# which in current GitHub, resets the environment variable to be valid in only the specified repos
+# assumes that every environment variable has an environment variable set with the correct value
 function save_in_codespaces() {
 
-    local repos               # the repos the secret is available in
-    local url                 # the url to get the secret's repos
-    local environmentVariable # the name of the secret
+    local repos               # the repos the environment variable is available in
+    local url                 # the url to get the environment variable's repos
+    local environmentVariable # the name of the environment variable
     local val                 # the secrets value
     local gh_pat              # the GitHub PAT - needed to call the REST api
     local current_repo        # the repo of the current project
@@ -216,35 +224,36 @@ function save_in_codespaces() {
 }
 
 #
-#   load the devscrets.json file and for each secret specified do
+#   load the required-env.json file and for each environment variable specified do
 #   1. check if the value is known, if not prompt the user for the value
-#   2. reconstruct and overwrite the $LOCAL_SECRETS_SET_FILE
-#   3. source the $LOCAL_SECRETS_SET_FILE
-function update_secrets {
+#   2. reconstruct and overwrite the $LOCAL_REQUIRED_ENV_FILE
+#   3. source the $LOCAL_REQUIRED_ENV_FILE
+function update_vars {
 
     # check the last modified date of the env file file and if it is gt the last modified time of the config file
     # we have no work to do
     local local_file_modified
     local required_file_modified
 
-    if [[ -f "$LOCAL_SECRETS_SET_FILE" ]]; then
+    if [[ -f "$LOCAL_REQUIRED_ENV_FILE" ]]; then
         if [[ $(uname) == "Darwin" ]]; then
-            local_file_modified=$(stat -f "%m" "$LOCAL_SECRETS_SET_FILE")
-            required_file_modified=$(stat -f "%m" "$REQUIRED_REPO_SECRETS")
+            local_file_modified=$(stat -f "%m" "$LOCAL_REQUIRED_ENV_FILE")
+            required_file_modified=$(stat -f "%m" "$REQUIRED_REPO_ENV_VARS")
         else
-            local_file_modified=$(stat -c "%Y" "$LOCAL_SECRETS_SET_FILE")
-            required_file_modified=$(stat -c "%Y" "$REQUIRED_REPO_SECRETS")
+            local_file_modified=$(stat -c "%Y" "$LOCAL_REQUIRED_ENV_FILE")
+            required_file_modified=$(stat -c "%Y" "$REQUIRED_REPO_ENV_VARS")
         fi
     else
+        # force the creation of the file - this makes the below if statment false
         local_file_modified=0
-        required_file_modified=$(stat -c "%Y" "$REQUIRED_REPO_SECRETS")
+        required_file_modified=1
     fi
 
     if [[ $local_file_modified -ge $required_file_modified ]]; then
-        echo_info "Using existing $LOCAL_SECRETS_SET_FILE"
-        echo_info "Update $REQUIRED_REPO_SECRETS if you want more secrets!"
+        echo_info "Using existing $LOCAL_REQUIRED_ENV_FILE"
+        echo_info "Update $REQUIRED_REPO_ENV_VARS if you want more secrets!"
         #shellcheck disable=SC1090
-        source "$LOCAL_SECRETS_SET_FILE"
+        source "$LOCAL_REQUIRED_ENV_FILE"
         return 0
     fi
 
@@ -255,21 +264,21 @@ function update_secrets {
     fi
 
     # load the secrets file to get the array of secrets
-    local json_secrets_array # a json array of secrets loaded from the $REQUIRED_REPO_SECRETS file
+    local json_env_array # a json array of secrets loaded from the $REQUIRED_REPO_ENV_VARS file
 
-    json_secrets_array=$(jq '.secrets' "$REQUIRED_REPO_SECRETS")
+    json_env_array=$(jq '.secrets' "$REQUIRED_REPO_ENV_VARS")
 
     # iterate through the JSON and get values for each secret
     # when this returns each secret will have an environment variable set
-    collect_secrets "$json_secrets_array"
+    collect_env "$json_env_array"
 
     # build, save, and source the local secrets script
-    build_save_secrets_script "$json_secrets_array"
+    build_set_env_script "$json_env_array"
 
     # if the user wants to use codespaces secrets, iterate through the json array
     # and store the secret in CodeSpaces user secrets, adding the current repo
     if [[ "$USE_GITHUB_USER_SECRETS" == "true" ]]; then
-        save_in_codespaces "$json_secrets_array"
+        save_in_codespaces "$json_env_array"
     fi
 
 }
@@ -322,13 +331,13 @@ function login_to_github() {
     fi
 }
 #
-#   gets the fully qualified path to devsecrets.sh and adds a line to the .bashrc or .zshrc to run
-#   devscrets.sh update.  Also creates an empty required-secrets.json file
+#   gets the fully qualified path to collect_env.sh and adds a line to the .bashrc or .zshrc to run
+#   devscrets.sh update.  Also creates an empty required-env.json file
 function initial_setup() {
     # Define the startup line to be added to the .bashrc
     local startup_line
     local this_script
-    this_script=$(get_real_path devsecrets.sh)
+    this_script=$(get_real_path collect_env.sh)
 
     startup_line="source $this_script update"
     # Check if the startup line exists in the .bashrc file
@@ -344,13 +353,13 @@ function initial_setup() {
     fi
 
     # if there isn't a json file, create a default one
-    if [[ ! -f $REQUIRED_REPO_SECRETS ]]; then
+    if [[ ! -f $REQUIRED_REPO_ENV_VARS ]]; then
         echo '{
     "options": {
         "useGitHubUserSecrets": false
     },
     "secrets": []
-        }' >"$REQUIRED_REPO_SECRETS"
+        }' >"$REQUIRED_REPO_ENV_VARS"
     fi
 }
 
@@ -365,17 +374,16 @@ function find_or_create_ssl_cert() {
     else
         echo_info "Found SSL cert information in $SSL_KEY_FILE and $SSL_CERT_FILE"
     fi
-
 }
 
 function show_help() {
-    echo "Usage: devsecrets.sh [OPTIONS]"
+    echo "Usage: collect_env.sh [OPTIONS]"
     echo ""
     echo "OPTIONS:"
     echo "  help        Show this help message"
-    echo "  update      parses required-secrets.json and updates $LOCAL_SECRETS_SET_FILE"
+    echo "  update      parses required-env.json and updates $LOCAL_REQUIRED_ENV_FILE"
     echo "  setup       modifies the devcontainer.json to bootstrap the system"
-    echo "  reset       Resets $LOCAL_SECRETS_SET_FILE and runs update"
+    echo "  reset       Resets $LOCAL_REQUIRED_ENV_FILE and runs update"
     echo ""
 }
 # this is where code execution starts
@@ -385,7 +393,7 @@ help)
     ;;
 update)
     echo_info "running update"
-    update_secrets
+    update_vars
     find_or_create_ssl_cert
     ;;
 setup)
@@ -393,10 +401,10 @@ setup)
     find_or_create_ssl_cert
     ;;
 reset)
-    rm "$LOCAL_SECRETS_SET_FILE" 2>/dev/null
+    rm "$LOCAL_REQUIRED_ENV_FILE" 2>/dev/null
     rm "$SSL_KEY_FILE" 2>/dev/null
     rm "$SSL_CERT_FILE" 2>/dev/null
-    update_secrets
+    update_vars
     find_or_create_ssl_cert
     # code for resetting the terminal goes here
     ;;

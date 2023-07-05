@@ -1,15 +1,12 @@
-
-
+use azure_core::StatusCode;
 /**
  * this is the module where I define the structures needed for the data in Cosmos
  */
 use azure_data_cosmos::CosmosEntity;
-use azure_core::{StatusCode};
 use serde::{Deserialize, Serialize};
 use std::env;
 
 use anyhow::{Context, Result};
-
 
 /**
  *  Every CosmosDb document needs to define the partition_key.  In Rust we do this via this trait.
@@ -32,10 +29,10 @@ impl CosmosEntity for User {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct User {
-    pub id: Option<String>, // not set by client
-    pub partition_key: Option<u64>, // Option<> so that the client can skip this
+    pub id: Option<String>,            // not set by client
+    pub partition_key: Option<u64>,    // Option<> so that the client can skip this
     pub password_hash: Option<String>, // when it is pulled from Cosmos, the hash is set
-    pub password: Option<String>,   // when the user is registered, the password is set
+    pub password: Option<String>,      // when the user is registered, the password is set
     pub email: String,
     pub first_name: String,
     pub last_name: String,
@@ -55,9 +52,9 @@ pub struct Credentials {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
-   pub id: String,
-   pub sub: String,
-   pub exp: usize,
+    pub id: String,
+    pub sub: String,
+    pub exp: usize,
 }
 
 /**
@@ -71,13 +68,11 @@ pub struct ServiceResponse {
     pub body: String,
 }
 
-
-
 /**
  *  the .devcontainer/required-secrets.json contains the list of secrets needed to run this application.  this stuctu
  *  holds them so that they are more convinient to use
  */
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CatanSecrets {
     pub cosmos_token: String,
     pub cosmos_account: String,
@@ -105,6 +100,15 @@ impl CatanSecrets {
             ssl_cert_location,
             login_secret_key,
         })
+    }
+    pub fn default() -> Self {
+        Self {
+            cosmos_token: "".to_owned(),
+            cosmos_account: "".to_owned(),
+            ssl_key_location: "".to_owned(),
+            ssl_cert_location: "".to_owned(),
+            login_secret_key: "".to_owned(),
+        }
     }
 }
 
