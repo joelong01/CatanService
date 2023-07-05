@@ -47,8 +47,6 @@ function get_real_path() {
 REQUIRED_REPO_ENV_VARS=$(get_real_path "required-env.json")
 LOCAL_REQUIRED_ENV_FILE="$HOME/.localDevEnv.sh"
 USE_GITHUB_USER_SECRETS=$(jq -r '.options.useGitHubUserSecrets' "$REQUIRED_REPO_ENV_VARS" 2>/dev/null)
-SSL_KEY_FILE="$HOME/catan_ssl_key.pem"
-SSL_CERT_FILE="$HOME/catan_ssl_cert.pem"
 
 # collect_env function
 #
@@ -361,18 +359,6 @@ function initial_setup() {
     fi
 }
 
-#
-# check a self signed cert and if it doesn't exist, create one
-
-function find_or_create_ssl_cert() {
-    if [[ ! -f "$SSL_KEY_FILE" || ! -f "$SSL_CERT_FILE" ]]; then
-        echo_info "creating SSL information in $HOME"
-        openssl req -x509 -newkey rsa:4096 -keyout "$SSL_KEY_FILE" -out "$SSL_CERT_FILE" -days 365 \
-            -nodes -subj "/C=US/ST=Washington/L=Woodinville/O=github.com/OU=joelong01/CN=catan_rust"
-    else
-        echo_info "Found SSL cert information in $SSL_KEY_FILE and $SSL_CERT_FILE"
-    fi
-}
 
 function show_help() {
     echo "Usage: collect_env.sh [OPTIONS]"
@@ -392,18 +378,17 @@ help)
 update)
     echo_info "running update"
     update_vars
-    find_or_create_ssl_cert
+    
     ;;
 setup)
     initial_setup
-    find_or_create_ssl_cert
+    
     ;;
 reset)
     rm "$LOCAL_REQUIRED_ENV_FILE" 2>/dev/null
     rm "$SSL_KEY_FILE" 2>/dev/null
     rm "$SSL_CERT_FILE" 2>/dev/null
     update_vars
-    find_or_create_ssl_cert
     # code for resetting the terminal goes here
     ;;
 *)
