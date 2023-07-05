@@ -6,7 +6,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
  */
 use crate::cosmos_db::cosmosdb::UserDb;
 use crate::shared::models::{CatanSecrets, Claims, Credentials, ServiceResponse, User};
-use crate::shared::utility::{get_id, COLLECTION_NAME, DATABASE_NAME};
+use crate::shared::utility::get_id;
 use actix_web::web::Data;
 use actix_web::{web, HttpRequest, HttpResponse};
 use azure_core::error::Result as AzureResult;
@@ -18,19 +18,28 @@ use super::middleware::AppState;
 /**
  * this sets up CosmosDb to make the sample run. the only prereq is the secrets set in
  * .devconainter/required-secrets.json, this API will call setupdb. this just calls the setupdb api and deals with errors
+ *
+ * you can't do the normal authn/authz here because the authn path requires the database to exist.  for this app,
+ * the users database will be created out of band and this path is just for test users.
  */
 pub async fn setup(data: Data<AppState>) -> HttpResponse {
-    //
-    //  TODO:  if this is not a test, then only an admin can run setup, as it is destructive
+    //  do not check claims as the db doesn't exist yet.
 
     let request_info = data.request_info.lock().unwrap();
+    if !request_info.is_test {
+        return create_http_response(
+            StatusCode::Unauthorized,
+            format!("setup is only available when the test header is set."),
+            "".to_owned(),
+        );
+    }
     let userdb = UserDb::new(&request_info.database, &request_info.collection).await;
     match userdb.setupdb().await {
         Ok(..) => {
             let response = ServiceResponse {
                 message: format!(
-                    "database: {} collection: {} \ncreated",
-                    DATABASE_NAME, COLLECTION_NAME
+                    "database: {} collection: {} created",
+                    request_info.database, request_info.collection
                 ),
                 status: StatusCode::Ok,
                 body: "".to_owned(),
@@ -58,7 +67,21 @@ pub async fn setup(data: Data<AppState>) -> HttpResponse {
  *  hard-to-figure-out error in actix_web deserialize layer.
  */
 pub async fn register(user_in: web::Json<User>, data: Data<AppState>) -> HttpResponse {
-    //TODO:  look up user by email to ensure that they aren't already in the system
+    let user_result =
+        internal_find_user("email".to_string(), user_in.email.clone(), data.clone()).await;
+
+    match user_result {
+        Ok(_) => {
+            return create_http_response(
+                StatusCode::Conflict,
+                format!("user already registered {}", user_in.email),
+                "".to_owned(),
+            )
+        }
+        Err(_) => {
+            // expect an error for user not found
+        }
+    };
 
     let mut user = user_in.clone();
     user.partition_key = Some(1);
@@ -89,9 +112,12 @@ pub async fn register(user_in: web::Json<User>, data: Data<AppState>) -> HttpRes
     let userdb = UserDb::new(&request_info.database, &request_info.collection).await;
 
     match userdb.create_user(user.clone()).await {
-        Ok(..) => HttpResponse::Ok()
-            .content_type("application/json")
-            .json(user),
+        Ok(..) => {
+            user.password_hash = None;
+            HttpResponse::Ok()
+                .content_type("application/json")
+                .json(user)
+        }
         Err(err) => {
             let response = ServiceResponse {
                 message: format!("Failed to add user to collection: {}", err),
@@ -301,6 +327,7 @@ fn create_http_response(status_code: StatusCode, message: String, body: String) 
         StatusCode::Unauthorized => HttpResponse::Unauthorized().json(response),
         StatusCode::InternalServerError => HttpResponse::InternalServerError().json(response),
         StatusCode::NotFound => HttpResponse::NotFound().json(response),
+        StatusCode::Conflict => HttpResponse::Conflict().json(response),
         _ => HttpResponse::BadRequest().json(response),
     }
 }
