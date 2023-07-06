@@ -5,18 +5,16 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
  * a User document in CosmosDb
  */
 use crate::cosmos_db::cosmosdb::UserDb;
-use crate::shared::models::{
-    CatanEnvironmentVariables, Claims, Credentials, ServiceResponse, User,
-};
+use crate::middleware::environment_mw::{ServiceEnvironmentContext, CATAN_ENV};
+use crate::shared::models::{Claims, Credentials, ServiceResponse, User};
 use crate::shared::utility::get_id;
 use actix_web::web::Data;
 use actix_web::{web, HttpRequest, HttpResponse};
 use azure_core::error::Result as AzureResult;
 use azure_core::StatusCode;
 use bcrypt::{hash, verify, DEFAULT_COST};
-use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 
-use super::middleware::ServiceContext;
 /**
  * this sets up CosmosDb to make the sample run. the only prereq is the secrets set in
  * .devconainter/required-secrets.json, this API will call setupdb. this just calls the setupdb api and deals with errors
@@ -24,7 +22,7 @@ use super::middleware::ServiceContext;
  * you can't do the normal authn/authz here because the authn path requires the database to exist.  for this app,
  * the users database will be created out of band and this path is just for test users.
  */
-pub async fn setup(data: Data<ServiceContext>) -> HttpResponse {
+pub async fn setup(data: Data<ServiceEnvironmentContext>) -> HttpResponse {
     //  do not check claims as the db doesn't exist yet.
 
     let request_context = data.context.lock().unwrap();
@@ -68,7 +66,10 @@ pub async fn setup(data: Data<ServiceContext>) -> HttpResponse {
  *  to call this API, set the form data in 'x-www-form-urlencoded', *not* in 'form-data', as that will fail with a
  *  hard-to-figure-out error in actix_web deserialize layer.
  */
-pub async fn register(user_in: web::Json<User>, data: Data<ServiceContext>) -> HttpResponse {
+pub async fn register(
+    user_in: web::Json<User>,
+    data: Data<ServiceEnvironmentContext>,
+) -> HttpResponse {
     let user_result =
         internal_find_user("email".to_string(), user_in.email.clone(), data.clone()).await;
 
@@ -139,7 +140,10 @@ pub async fn register(user_in: web::Json<User>, data: Data<ServiceContext>) -> H
  * hash the password and make sure it matches the hash in the db
  * if it does, return a signed JWT token
  */
-pub async fn login(creds: web::Json<Credentials>, data: Data<ServiceContext>) -> HttpResponse {
+pub async fn login(
+    creds: web::Json<Credentials>,
+    data: Data<ServiceEnvironmentContext>,
+) -> HttpResponse {
     let user_result = internal_find_user("email".to_string(), creds.username.clone(), data).await;
 
     let user = match user_result {
@@ -175,11 +179,10 @@ pub async fn login(creds: web::Json<Credentials>, data: Data<ServiceContext>) ->
             exp: expire_duration,
         };
 
-        let secrets = CatanEnvironmentVariables::load_from_env().expect("Error loading secrets");
         let token_result = encode(
             &Header::new(Algorithm::HS512),
             &claims,
-            &EncodingKey::from_secret(secrets.login_secret_key.as_ref()),
+            &EncodingKey::from_secret(CATAN_ENV.login_secret_key.as_ref()),
         );
 
         match token_result {
@@ -202,14 +205,7 @@ pub async fn login(creds: web::Json<Credentials>, data: Data<ServiceContext>) ->
  *  this will get a list of all documents.  Note this does *not* do pagination. This would be a reasonable next step to
  *  show in the sample
  */
-pub async fn list_users(data: Data<ServiceContext>, req: HttpRequest) -> HttpResponse {
-    let claims: Claims = match check_jwt(req) {
-        Ok(c) => c,
-        Err(e) => return e,
-    };
-
-    log::debug!("user {} is listing all users", claims.sub);
-
+pub async fn list_users(data: Data<ServiceEnvironmentContext>) -> HttpResponse {
     let request_context = data.context.lock().unwrap();
     let userdb = UserDb::new(&request_context).await;
 
@@ -242,13 +238,8 @@ pub async fn list_users(data: Data<ServiceContext>, req: HttpRequest) -> HttpRes
  */
 pub async fn find_user_by_id(
     id: web::Path<String>,
-    data: Data<ServiceContext>,
-    req: HttpRequest,
+    data: Data<ServiceEnvironmentContext>,
 ) -> HttpResponse {
-    let _ = match check_jwt(req) {
-        Ok(c) => c,
-        Err(e) => return e,
-    };
     match internal_find_user("id".to_string(), id.to_string(), data).await {
         Ok(mut user) => {
             user.password_hash = None;
@@ -272,7 +263,7 @@ pub async fn find_user_by_id(
 async fn internal_find_user(
     prop: String,
     id: String,
-    data: Data<ServiceContext>,
+    data: Data<ServiceEnvironmentContext>,
 ) -> AzureResult<User> {
     let request_context = data.context.lock().unwrap();
     let userdb = UserDb::new(&request_context).await;
@@ -283,15 +274,23 @@ async fn internal_find_user(
 
 pub async fn delete(
     id: web::Path<String>,
-    data: Data<ServiceContext>,
+    data: Data<ServiceEnvironmentContext>,
     req: HttpRequest,
 ) -> HttpResponse {
-    let claim = match check_jwt(req) {
-        Ok(c) => c,
-        Err(e) => return e,
+    let header_id_result = req.headers().get("user_id").unwrap().to_str();
+
+    let header_id = match header_id_result {
+        Ok(val) => val,
+        Err(_) => {
+            return create_http_response(
+                StatusCode::BadRequest,
+                "Invalid id header value".to_owned(),
+                "".to_owned(),
+            )
+        }
     };
 
-    if claim.id != *id {
+    if header_id != *id {
         return create_http_response(
             StatusCode::Unauthorized,
             "you can only delete yourself".to_owned(),
@@ -338,30 +337,5 @@ fn create_http_response(status_code: StatusCode, message: String, body: String) 
         StatusCode::NotFound => HttpResponse::NotFound().json(response),
         StatusCode::Conflict => HttpResponse::Conflict().json(response),
         _ => HttpResponse::BadRequest().json(response),
-    }
-}
-
-fn check_jwt(req: HttpRequest) -> Result<Claims, HttpResponse> {
-    let secrets = CatanEnvironmentVariables::load_from_env().expect("Error loading secrets");
-    let headers = req.headers();
-    match headers.get("Authorization") {
-        Some(value) => {
-            let token_str = value.to_str().unwrap_or_default().replace("Bearer ", "");
-            let validation = Validation::new(Algorithm::HS512);
-            match decode::<Claims>(
-                &token_str,
-                &DecodingKey::from_secret(secrets.login_secret_key.as_ref()),
-                &validation,
-            ) {
-                Ok(token_data) => {
-                    // Token is valid. You can use the data in the token to perform authorization checks now.
-                    Ok(token_data.claims)
-                }
-                Err(err) => {
-                    Err(HttpResponse::Unauthorized().body(format!("Unauthorized: {}", err)))
-                }
-            }
-        }
-        None => Err(HttpResponse::Unauthorized().body("No Authorization Header")),
     }
 }

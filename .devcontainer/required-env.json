@@ -9,7 +9,6 @@
             "shellscript": "",
             "default": "players-account"
         },
-
         {
             "environmentVariable": "COSMOS_RESOURCEGROUP",
             "description": "the resource group for the Cosmos User Database",

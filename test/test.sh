@@ -4,7 +4,8 @@ FAIL=0
 RED=$(tput setaf 1)
 GREEN=$(tput setaf 2)
 YELLOW=$(tput setaf 3)
-SERVER_URI="https://localhost:8080/api/v1"
+AUTH_SERVER_URI="https://localhost:8080/auth/api/v1"
+NO_AUTH_SERVER_URI="https://localhost:8080/api/v1"
 declare VERBOSE
 VERBOSE=false
 
@@ -88,18 +89,18 @@ check_response() {
 
 function run_tests() {
 
-  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location --request POST "$SERVER_URI/setup")
+  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location --request POST "$NO_AUTH_SERVER_URI/users/setup")
   check_response "$status" 401 "setup, no test header"
 
 
-  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location --request POST "$SERVER_URI/setup" -H 'is_test: true')
+  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location --request POST "$NO_AUTH_SERVER_URI/users/setup" -H 'is_test: true')
   check_response "$status" 200 "setup with test header"
 
 
-  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location "$SERVER_URI/users" -H 'is_test: true')
+  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location "$AUTH_SERVER_URI/auth/users" -H 'is_test: true')
   check_response "$status" 401 "no Authorization Header" "looking for users. negative test"
 
-  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location "$SERVER_URI/users" \
+  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location "$NO_AUTH_SERVER_URI/users/register" \
     --header 'is_test: true' \
     --header 'Content-Type: application/json' \
     --data-raw '{
@@ -118,7 +119,7 @@ function run_tests() {
   id=$(jq .id <tmp.txt)
   check_response "$status" 200 "registering user"
 
-  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location "$SERVER_URI/users" \
+  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location "$NO_AUTH_SERVER_URI/users/register" \
     --header 'is_test: true' \
     --header 'Content-Type: application/json' \
     --data-raw '{
@@ -137,7 +138,7 @@ function run_tests() {
 
   check_response "$status" 409 "second registration"
 
-  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location "$SERVER_URI/users/login" \
+  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location "$NO_AUTH_SERVER_URI/users/login" \
     --header 'Content-Type: application/json' \
     --header 'is_test: true' \
     --data-raw '{
@@ -147,7 +148,7 @@ function run_tests() {
 
   check_response "$status" 404  "bad password"
 
-  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location "$SERVER_URI/users/login" \
+  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location "$NO_AUTH_SERVER_URI/users/login" \
     --header 'is_test: true' \
     --header 'Content-Type: application/json' \
     --data-raw '{
@@ -158,32 +159,33 @@ function run_tests() {
   check_response "$status" 200  "login"
   
   token=$(jq -r .body <tmp.txt)
-  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location "$SERVER_URI/users" \
+  SERVER_URI="$SERVER_URI/auth"
+  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location "$AUTH_SERVER_URI/users" \
     --header "Authorization: $token" \
     --header 'is_test: true')
   check_response "$status" 200  "authenticated get all users"
 
 
   id=$(jq -r '.[0].id' <tmp.txt)
-  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location "$SERVER_URI/users/$id" -H 'is_test: true')
+  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location "$AUTH_SERVER_URI/users/$id" -H 'is_test: true')
   check_response "$status" 401 "unauthenticated find one user"
 
-  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location "$SERVER_URI/users/$id" \
+  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location "$AUTH_SERVER_URI/users/$id" \
     --header 'is_test: true' \
     --header "Authorization: $token")
   
   check_response "$status" 200 "authenticated find one user"
 
-  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location --request DELETE "$SERVER_URI/users/$id" \
+  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location --request DELETE "$AUTH_SERVER_URI/users/$id" \
     --header 'is_test: true')
   check_response "$status" 401 "unauthenticated delete"
 
-  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location --request DELETE "$SERVER_URI/users/unique_id1184292312312321" \
+  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location --request DELETE "$AUTH_SERVER_URI/users/unique_id1184292312312321" \
     --header 'is_test: true' \
     --header "Authorization: $token")
   check_response "$status" 401 "authenticated delete of somebody else"
 
-  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location --request DELETE "$SERVER_URI/users/$id" \
+  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location --request DELETE "$AUTH_SERVER_URI/users/$id" \
     --header 'is_test: true' \
     --header "Authorization: $token")
 

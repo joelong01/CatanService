@@ -2,8 +2,8 @@
  *  this is the class that calls directly to CosmosDb --
  */
 use crate::log_return_err;
+use crate::middleware::environment_mw::RequestEnvironmentContext;
 use crate::shared::models::User;
-use crate::user_service::middleware::RequestContext;
 use azure_core::error::{ErrorKind, Result as AzureResult};
 use azure_data_cosmos::prelude::{
     AuthorizationToken, CollectionClient, CosmosClient, DatabaseClient, Query, QueryCrossPartition,
@@ -49,7 +49,7 @@ fn public_client(account: &str, token: &str) -> CosmosClient {
  */
 
 impl UserDb {
-    pub async fn new(context: &RequestContext) -> Self {
+    pub async fn new(context: &RequestEnvironmentContext) -> Self {
         let client = public_client(&context.env.cosmos_account, &context.env.cosmos_token);
         let database_name = context.database_name.clone();
         let collection_name = context.env.container_name.clone();
@@ -219,7 +219,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_e2e() {
-        let context = RequestContext::create(true);
+        let context = RequestEnvironmentContext::create(true);
         env_logger::init();
         let _ = env_logger::builder().is_test(true).try_init();
 

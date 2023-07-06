@@ -19,15 +19,15 @@ lazy_static! {
         CatanEnvironmentVariables::load_from_env().unwrap();
 }
 /**
- * ContextMiddleWare: This is an implementation of the Transform trait which is required by Actix to define a
+ * EnvironmentMiddleWare: This is an implementation of the Transform trait which is required by Actix to define a
  * middleware component. The Transform trait is used to apply transformations to requests/responses as they pass
- * through the middleware. In this case, ContextMiddleWare is used as a factory to create instances of
- * ServiceContextMiddleware which is the actual middleware component.
+ * through the middleware. In this case, EnvironmentMiddleWare is used as a factory to create instances of
+ * ServiceEnvironmentMiddleWare which is the actual middleware component.
  */
-pub struct ContextMiddleWare;
+pub struct EnvironmentMiddleWareFactory;
 
 // This trait is required for middleware (*defined* what it means to be middleware)
-impl<S, B> Transform<S, ServiceRequest> for ContextMiddleWare
+impl<S, B> Transform<S, ServiceRequest> for EnvironmentMiddleWareFactory
 where
     S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
     S::Future: 'static,
@@ -35,24 +35,24 @@ where
 {
     type Response = ServiceResponse<B>;
     type Error = Error;
-    type Transform = ServiceContextMiddleware<S>;
+    type Transform = ServiceEnvironmentContextMiddleware<S>;
     type InitError = ();
     type Future = Ready<Result<Self::Transform, Self::InitError>>;
 
     fn new_transform(&self, service: S) -> Self::Future {
-        ok(ServiceContextMiddleware { service })
+        ok(ServiceEnvironmentContextMiddleware { service })
     }
 }
 /**
- * ServiceContextMiddleware: This struct is your actual middleware component. It has a service field that represents
- * the next service in the middleware chain. This middleware intercepts each request, updates the ServiceContext
+ * ServiceEnvironmentContextMiddleware: This struct is the actual middleware component. It has a service field that represents
+ * the next service in the middleware chain. This middleware intercepts each request, updates the ServiceEnvironmentContextMiddleware
  * associated with the request based on the is_test header value, and then passes the request to the next service.
  */
-pub struct ServiceContextMiddleware<S> {
+pub struct ServiceEnvironmentContextMiddleware<S> {
     service: S,
 }
 
-impl<S, B> Service<ServiceRequest> for ServiceContextMiddleware<S>
+impl<S, B> Service<ServiceRequest> for ServiceEnvironmentContextMiddleware<S>
 where
     S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
     S::Future: 'static,
@@ -70,30 +70,33 @@ where
         // fetch is_test flag from the header
         let is_test = req.headers().contains_key("is_test");
 
-        let app_state = req.app_data::<Data<ServiceContext>>().unwrap().clone();
+        let app_state = req
+            .app_data::<Data<ServiceEnvironmentContext>>()
+            .unwrap()
+            .clone();
         {
             let mut request_info = app_state.context.lock().unwrap();
-            *request_info = RequestContext::create(is_test);
+            *request_info = RequestEnvironmentContext::create(is_test);
         }
 
         self.service.call(req)
     }
 }
 /**
- * RequestContext: This struct holds the information that your service needs to operate such as the database,
- * collection, and secrets. This information is stored in a Mutex in the ServiceContext so that it can be safely
+ * RequestEnvironmentContext: This struct holds the information that your service needs to operate such as the database,
+ * collection, and secrets. This information is stored in a Mutex in the ServiceEnvironmentContext so that it can be safely
  * updated by the middleware during request processing. The is_test flag is used to select between test and
- * production database/collection values.  database_name is stored in the RequestContext so that it can be changed,
+ * production database/collection values.  database_name is stored in the RequestEnvironmentContext so that it can be changed,
  * keeping CatanSecrets read only.
  */
 #[derive(Clone)]
-pub struct RequestContext {
+pub struct RequestEnvironmentContext {
     pub is_test: bool,
     pub database_name: String,
     pub env: &'static CatanEnvironmentVariables,
 }
 
-impl RequestContext {
+impl RequestEnvironmentContext {
     fn new(is_test: bool, catan_env: &'static CatanEnvironmentVariables) -> Self {
         let mut db_name: String = catan_env.database_name.clone();
         if is_test {
@@ -111,20 +114,20 @@ impl RequestContext {
 }
 
 /**
- * ServiceContext: This struct contains a Mutex<RequestContext> which allows safe, mutable access to the RequestContext
- * from multiple threads. An instance of ServiceContext is created at the start of the application and is stored as
- * shared application data. This ServiceContext is then updated by the ServiceContextMiddleware during each request.
- * "env" is write once, so it is set outside the mutex
+ * ServiceEnvironmentContext: This struct contains a Mutex<RequestEnvironmentContext> which allows safe, mutable access
+ * to the RequestEnvironmentContext from multiple threads. An instance of ServiceEnvironmentContext is created at the
+ * start of the application and is stored as shared application data. This ServiceEnvironmentContext is then updated by
+ * the ServiceEnvironmentContextMiddleware during each request. "env" is write once, so it is set outside the mutex
  */
-pub struct ServiceContext {
-    pub context: Mutex<RequestContext>,
+pub struct ServiceEnvironmentContext {
+    pub context: Mutex<RequestEnvironmentContext>,
     pub env: &'static CatanEnvironmentVariables,
 }
 
-impl ServiceContext {
+impl ServiceEnvironmentContext {
     pub fn new() -> Self {
         Self {
-            context: Mutex::new(RequestContext::new(false, &CATAN_ENV)),
+            context: Mutex::new(RequestEnvironmentContext::new(false, &CATAN_ENV)),
             env: &*CATAN_ENV,
         }
     }
