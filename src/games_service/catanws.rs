@@ -129,7 +129,7 @@ impl Handler<ClientMessage> for Broker {
         }
     }
 }
-
+#[allow(dead_code)]
 pub async fn send_client_message(broker_addr: Addr<Broker>, id: String, msg: String) {
     broker_addr.do_send(ClientMessage { id, msg });
 }
@@ -153,7 +153,7 @@ impl Handler<BroadcastMessage> for Broker {
         }
     }
 }
-
+#[allow(dead_code)]
 pub async fn broadcast_message(broker_addr: Addr<Broker>, msg: String) {
     broker_addr.do_send(BroadcastMessage { msg });
 }
