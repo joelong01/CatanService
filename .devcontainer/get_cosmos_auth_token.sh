@@ -5,8 +5,8 @@
 
 export COSMOS_AUTH_TOKEN
 
-if [ -z "$COSMOS_RESOURCEGROUP" ] || [ -z "$COSMOS_ACCOUNT_NAME" ]; then
-    echo "COSMOS_RESOURCEGROUP or COSMOS_ACCOUNT_NAME not set"
+if [ -z "$AZURE_RESOURCE_GROUP" ] || [ -z "$COSMOS_ACCOUNT_NAME" ]; then
+    echo "AZURE_RESOURCE_GROUP or COSMOS_ACCOUNT_NAME not set"
     echo "enter the Cosmosdb authentication token (look for 'Keys' in the Azure Portal): "
     read -r COSMOS_AUTH_TOKEN
     return 0
@@ -18,7 +18,7 @@ if [[ -z $(az account show 2>/dev/null) ]]; then
 fi
 
 # Get the connection string for your Azure Cosmos DB account
-keys=$(az cosmosdb keys list --name "$COSMOS_ACCOUNT_NAME" --resource-group "$COSMOS_RESOURCEGROUP" 2>/dev/null)
+keys=$(az cosmosdb keys list --name "$COSMOS_ACCOUNT_NAME" --resource-group "$AZURE_RESOURCE_GROUP" 2>/dev/null)
 if [[ -z $keys ]]; then
     # couldn't get keys -- permission issue?  prompt for it
     echo "enter the Cosmosdb authentication token (look for 'Keys' in the Azure Portal): "

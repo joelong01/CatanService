@@ -10,8 +10,8 @@
             "default": "players-account"
         },
         {
-            "environmentVariable": "COSMOS_RESOURCEGROUP",
-            "description": "the resource group for the Cosmos User Database",
+            "environmentVariable": "AZURE_RESOURCE_GROUP",
+            "description": "the Azure Resource Group for the app:",
             "shellscript": "",
             "default": "CosmosDb_test"
         },
@@ -30,7 +30,7 @@
         {
             "environmentVariable": "SSL_CERT_FILE",
             "description": "the file containing the SSL certificate",
-            "shellscript":  ".devcontainer/generate_ssl_cert.sh",
+            "shellscript": ".devcontainer/generate_ssl_cert.sh",
             "default": "$HOME/catan_ssl_cert.pem"
         },
         {
@@ -45,19 +45,23 @@
             "shellscript": "",
             "default": "actix_web=trace,actix_server=trace,rust=trace"
         },
-
         {
             "environmentVariable": "CATAN_USER_DATABASE_NAME",
             "description": "the name of the User database",
             "shellscript": "",
             "default": "Users-db"
         },
-
         {
             "environmentVariable": "CATAN_USER_CONTAINER_NAME",
             "description": "the name of the User container",
             "shellscript": "",
             "default": "User-Container"
+        },
+        {
+            "environmentVariable": "AZURE_COMMUNICATION_CONNECTION_STRING",
+            "description": "the azure communication connection string",
+            "shellscript": ".devcontainer/get_azure_email_info.sh",
+            "default": ""
         }
     ]
 }

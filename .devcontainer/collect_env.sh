@@ -359,7 +359,6 @@ function initial_setup() {
     fi
 }
 
-
 function show_help() {
     echo "Usage: collect_env.sh [OPTIONS]"
     echo ""
@@ -378,11 +377,11 @@ help)
 update)
     echo_info "running update"
     update_vars
-    
+
     ;;
 setup)
     initial_setup
-    
+
     ;;
 reset)
     rm "$LOCAL_REQUIRED_ENV_FILE" 2>/dev/null

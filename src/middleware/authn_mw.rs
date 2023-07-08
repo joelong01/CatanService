@@ -66,9 +66,9 @@ where
     actix_service::forward_ready!(service);
 
     // call is invoked for every incoming ServiceRequest.
-    // It intercepts each request, checks for the presence and validity of the
-    // authorization token, and if the token is missing or invalid, immediately
-    // responds with an Unauthorized error.
+    // It intercepts each request, checks for the presence and validity of the authorization token,
+    // and if the token is missing or invalid, immediately responds with an Unauthorized error.
+    // This will also add headers for user_id and email for downstream handlers
     fn call(&self, mut req: ServiceRequest) -> Self::Future {
         // fetch the authorization header
         let auth_header = req.headers().get("Authorization");
