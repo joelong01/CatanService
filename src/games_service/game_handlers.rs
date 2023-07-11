@@ -2,7 +2,7 @@ use crate::shared::{models::ServiceResponse, utility::get_id};
 use actix_web::{web::Path, HttpResponse, Responder};
 use azure_core::StatusCode;
 
-use crate::games_service::game_models::{CatanGames, GameData, SupportedGames};
+use crate::games_service::catan_games::game_enums::{CatanGames, GameData, SupportedGames};
 
 pub async fn new_game(game_type: Path<CatanGames>) -> impl Responder {
     let game_type = game_type.into_inner();
@@ -16,7 +16,10 @@ pub async fn new_game(game_type: Path<CatanGames>) -> impl Responder {
             .content_type("application/json")
             .json(response);
     }
-    let game_data = GameData { id: get_id() };
+    let game_data = GameData {
+        id: get_id(),
+        players: vec![],
+    };
     HttpResponse::Ok()
         .content_type("application/json")
         .json(game_data)

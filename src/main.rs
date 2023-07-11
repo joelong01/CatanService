@@ -18,7 +18,7 @@ use actix_web::{
 
 use games_service::{
     catanws::{self, Broker},
-    games,
+    game_handlers,
 };
 use middleware::authn_mw::AuthenticationMiddlewareFactory;
 use middleware::environment_mw::{
@@ -111,8 +111,11 @@ async fn main() -> std::io::Result<()> {
                             .route("/users", web::get().to(users::list_users))
                             .route("/users/{id}", web::delete().to(users::delete))
                             .route("/users/{id}", web::get().to(users::find_user_by_id))
-                            .route("/games/{game_type}", web::post().to(games::new_game))
-                            .route("/games", web::get().to(games::supported_games))
+                            .route(
+                                "/games/{game_type}",
+                                web::post().to(game_handlers::new_game),
+                            )
+                            .route("/games", web::get().to(game_handlers::supported_games))
                             .route("/ws/{user_id}", web::get().to(catanws::ws_index)),
                     ),
             )

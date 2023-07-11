@@ -5,6 +5,34 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Cargo test",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib"
+                ]
+            },
+            "args": []
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Cargo test",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin catan_service"
+                ]
+            },
+
+            "args": ["--test", "<test_name>"],
+        },
+        
+        {
             "type": "bashdb",
             "request": "launch",
             "name": "Bash-Debug collect_env.sh update",
@@ -60,5 +88,6 @@
             "args": [],
             "cwd": "${workspaceFolder}"
         }
+          
     ]
 }
