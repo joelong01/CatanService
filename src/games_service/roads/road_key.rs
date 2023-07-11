@@ -1,7 +1,7 @@
 use crate::games_service::catan_games::game_enums::Direction;
 use crate::games_service::tiles::tile_key::TileKey;
 use crate::{
-    shared::utility::DeserializeKeyTrait, shared::utility::KeySerializerTrait, DeserializeKey,
+    shared::utility::DeserializeKeyTrait, shared::utility::SerializerKeyTrait, DeserializeKey,
     KeySerializer,
 };
 
@@ -48,41 +48,16 @@ DeserializeKey!(RoadKey {
     direction
 });
 
-// impl Serialize for RoadKey {
-//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//     where
-//         S: Serializer,
-//     {
-//         let map = serde_json::json!({
-//             "tile_key": self.tile_key,
-//             "direction": self.direction
-//         });
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::games_service::tiles::tile_key::TileKey;
 
-//         let s = serde_json::to_string(&map)
-//             .map_err(ser::Error::custom)?
-//             .replace("{", "[");
-//         serializer.serialize_str(&s)
-//     }
-// }
-
-// impl<'de> Deserialize<'de> for RoadKey {
-//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-//     where
-//         D: Deserializer<'de>,
-//     {
-//         let s = String::deserialize(deserializer)?;
-//         let s = s.replace("[", "{");
-
-//         let map: Value = serde_json::from_str(&s).map_err(de::Error::custom)?;
-
-//         let tile_coord =
-//             serde_json::from_value(map["tile_key"].clone()).map_err(de::Error::custom)?;
-//         let direction =
-//             serde_json::from_value(map["direction"].clone()).map_err(de::Error::custom)?;
-
-//         Ok(RoadKey {
-//             tile_key: tile_coord,
-//             direction,
-//         })
-//     }
-// }
+    #[test]
+    fn test_road_key_serialization() {
+        let key = RoadKey::new(Direction::North, TileKey { q: -1, r: 2, s: 3 });
+        let tk_json = serde_json::to_string(&key).unwrap();
+        let deserialized_key: RoadKey = serde_json::from_str(&tk_json).unwrap();
+        assert_eq!(key, deserialized_key);
+    }
+}

@@ -4,8 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     games_service::{
         catan_games::{game_enums::Direction, traits::game_info_trait::GameInfoTrait},
-        harbor::HarborData,
-        harbor::{HarborKey, HarborType},
+        harbors::{harbor::HarborData, harbor_enums::HarborType, harbor_key::HarborKey},
         tiles::{tile_enums::TileResource, tile_key::TileKey},
     },
     harbor_data,

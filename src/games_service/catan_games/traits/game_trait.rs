@@ -8,7 +8,7 @@ use std::{
 use crate::games_service::{
     buildings::{building::Building, building_key::BuildingKey},
     catan_games::game_enums::Direction,
-    harbor::{HarborData, HarborKey},
+    harbors::{harbor::HarborData, harbor_key::HarborKey},
     roads::{road::Road, road_key::RoadKey},
     tiles::{tile::Tile, tile_key::TileKey},
 };

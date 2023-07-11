@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::games_service::{harbor::HarborData, tiles::tile_enums::TileResource};
+use crate::games_service::{harbors::harbor::HarborData, tiles::tile_enums::TileResource};
 
 pub trait GameInfoTrait: Serialize + Deserialize<'static> {
     fn name(&self) -> &str;

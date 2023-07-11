@@ -4,7 +4,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::shared::models::User;
 
-use crate::games_service::{buildings::building::Building, harbor::HarborData, roads::road::Road};
+use crate::games_service::{
+    buildings::building::Building, harbors::harbor::HarborData, roads::road::Road,
+};
 
 use super::calculated_state::{CalculatedState, ResourceCount};
 use super::player_enums::Target;

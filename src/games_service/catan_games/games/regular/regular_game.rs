@@ -3,7 +3,7 @@
 use crate::games_service::{
     buildings::{building::Building, building_enums::BuildingPosition, building_key::BuildingKey},
     catan_games::{game_enums::Direction, traits::game_trait::CatanGame},
-    harbor::{HarborData, HarborKey},
+    harbors::{harbor::HarborData, harbor_key::HarborKey},
     player::player::Player,
     roads::{road::Road, road_key::RoadKey},
     tiles::{tile::Tile, tile_key::TileKey},

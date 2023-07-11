@@ -2,10 +2,16 @@
 
 use crate::games_service::catan_games::game_enums::Direction;
 use once_cell::sync::Lazy;
-use serde::{
-    de::{Deserialize, Deserializer, Error as DeError},
-    Serialize, Serializer,
+
+use crate::{
+    shared::utility::DeserializeKeyTrait, shared::utility::SerializerKeyTrait, DeserializeKey,
+    KeySerializer,
 };
+
+use serde::de::Error as SerdeError;
+use serde::{ser, Deserialize, Deserializer, Serialize, Serializer};
+use serde_json::Value;
+
 use std::collections::HashMap;
 use strum::IntoEnumIterator;
 
@@ -28,23 +34,11 @@ pub struct TileKey {
     pub s: i32,
 }
 
-impl Serialize for TileKey {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(&self.to_string())
-    }
-}
-impl<'de> Deserialize<'de> for TileKey {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let key_str = String::deserialize(deserializer)?;
-        TileKey::from_string::<D>(&key_str)
-    }
-}
+// Use the KeySerializer macro to serialize the key
+// we use this as a key to a map, and serde can only serialize keys that are strings
+
+KeySerializer!(TileKey { q, r, s });
+DeserializeKey!(TileKey { q, r, s });
 
 impl TileKey {
     // Create a new HexCoords object with the specified q, r, and s values
@@ -137,5 +131,19 @@ impl TileKey {
         };
 
         Ok(TileKey { q, r, s })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn test_tile_key_serialization() {
+        let key = TileKey { q: -1, r: 2, s: 3 };
+        let tk_json = serde_json::to_string(&key).unwrap();
+        let deserialized_key: TileKey = serde_json::from_str(&tk_json).unwrap();
+        assert_eq!(key, deserialized_key);
     }
 }
