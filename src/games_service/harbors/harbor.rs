@@ -6,14 +6,15 @@ use super::{harbor_enums::HarborType, harbor_key::HarborKey};
 
 // Defining HarborInfo struct to be analogous to TypeScript's class
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct HarborData {
+#[serde(rename_all = "camelCase")]
+pub struct Harbor {
     #[serde(rename = "HarborKey")]
     pub key: HarborKey,
     #[serde(rename = "HarborType")]
     pub harbor_type: HarborType,
 }
 
-impl HarborData {
+impl Harbor {
     /// Constructs a new Harbor instance.
     ///
     /// This method creates a new Harbor with the given HarborKey and HarborType.

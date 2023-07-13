@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     games_service::{
         catan_games::{game_enums::Direction, traits::game_info_trait::GameInfoTrait},
-        harbors::{harbor::HarborData, harbor_enums::HarborType, harbor_key::HarborKey},
+        harbors::{harbor::Harbor, harbor_enums::HarborType, harbor_key::HarborKey},
         tiles::{tile_enums::TileResource, tile_key::TileKey},
     },
     harbor_data,
@@ -17,7 +17,7 @@ pub struct RegularGameInfo {
     pub tile_resources: Vec<TileResource>,
     pub rolls: Vec<u32>,
     pub rows_per_column: Vec<u32>,
-    pub harbor_data: Vec<HarborData>,
+    pub harbor_data: Vec<Harbor>,
 }
 
 impl GameInfoTrait for RegularGameInfo {
@@ -37,7 +37,7 @@ impl GameInfoTrait for RegularGameInfo {
         &self.rows_per_column
     }
 
-    fn harbor_data(&self) -> &[HarborData] {
+    fn harbor_data(&self) -> &[Harbor] {
         &self.harbor_data
     }
 }
@@ -135,7 +135,7 @@ impl GameInfoTrait for RegularGame {
         &REGULAR_GAME_INFO.rows_per_column
     }
 
-    fn harbor_data(&self) -> &[HarborData] {
+    fn harbor_data(&self) -> &[Harbor] {
         &REGULAR_GAME_INFO.harbor_data
     }
 }

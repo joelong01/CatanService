@@ -28,6 +28,7 @@ impl CosmosEntity for User {
  */
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct User {
     pub id: Option<String>,            // not set by client
     pub partition_key: Option<u64>,    // Option<> so that the client can skip this

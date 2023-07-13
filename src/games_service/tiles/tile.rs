@@ -11,6 +11,7 @@ use std::collections::HashMap;
 
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct Tile {
     pub current_resource: TileResource, // the resource (including a temp resource) that the tile currently holds
     pub original_resource: TileResource, // the orginal resource the tile started with

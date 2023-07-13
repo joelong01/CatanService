@@ -11,7 +11,7 @@ use std::{
 use crate::games_service::{
     buildings::{building::Building, building_key::BuildingKey},
     catan_games::game_enums::Direction,
-    harbors::{harbor::HarborData, harbor_key::HarborKey},
+    harbors::{harbor::Harbor, harbor_key::HarborKey},
     roads::{road::Road, road_key::RoadKey},
     tiles::{tile::Tile, tile_key::TileKey},
 };
@@ -24,7 +24,7 @@ pub trait CatanGame<'a> {
     type Tiles: BorrowMut<HashMap<TileKey, Tile>>;
     type GameInfoType: GameInfoTrait;
 
-    // type Harbors: Borrow<HashMap<HarborKey, HarborData>>;
+    // type Harbors: Borrow<HashMap<HarborKey, Harbor>>;
     // type Roads: Borrow<HashMap<RoadKey, Road>>;
     // type Buildings: Borrow<HashMap<BuildingKey, Building>>;
 

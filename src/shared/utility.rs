@@ -11,13 +11,8 @@ thread_local! {
     static RNG: RefCell<StdRng> = RefCell::new(StdRng::from_entropy());
 }
 pub fn get_id() -> String {
-    format!("unique_id{}", RNG.with(|rng| rng.borrow_mut().gen::<u64>()))
+    format!("id:{}", RNG.with(|rng| rng.borrow_mut().gen::<u64>()))
 }
 
-#[macro_export]
-macro_rules! log_return_err {
-    ( $e:expr ) => {{
-        log::error!("\t{}\n {:#?}", $e, $e);
-        return Err($e);
-    }};
-}
+
+

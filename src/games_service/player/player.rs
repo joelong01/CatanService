@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::shared::models::User;
 
 use crate::games_service::{
-    buildings::building::Building, harbors::harbor::HarborData, roads::road::Road,
+    buildings::building::Building, harbors::harbor::Harbor, roads::road::Road,
 };
 
 use super::calculated_state::{CalculatedState, ResourceCount};
@@ -15,11 +15,12 @@ use super::player_enums::Target;
 //  this contains all the "concrete" data the result from a players actions.  we separetely define the calculated
 //  data.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct Player {
     user_data: User,
     roads: Vec<Road>,
     buildings: Vec<Building>,
-    harbors: Vec<HarborData>,
+    harbors: Vec<Harbor>,
     targets: Vec<Target>, // from this you can derive number of times 7 is rolled, how many knights played
     resource_count: ResourceCount, // total number of resources won and/or lost
     good_rolls: i8,       // the number of rolls the resulted in resources

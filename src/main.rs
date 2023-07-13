@@ -6,6 +6,7 @@ mod games_service;
 mod middleware;
 mod shared;
 mod user_service;
+mod macros;
 
 use actix::Actor;
 // dependencies...

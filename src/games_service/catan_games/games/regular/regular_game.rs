@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
+#![macro_use]
 use crate::games_service::catan_games::traits::game_info_trait::shuffle_vector;
 use crate::games_service::harbors::harbor_enums::HarborType;
 use crate::games_service::{
@@ -9,16 +10,18 @@ use crate::games_service::{
         traits::{game_info_trait::GameInfoTrait, game_trait::CatanGame},
     },
     game,
-    harbors::{harbor::HarborData, harbor_key::HarborKey},
+    harbors::{harbor::Harbor, harbor_key::HarborKey},
     player::player::Player,
     roads::{road::Road, road_key::RoadKey},
     tiles::{self, tile::Tile, tile_enums::TileResource, tile_key::TileKey},
 };
+
 use crate::shared::{models::User, utility::get_id};
+
 use actix_web::Resource;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::serde_as;
 use std::fs::File;
 use std::io::Write;
@@ -26,15 +29,17 @@ use std::{collections::HashMap, fmt};
 use strum::IntoEnumIterator;
 
 use super::game_info::{RegularGameInfo, REGULAR_GAME_INFO};
+
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct RegularGame {
     pub id: String,
     pub players: Vec<Player>,
     #[serde_as(as = "Vec<(_, _)>")]
     pub tiles: HashMap<TileKey, Tile>,
     #[serde_as(as = "Vec<(_, _)>")]
-    pub harbors: HashMap<HarborKey, HarborData>,
+    pub harbors: HashMap<HarborKey, Harbor>,
     #[serde_as(as = "Vec<(_, _)>")]
     pub roads: HashMap<RoadKey, Road>,
     #[serde_as(as = "Vec<(_, _)>")]
@@ -60,7 +65,7 @@ impl RegularGame {
         let mut tiles = Self::setup_tiles(game_info);
         let roads = Self::setup_roads(&mut tiles);
         let buildings = Self::setup_buildings(&mut tiles);
-        let harbors: HashMap<HarborKey, HarborData> = game_info
+        let harbors: HashMap<HarborKey, Harbor> = game_info
             .harbor_data()
             .into_iter()
             .map(|data| (data.key.clone(), data.clone()))
@@ -218,46 +223,72 @@ impl RegularGame {
 
         buildings
     }
+    /// Shuffles the resources and roll numbers of the tiles in the game.
+    ///
+    /// This function takes all the `Tile` objects in the game, excluding the desert,
+    /// shuffles their resources and roll numbers, and then assigns the shuffled values
+    /// back to the tiles. It ensures that the desert tile always has a roll number of 7.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if:
+    ///
+    /// - There is no tile with the `Desert` resource in the game.
+    /// - There is no tile with a roll number of 7 in the game.
+    /// - There are less resources or roll numbers than non-desert tiles in the game.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// // Assuming `game` is a mutable reference to a `RegularGame` instance
+    /// game.shuffle_tiles();
+    /// ```
     fn shuffle_tiles(&mut self) {
         let mut tiles: Vec<Tile> = self.tiles.values().cloned().collect();
         let mut resources: Vec<TileResource> = tiles
             .iter()
+            .filter(|tile| tile.current_resource != TileResource::Desert)
             .map(|tile| tile.current_resource.clone())
             .collect();
-        let mut rolls: Vec<u32> = tiles.iter().map(|tile| tile.roll.clone()).collect();
-    
+        let mut rolls: Vec<u32> = tiles
+            .iter()
+            .filter(|tile| tile.roll != 7)
+            .map(|tile| tile.roll)
+            .collect();
+
         shuffle_vector(&mut resources);
         shuffle_vector(&mut rolls);
-    
-        for i in 0..tiles.len() {
-            if tiles[i].current_resource == TileResource::Desert {
-                tiles[i].roll = 7;
+
+        let desert_tile_index = tiles
+            .iter()
+            .position(|tile| tile.current_resource == TileResource::Desert)
+            .expect("There better be a desert tile!");
+
+        let seven_tile_index = tiles
+            .iter()
+            .position(|tile| tile.roll == 7)
+            .expect("There needs to be a tile with a 7 roll");
+
+        tiles[seven_tile_index].roll = tiles[desert_tile_index].roll;
+        tiles[desert_tile_index].roll = 7;
+
+        let mut resources_iter = resources.into_iter();
+        let mut rolls_iter = rolls.into_iter();
+        for tile in &mut tiles {
+            if tile.current_resource == TileResource::Desert || tile.roll == 7 {
                 continue;
             }
-    
-            if tiles[i].roll == 7 {
-                continue;
-            }
-    
-            tiles[i].current_resource = resources[i];
-            tiles[i].original_resource = resources[i];
+            tile.current_resource = resources_iter.next().expect("Ran out of resources!");
+            tile.original_resource = tile.current_resource;
+            tile.roll = rolls_iter.next().expect("Ran out of rolls!");
         }
-    
-        for i in 0..tiles.len() {
-            if tiles[i].current_resource == TileResource::Desert {
-                continue;
-            }
-    
-            tiles[i].roll = rolls[i];
-        }
-    
-        for (_i, tile) in tiles.into_iter().enumerate() {
-            let key = tile.key.clone();
-            self.tiles.insert(key, tile);
+
+        self.tiles.clear();
+        for tile in tiles {
+            self.tiles.insert(tile.key.clone(), tile);
         }
     }
-    
-    
+
     fn shuffle_harbors(&mut self) {
         let harbor_keys: Vec<HarborKey> = self.harbors.keys().cloned().collect();
         let mut harbor_types: Vec<HarborType> = self
@@ -273,7 +304,7 @@ impl RegularGame {
         for (key, harbor_type) in harbor_keys.iter().zip(harbor_types.into_iter()) {
             new_harbors.insert(
                 *key,
-                HarborData {
+                Harbor {
                     key: *key,
                     harbor_type,
                 },
@@ -311,7 +342,7 @@ impl<'a> CatanGame<'a> for RegularGame {
     type Tiles = &'a mut HashMap<TileKey, Tile>;
     type GameInfoType = RegularGameInfo;
 
-    // type Harbors = &'a HashMap<HarborKey, HarborData>;
+    // type Harbors = &'a HashMap<HarborKey, Harbor>;
     // type Roads = &'a HashMap<RoadKey, Road>;
     // type Buildings = &'a HashMap<BuildingKey, Building>;
 
@@ -363,11 +394,11 @@ impl<'a> CatanGame<'a> for RegularGame {
 
     fn shuffle(&mut self) {
         let mut count = 0;
-       
+
         loop {
             count += 1;
             self.shuffle_tiles();
-           
+
             if self.validate_no_adjacent_six_eight() {
                 break;
             }
@@ -410,21 +441,84 @@ mod tests {
         assert_eq!(key, deserialized_key);
     }
 
-    fn test_serialization(game: RegularGame) {
+    fn test_serialization(game: &RegularGame) {
         //   let tiles = game.get_tiles();
         // println!("{:#?}", tiles);
         //   print!("{}", serde_json::to_string_pretty(&tiles).unwrap());
-        let game_json = serde_json::to_string_pretty(&game).unwrap();
+        let game_json = serde_json::to_string_pretty(game).unwrap();
+        assert_eq!(game_json.contains("_"), false, 
+        "There should be no _ in the json.  set #[serde(rename_all = \"camelCase\")] in the struct");
         let mut file = File::create("output.json").expect("Could not create file");
         write!(file, "{}", game_json).expect("Could not write to file");
 
         let de_game: RegularGame = serde_json::from_str(&game_json).expect("deserializing game");
 
-        assert_eq!(game, de_game);
+        assert_eq!(*game, de_game);
+    }
+
+    fn test_desert(game: &RegularGame) {
+        let mut desert_tile = game
+            .tiles
+            .iter()
+            .find(|(_key, tile)| tile.current_resource == TileResource::Desert)
+            .expect("desert must be here")
+            .1;
+
+        assert_eq!(desert_tile.roll, 7);
+
+        desert_tile = game
+            .tiles
+            .iter()
+            .find(|(_key, tile)| tile.roll == 7)
+            .expect("desert must be here")
+            .1;
+
+        assert_eq!(desert_tile.current_resource, TileResource::Desert);
+        assert_eq!(desert_tile.original_resource, TileResource::Desert)
+    }
+
+    fn test_rolls_and_resources(game: &RegularGame) {
+        let mut roll_counts: HashMap<i32, i32> = HashMap::new();
+
+        for tile in game.tiles.values() {
+            *roll_counts.entry(tile.roll as i32).or_insert(0) += 1;
+        }
+        //
+
+        assert_eq!(*roll_counts.get(&2).expect("2"), 1);
+        assert_eq!(*roll_counts.get(&3).expect("3"), 2);
+        assert_eq!(*roll_counts.get(&4).expect("4"), 2);
+        assert_eq!(*roll_counts.get(&5).expect("5"), 2);
+        assert_eq!(*roll_counts.get(&6).expect("6"), 2);
+        assert_eq!(*roll_counts.get(&7).expect("7"), 1);
+        assert_eq!(*roll_counts.get(&8).expect("8"), 2);
+        assert_eq!(*roll_counts.get(&9).expect("9"), 2);
+        assert_eq!(*roll_counts.get(&10).expect("10"), 2);
+        assert_eq!(*roll_counts.get(&11).expect("11"), 2);
+        assert_eq!(*roll_counts.get(&12).expect("12"), 1);
+
+        let mut resource_counts: HashMap<TileResource, i32> = HashMap::new();
+
+        for tile in game.tiles.values() {
+            *resource_counts
+                .entry(tile.current_resource.clone())
+                .or_insert(0) += 1;
+        }
+
+        // resource_counts.iter().for_each(|(key, value)| {
+        //     println!("{}:{}", key, value);
+
+        // });
+        assert_eq!(*resource_counts.get(&TileResource::Wheat).expect("4"), 4);
+        assert_eq!(*resource_counts.get(&TileResource::Wood).expect("4"), 4);
+        assert_eq!(*resource_counts.get(&TileResource::Brick).expect("3"), 3);
+        assert_eq!(*resource_counts.get(&TileResource::Sheep).expect("4"), 4);
+        assert_eq!(*resource_counts.get(&TileResource::Ore).expect("3"), 3);
+        assert_eq!(*resource_counts.get(&TileResource::Desert).expect("3"), 1);
     }
 
     #[test]
-    fn test_regular_game_serialize_roundtrip() {
+    fn test_regular_game() {
         let user = User {
             id: Some("123".to_string()),
             partition_key: Some(456),
@@ -478,6 +572,8 @@ mod tests {
         game.add_user(user1);
         game.add_user(user2);
         game.shuffle();
-        test_serialization(game);
+        test_desert(&game);
+        test_rolls_and_resources(&game);
+        test_serialization(&game);
     }
 }

@@ -1,4 +1,4 @@
-use crate::games_service::{harbors::harbor::HarborData, tiles::tile_enums::TileResource};
+use crate::games_service::{harbors::harbor::Harbor, tiles::tile_enums::TileResource};
 
 use rand::{thread_rng, Rng};
 
@@ -7,12 +7,12 @@ pub trait GameInfoTrait {
     fn tile_resources(&self) -> &[TileResource];
     fn rolls(&self) -> &[u32];
     fn rows_per_column(&self) -> &[u32];
-    fn harbor_data(&self) -> &[HarborData];
+    fn harbor_data(&self) -> &[Harbor];
 }
 #[macro_export]
 macro_rules! harbor_data {
     ($tile_key:expr, $position:expr, $harbor_type:expr) => {
-        HarborData::new(HarborKey::new($tile_key, $position), $harbor_type)
+        Harbor::new(HarborKey::new($tile_key, $position), $harbor_type)
     };
 }
 
