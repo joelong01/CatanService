@@ -1,6 +1,6 @@
 #![allow(unused_imports)]
 
-use crate::games_service::player::player::Player;
+use crate::{games_service::player::player::Player, shared::models::GameError};
 
 use std::{
     borrow::{Borrow, BorrowMut},
@@ -41,6 +41,7 @@ pub trait CatanGame<'a> {
 
     fn add_user(&mut self, user: User);
     fn shuffle(&mut self);
+    fn set_player_order(&mut self, id_order: Vec<String>) -> Result<(), GameError>;
 
     // fn new(creator: User) -> Self
     // where

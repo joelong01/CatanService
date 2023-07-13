@@ -16,6 +16,7 @@ use crate::games_service::{
     tiles::{self, tile::Tile, tile_enums::TileResource, tile_key::TileKey},
 };
 
+use crate::shared::models::GameError;
 use crate::shared::{models::User, utility::get_id};
 
 use actix_web::Resource;
@@ -410,6 +411,68 @@ impl<'a> CatanGame<'a> for RegularGame {
         println!("looped {} times", count);
         self.shuffle_harbors();
     }
+    /// Sets the order of the players in the game.
+    ///
+    /// The input `id_order` specifies the desired order of the players by their IDs. The function will sort the `players`
+    /// field of the `RegularGame` instance according to this order.
+    ///
+    /// # Arguments
+    ///
+    /// * `id_order` - A vector of strings representing the order of the player IDs. The size of the vector must match
+    ///   the number of players in the game.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` if the players were successfully reordered.
+    /// * `Err(GameError::PlayerMismatch)` if the number of IDs in `id_order` does not match the number of players.
+    /// * `Err(GameError::IdNotFoundInOrder)` if a player's ID is not found in `id_order`.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if any player in the game does not have an ID.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut game = RegularGame::new(...);
+    /// game.set_player_order(vec!["player1".to_string(), "player2".to_string(), "player3".to_string()]).unwrap();
+    /// assert_eq!(game.players[0].user_data.id.unwrap(), "player1");
+    /// assert_eq!(game.players[1].user_data.id.unwrap(), "player2");
+    /// assert_eq!(game.players[2].user_data.id.unwrap(), "player3");
+    ///
+    fn set_player_order(&mut self, id_order: Vec<String>) -> Result<(), GameError> {
+        // Check if the number of players matches the number of IDs in id_order
+        if self.players.len() != id_order.len() {
+            return Err(GameError::PlayerMismatch);
+        }
+
+        let mut players_with_indices: Vec<(usize, Player)> = self
+            .players
+            .iter()
+            .map(|player| {
+                let player_id = player
+                    .user_data
+                    .id
+                    .as_ref()
+                    .expect("Player is missing an ID");
+                let index = id_order.iter().position(|id| *id == *player_id);
+                index.map(|index| (index, player.clone()))
+            })
+            .collect::<Option<Vec<_>>>()
+            .ok_or(GameError::IdNotFoundInOrder)?;
+
+        // Sort players by their indices in id_order
+        players_with_indices.sort_by_key(|(index, _player)| *index);
+
+        // Remove indices, leaving only the sorted players
+        let sorted_players = players_with_indices
+            .into_iter()
+            .map(|(_index, player)| player)
+            .collect();
+
+        self.players = sorted_players;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -516,11 +579,15 @@ mod tests {
         assert_eq!(*resource_counts.get(&TileResource::Ore).expect("3"), 3);
         assert_eq!(*resource_counts.get(&TileResource::Desert).expect("3"), 1);
     }
-
-    #[test]
-    fn test_regular_game() {
+    fn test_player_order(game: &mut RegularGame){
+        game.set_player_order(vec!["3".to_string(), "2".to_string(), "1".to_string()]).unwrap();
+        assert_eq!(game.players[0].user_data.id.as_ref().unwrap(), "3");
+        assert_eq!(game.players[1].user_data.id.as_ref().unwrap(), "2");
+        assert_eq!(game.players[2].user_data.id.as_ref().unwrap(), "1");
+    }
+    fn create_and_add_players() -> RegularGame{
         let user = User {
-            id: Some("123".to_string()),
+            id: Some("1".to_string()),
             partition_key: Some(456),
             password_hash: Some("hash".to_string()),
             password: Some("password".to_string()),
@@ -539,7 +606,7 @@ mod tests {
         //
         //  create 2 more users and add them to the game
         let user1 = User {
-            id: Some("789".to_string()),
+            id: Some("2".to_string()),
             partition_key: Some(101),
             password_hash: Some("hash1".to_string()),
             password: Some("password1".to_string()),
@@ -555,7 +622,7 @@ mod tests {
         };
 
         let user2 = User {
-            id: Some("987".to_string()),
+            id: Some("3".to_string()),
             partition_key: Some(202),
             password_hash: Some("hash2".to_string()),
             password: Some("password2".to_string()),
@@ -571,9 +638,15 @@ mod tests {
         };
         game.add_user(user1);
         game.add_user(user2);
+        game
+    }
+    #[test]
+    fn test_regular_game() {
+        let mut game = create_and_add_players();
         game.shuffle();
         test_desert(&game);
         test_rolls_and_resources(&game);
+        test_player_order(&mut game);
         test_serialization(&game);
     }
 }

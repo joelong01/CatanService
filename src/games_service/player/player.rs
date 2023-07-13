@@ -17,15 +17,15 @@ use super::player_enums::Target;
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Player {
-    user_data: User,
-    roads: Vec<Road>,
-    buildings: Vec<Building>,
-    harbors: Vec<Harbor>,
-    targets: Vec<Target>, // from this you can derive number of times 7 is rolled, how many knights played
-    resource_count: ResourceCount, // total number of resources won and/or lost
-    good_rolls: i8,       // the number of rolls the resulted in resources
-    bad_rolls: i8,        // the number of rolls the resulted in no resources
-    state: CalculatedState,
+    pub user_data: User,
+    pub roads: Vec<Road>,
+    pub buildings: Vec<Building>,
+    pub harbors: Vec<Harbor>,
+    pub targets: Vec<Target>, // from this you can derive number of times 7 is rolled, how many knights played
+    pub resource_count: ResourceCount, // total number of resources won and/or lost
+    pub good_rolls: i8,       // the number of rolls the resulted in resources
+    pub bad_rolls: i8,        // the number of rolls the resulted in no resources
+    pub state: CalculatedState,
 }
 
 impl Player {

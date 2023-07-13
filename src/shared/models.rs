@@ -4,9 +4,17 @@ use azure_core::StatusCode;
  */
 use azure_data_cosmos::CosmosEntity;
 use serde::{Deserialize, Serialize};
+use strum_macros::Display;
 use std::env;
 
 use anyhow::{Context, Result};
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, Display)]
+pub enum GameError {
+    PlayerMismatch,
+    MissingPlayerId,
+    IdNotFoundInOrder,
+}
 
 /**
  *  Every CosmosDb document needs to define the partition_key.  In Rust we do this via this trait.
