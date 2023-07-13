@@ -10,7 +10,7 @@ use crate::{
     harbor_data,
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct RegularGameInfo {
     pub name: String,
@@ -45,10 +45,10 @@ fn create_regular_game_info() -> RegularGameInfo {
     RegularGameInfo {
         name: "Regular Game".to_owned(),
         tile_resources: vec![
-            TileResource::Brick,
-            TileResource::Brick,
-            TileResource::Brick,
             TileResource::Desert,
+            TileResource::Brick,
+            TileResource::Brick,
+            TileResource::Brick,
             TileResource::Ore,
             TileResource::Ore,
             TileResource::Ore,
@@ -65,7 +65,7 @@ fn create_regular_game_info() -> RegularGameInfo {
             TileResource::Wood,
             TileResource::Wood,
         ],
-        rolls: vec![2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12],
+        rolls: vec![7, 2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12],
         rows_per_column: vec![3, 4, 5, 4, 3],
         harbor_data: vec![
             harbor_data!(

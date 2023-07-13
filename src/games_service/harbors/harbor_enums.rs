@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 // Defining HarborType enum with variants that map to TypeScript variant strings
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum HarborType {
     #[serde(rename = "Wheat")]
     Wheat,

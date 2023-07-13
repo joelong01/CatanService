@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct CalculatedState {
     #[serde(rename = "KnightsPlayed")]
     knights_played: i8,
@@ -45,7 +45,7 @@ impl Default for CalculatedState {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct WonResources {
     sheep: i8,
     wood: i8,
@@ -79,7 +79,7 @@ impl Default for WonResources {
         }
     }
 }
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct ResourceCount {
     acquired: i32,
     lost: i32,

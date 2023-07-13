@@ -1,41 +1,112 @@
+#![allow(dead_code)]
+use crate::games_service::catan_games::game_enums::Direction;
+use crate::games_service::tiles::tile::Tile;
 use crate::games_service::tiles::tile_key::TileKey;
-use crate::{
-    shared::utility::DeserializeKeyTrait, shared::utility::SerializerKeyTrait, DeserializeKey,
-    KeySerializer,
-};
-
-use serde::de::Error as SerdeError;
-use serde::{ser, Deserialize, Deserializer, Serialize, Serializer};
-use serde_json::Value;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fmt;
 use std::str::FromStr;
 
 use super::building_enums::BuildingPosition;
 
 // Struct representing a building alias containing position, coordinates and index of a building
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
 pub struct BuildingKey {
     pub building_position: BuildingPosition,
     pub tile_key: TileKey,
 }
-// Use the KeySerializer macro to serialize the key
-// we use this as a key to a map, and serde can only serialize keys that are strings
 
-KeySerializer!(BuildingKey {
-    building_position,
-    tile_key
-});
-DeserializeKey!(BuildingKey {
-    tile_key,
-    building_position
-});
 impl BuildingKey {
-    // Function to create a new instance of BuildingAlias
+    /// Constructs a new instance of `BuildingKey` with the given `BuildingPosition` and `TileKey`.
+    ///
+    /// The `new` function is typically used to create a `BuildingKey` when the building's position
+    /// on the tile and the tile's key are known.
+    ///
+    /// # Arguments
+    ///
+    /// * `building_position` - A `BuildingPosition` that represents the building's position on a tile.
+    /// * `tile_key` - A `TileKey` that uniquely identifies a tile.
+    ///
+    /// # Returns
+    ///
+    /// * `BuildingKey` - A new instance of `BuildingKey`.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let building_key = BuildingKey::new(BuildingPosition::TopRight, tile_key);
+    /// ```
+    ///
     pub fn new(building_position: BuildingPosition, tile_key: TileKey) -> Self {
         Self {
             building_position,
             tile_key,
         }
+    }
+
+    /// Returns a `Vec` of `BuildingKey`s that represent buildings adjacent to the current building.
+    ///
+    /// The function determines the adjacent buildings based on the current building's position
+    /// and the layout of the provided tiles. It utilizes the `get_neighbor_key` method
+    /// to find the neighboring tiles and generates corresponding `BuildingKey`s.
+    /// Buildings on tiles that are not included in the provided `tiles` HashMap are excluded.
+    ///
+    /// # Arguments
+    ///
+    /// * `&self` - A reference to the current instance of `BuildingKey`.
+    /// * `tiles` - A reference to a HashMap holding `TileKey`-`Tile` pairs.
+    ///
+    /// # Returns
+    ///
+    /// * `Vec<BuildingKey>` - A vector containing `BuildingKey`s for each adjacent building.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let adjacent_keys = building_key.get_adjacent_building_keys(&tiles);
+    /// ```
+    ///
+    pub fn get_adjacent_building_keys(&self, tiles: &HashMap<TileKey, Tile>) -> Vec<BuildingKey> {
+        let directions: Vec<(BuildingPosition, Direction)> = match self.building_position {
+            BuildingPosition::TopRight => vec![
+                (BuildingPosition::BottomRight, Direction::North),
+                (BuildingPosition::Left, Direction::NorthEast),
+            ],
+            BuildingPosition::Right => vec![
+                (BuildingPosition::BottomLeft, Direction::NorthEast),
+                (BuildingPosition::TopLeft, Direction::SouthEast),
+            ],
+            BuildingPosition::BottomRight => vec![
+                (BuildingPosition::TopRight, Direction::South),
+                (BuildingPosition::Left, Direction::SouthEast),
+            ],
+            BuildingPosition::BottomLeft => vec![
+                (BuildingPosition::Right, Direction::SouthWest),
+                (BuildingPosition::TopLeft, Direction::South),
+            ],
+            BuildingPosition::Left => vec![
+                (BuildingPosition::BottomRight, Direction::NorthWest),
+                (BuildingPosition::TopRight, Direction::SouthWest),
+            ],
+            BuildingPosition::TopLeft => vec![
+                (BuildingPosition::Right, Direction::NorthWest),
+                (BuildingPosition::BottomLeft, Direction::North),
+            ],
+        };
+
+        let adjacent_keys = directions
+            .iter()
+            .filter_map(|(building_pos, dir)| {
+                let neighbor_key = self.tile_key.get_neighbor_key(*dir);
+                if tiles.contains_key(&neighbor_key) {
+                    Some(BuildingKey::new(*building_pos, neighbor_key))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        adjacent_keys
     }
 }
 
@@ -68,7 +139,7 @@ mod tests {
 
     #[test]
     fn test_buliding_key_serialization() {
-        let key = BuildingKey::new(BuildingPosition::BottomLeft, TileKey { q: -1, r: 2, s: 3 });
+        let key = BuildingKey::new(BuildingPosition::BottomLeft, TileKey::new(-1, 2, 3));
 
         let tk_json = serde_json::to_string(&key).unwrap();
         let deserialized_key: BuildingKey = serde_json::from_str(&tk_json).unwrap();
