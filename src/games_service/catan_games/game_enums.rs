@@ -13,32 +13,32 @@ pub struct GameData {
     pub id: String,
     pub players: Vec<User>,
 }
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SupportedGames {
     pub catan_games: Vec<CatanGames>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy)]
 pub enum CatanGames {
     Regular,
     Expansion,
     Seafarers,
     Seafarers4Player,
 }
-
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy)]
 pub enum GameType {
     Test,
     Normal,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy)]
 pub enum TileOrientation {
     FaceDown,
     FaceUp,
     None,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy)]
 pub enum Entitlement {
     Undefined,
     DevCard,
@@ -46,29 +46,40 @@ pub enum Entitlement {
     City,
     Road,
 }
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Copy)]
+pub enum GameActions {
+    AddPlayer,
+    RemovePlayer,
+    NewBoard,
+    SetOrder,
+    Start,
+    Buy,
+    Build,
+    Roll,
+    MoveBaron,
+    Trade,
+    Done, 
+    Undo,
+    Redo
+}
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+//
+//  answers the question "what are we doing now?"
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Copy)]
+#[serde(rename_all = "camelCase")]
 pub enum GameState {
-    Uninitialized,           // 0
-    WaitingForNewGame,       // 1
-    Starting,                // 2
-    Dealing,                 // 3
+
+    AddingPlayers,       // 1
+    ChoosingBoard,                // 2
+    SettingPlayerOrder,                 // 3
     WaitingForStart,         // 4
     AllocateResourceForward, // 5
     AllocateResourceReverse, // 6
-    DoneResourceAllocation,  // 7
     WaitingForRoll,          // 8
-    Targeted,                // 9
-    LostToCardsLikeMonopoly, // 10
+    MustMoveBaron,                // 9
+    BuyingAndTrading, // 10
     Supplemental,            // 11
-    DoneSupplemental,        // 12
-    WaitingForNext,          // 13
-    LostCardsToSeven,        // 14
-    MissedOpportunity,       // 15
-    GamePicked,              // 16
-    MustMoveBaron,           // 17
-    Unknown,
-}
+ }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ResourceType {

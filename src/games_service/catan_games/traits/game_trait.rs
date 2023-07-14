@@ -32,7 +32,7 @@ pub trait CatanGame<'a> {
     fn get_game_info_ro(&self) -> &Self::GameInfoType;
     fn get_tiles(&mut self) -> &mut HashMap<TileKey, Tile>;
     fn get_tiles_ro(&self) -> &HashMap<TileKey, Tile>;
-    fn get_players(&self) -> &Vec<Player>;
+    fn get_players(&self) -> &HashMap<String, Player>;
     fn get_neighbor(&'a mut self, tile: &Tile, direction: Direction) -> Option<Tile>;
     fn get_neighbor_direction(pos: Direction) -> Direction
     where
@@ -42,7 +42,7 @@ pub trait CatanGame<'a> {
     fn add_user(&mut self, user: User);
     fn shuffle(&mut self);
     fn set_player_order(&mut self, id_order: Vec<String>) -> Result<(), GameError>;
-
+    fn get_next_player(&mut self) -> Player;
     // fn new(creator: User) -> Self
     // where
     //     Self: Sized;

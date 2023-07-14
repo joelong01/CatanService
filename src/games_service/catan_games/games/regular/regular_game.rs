@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 #![macro_use]
+use crate::games_service::catan_games::game_enums::GameState;
 use crate::games_service::catan_games::traits::game_info_trait::shuffle_vector;
 use crate::games_service::harbors::harbor_enums::HarborType;
 use crate::games_service::{
@@ -30,13 +31,15 @@ use std::{collections::HashMap, fmt};
 use strum::IntoEnumIterator;
 
 use super::game_info::{RegularGameInfo, REGULAR_GAME_INFO};
+use super::game_state::GameStateMachine;
 
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RegularGame {
     pub id: String,
-    pub players: Vec<Player>,
+    #[serde_as(as = "Vec<(_, _)>")]
+    pub players: HashMap<String, Player>,
     #[serde_as(as = "Vec<(_, _)>")]
     pub tiles: HashMap<TileKey, Tile>,
     #[serde_as(as = "Vec<(_, _)>")]
@@ -45,6 +48,10 @@ pub struct RegularGame {
     pub roads: HashMap<RoadKey, Road>,
     #[serde_as(as = "Vec<(_, _)>")]
     pub buildings: HashMap<BuildingKey, Building>,
+    pub current_player_id: String,
+    pub player_order: Vec<String>,
+    pub state_machine: GameStateMachine,
+    pub creator_id: String,
 }
 
 impl RegularGame {
@@ -61,23 +68,33 @@ impl RegularGame {
     ///
     /// A new RegularGame instance.
     pub fn new(creator: User) -> Self {
-        let player = Player::new(creator);
+        let player = Player::new(creator.clone());
         let game_info = &*REGULAR_GAME_INFO;
         let mut tiles = Self::setup_tiles(game_info);
         let roads = Self::setup_roads(&mut tiles);
         let buildings = Self::setup_buildings(&mut tiles);
+
+        let mut players = HashMap::new();
+        let player_id = creator.id.unwrap().clone();
+        players.insert(player_id.clone(), player);
+
         let harbors: HashMap<HarborKey, Harbor> = game_info
             .harbor_data()
             .into_iter()
             .map(|data| (data.key.clone(), data.clone()))
             .collect();
+
         Self {
             id: get_id(),
-            players: vec![player],
-            tiles: tiles,
-            harbors: harbors,
-            roads: roads,
-            buildings: buildings,
+            players,
+            tiles,
+            harbors,
+            roads,
+            buildings,
+            current_player_id: player_id.clone(),
+            player_order: vec![],
+            state_machine: GameStateMachine::new(),
+            creator_id: player_id.clone(),
         }
     }
 
@@ -360,7 +377,7 @@ impl<'a> CatanGame<'a> for RegularGame {
     fn get_tiles_ro(&self) -> &HashMap<TileKey, Tile> {
         &self.tiles
     }
-    fn get_players(&self) -> &Vec<Player> {
+    fn get_players(&self) -> &HashMap<String, Player> {
         &self.players
     }
 
@@ -369,6 +386,22 @@ impl<'a> CatanGame<'a> for RegularGame {
         let neighbor_coord = current_coord.get_neighbor_key(direction);
         self.get_tiles().get(&neighbor_coord).cloned()
     }
+    fn get_next_player(&mut self) -> Player {
+        let current_player_index = self
+            .player_order
+            .iter()
+            .position(|p| *p == self.current_player_id)
+            .expect("How did the player ID not be in the list?");
+
+        let next_player_index = (current_player_index + 1) % self.player_order.len();
+        let next_player_id = &self.player_order[next_player_index];
+        self.current_player_id = next_player_id.to_owned();
+        self.players
+            .get(next_player_id)
+            .expect("Player should be in the map")
+            .clone()
+    }
+
     fn get_neighbor_direction(pos: Direction) -> Direction
     where
         Self: Sized,
@@ -390,7 +423,8 @@ impl<'a> CatanGame<'a> for RegularGame {
     }
 
     fn add_user(&mut self, user: User) {
-        self.players.push(Player::new(user));
+        self.players
+            .insert(user.id.clone().unwrap(), Player::new(user));
     }
 
     fn shuffle(&mut self) {
@@ -413,8 +447,7 @@ impl<'a> CatanGame<'a> for RegularGame {
     }
     /// Sets the order of the players in the game.
     ///
-    /// The input `id_order` specifies the desired order of the players by their IDs. The function will sort the `players`
-    /// field of the `RegularGame` instance according to this order.
+    /// The input `id_order` specifies the desired order of the players by their IDs.
     ///
     /// # Arguments
     ///
@@ -425,7 +458,7 @@ impl<'a> CatanGame<'a> for RegularGame {
     ///
     /// * `Ok(())` if the players were successfully reordered.
     /// * `Err(GameError::PlayerMismatch)` if the number of IDs in `id_order` does not match the number of players.
-    /// * `Err(GameError::IdNotFoundInOrder)` if a player's ID is not found in `id_order`.
+    /// * `Err(GameError::IdNotFoundInOrder)` if a player's ID is not found in `players`.
     ///
     /// # Panics
     ///
@@ -445,208 +478,18 @@ impl<'a> CatanGame<'a> for RegularGame {
         if self.players.len() != id_order.len() {
             return Err(GameError::PlayerMismatch);
         }
-
-        let mut players_with_indices: Vec<(usize, Player)> = self
-            .players
-            .iter()
-            .map(|player| {
-                let player_id = player
-                    .user_data
-                    .id
-                    .as_ref()
-                    .expect("Player is missing an ID");
-                let index = id_order.iter().position(|id| *id == *player_id);
-                index.map(|index| (index, player.clone()))
-            })
-            .collect::<Option<Vec<_>>>()
-            .ok_or(GameError::IdNotFoundInOrder)?;
-
-        // Sort players by their indices in id_order
-        players_with_indices.sort_by_key(|(index, _player)| *index);
-
-        // Remove indices, leaving only the sorted players
-        let sorted_players = players_with_indices
-            .into_iter()
-            .map(|(_index, player)| player)
-            .collect();
-
-        self.players = sorted_players;
+        let order = id_order.clone();
+        for id in order {
+            if !self.players.contains_key(&id) {
+                return Err(GameError::IdNotFoundInOrder);
+            }
+        }
+        self.player_order = id_order.clone();
+        self.current_player_id = id_order[0].clone();
         Ok(())
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use crate::{
-        games_service::{catan_games::traits::game_trait::CatanGame, tiles::tile_key::TileKey},
-        shared::models::User,
-    };
-    use std::fs::File;
-    use std::io::Write;
-
-    use super::*;
-    #[test]
-    fn test_tile_key_serialization() {
-        let tile_key = TileKey::new(-1, 2, 3);
-
-        let tk_json = serde_json::to_string(&tile_key).unwrap();
-        print!("{:#?}", tk_json);
-        let deserialized_tile_key: TileKey = serde_json::from_str(&tk_json).unwrap();
-        assert_eq!(tile_key, deserialized_tile_key);
-    }
-    #[test]
-    fn test_road_key_serialization() {
-        let key = RoadKey::new(Direction::North, TileKey::new(-1, 2, 3));
-
-        let tk_json = serde_json::to_string(&key).unwrap();
-        print!("{:#?}", tk_json);
-        let deserialized_key: RoadKey = serde_json::from_str(&tk_json).unwrap();
-        assert_eq!(key, deserialized_key);
-    }
-
-    fn test_serialization(game: &RegularGame) {
-        //   let tiles = game.get_tiles();
-        // println!("{:#?}", tiles);
-        //   print!("{}", serde_json::to_string_pretty(&tiles).unwrap());
-        let game_json = serde_json::to_string_pretty(game).unwrap();
-        assert_eq!(game_json.contains("_"), false, 
-        "There should be no _ in the json.  set #[serde(rename_all = \"camelCase\")] in the struct");
-        let mut file = File::create("output.json").expect("Could not create file");
-        write!(file, "{}", game_json).expect("Could not write to file");
-
-        let de_game: RegularGame = serde_json::from_str(&game_json).expect("deserializing game");
-
-        assert_eq!(*game, de_game);
-    }
-
-    fn test_desert(game: &RegularGame) {
-        let mut desert_tile = game
-            .tiles
-            .iter()
-            .find(|(_key, tile)| tile.current_resource == TileResource::Desert)
-            .expect("desert must be here")
-            .1;
-
-        assert_eq!(desert_tile.roll, 7);
-
-        desert_tile = game
-            .tiles
-            .iter()
-            .find(|(_key, tile)| tile.roll == 7)
-            .expect("desert must be here")
-            .1;
-
-        assert_eq!(desert_tile.current_resource, TileResource::Desert);
-        assert_eq!(desert_tile.original_resource, TileResource::Desert)
-    }
-
-    fn test_rolls_and_resources(game: &RegularGame) {
-        let mut roll_counts: HashMap<i32, i32> = HashMap::new();
-
-        for tile in game.tiles.values() {
-            *roll_counts.entry(tile.roll as i32).or_insert(0) += 1;
-        }
-        //
-
-        assert_eq!(*roll_counts.get(&2).expect("2"), 1);
-        assert_eq!(*roll_counts.get(&3).expect("3"), 2);
-        assert_eq!(*roll_counts.get(&4).expect("4"), 2);
-        assert_eq!(*roll_counts.get(&5).expect("5"), 2);
-        assert_eq!(*roll_counts.get(&6).expect("6"), 2);
-        assert_eq!(*roll_counts.get(&7).expect("7"), 1);
-        assert_eq!(*roll_counts.get(&8).expect("8"), 2);
-        assert_eq!(*roll_counts.get(&9).expect("9"), 2);
-        assert_eq!(*roll_counts.get(&10).expect("10"), 2);
-        assert_eq!(*roll_counts.get(&11).expect("11"), 2);
-        assert_eq!(*roll_counts.get(&12).expect("12"), 1);
-
-        let mut resource_counts: HashMap<TileResource, i32> = HashMap::new();
-
-        for tile in game.tiles.values() {
-            *resource_counts
-                .entry(tile.current_resource.clone())
-                .or_insert(0) += 1;
-        }
-
-        // resource_counts.iter().for_each(|(key, value)| {
-        //     println!("{}:{}", key, value);
-
-        // });
-        assert_eq!(*resource_counts.get(&TileResource::Wheat).expect("4"), 4);
-        assert_eq!(*resource_counts.get(&TileResource::Wood).expect("4"), 4);
-        assert_eq!(*resource_counts.get(&TileResource::Brick).expect("3"), 3);
-        assert_eq!(*resource_counts.get(&TileResource::Sheep).expect("4"), 4);
-        assert_eq!(*resource_counts.get(&TileResource::Ore).expect("3"), 3);
-        assert_eq!(*resource_counts.get(&TileResource::Desert).expect("3"), 1);
-    }
-    fn test_player_order(game: &mut RegularGame){
-        game.set_player_order(vec!["3".to_string(), "2".to_string(), "1".to_string()]).unwrap();
-        assert_eq!(game.players[0].user_data.id.as_ref().unwrap(), "3");
-        assert_eq!(game.players[1].user_data.id.as_ref().unwrap(), "2");
-        assert_eq!(game.players[2].user_data.id.as_ref().unwrap(), "1");
-    }
-    fn create_and_add_players() -> RegularGame{
-        let user = User {
-            id: Some("1".to_string()),
-            partition_key: Some(456),
-            password_hash: Some("hash".to_string()),
-            password: Some("password".to_string()),
-            email: "test@example.com".to_string(),
-            first_name: "John".to_string(),
-            last_name: "Doe".to_string(),
-            display_name: "johndoe".to_string(),
-            picture_url: "https://example.com/picture.jpg".to_string(),
-            foreground_color: "#000000".to_string(),
-            background_color: "#FFFFFF".to_string(),
-            games_played: Some(10),
-            games_won: Some(2),
-        };
-        let mut game = RegularGame::new(user);
-
-        //
-        //  create 2 more users and add them to the game
-        let user1 = User {
-            id: Some("2".to_string()),
-            partition_key: Some(101),
-            password_hash: Some("hash1".to_string()),
-            password: Some("password1".to_string()),
-            email: "test1@example.com".to_string(),
-            first_name: "Jane".to_string(),
-            last_name: "Smith".to_string(),
-            display_name: "janesmith".to_string(),
-            picture_url: "https://example.com/picture1.jpg".to_string(),
-            foreground_color: "#FF0000".to_string(),
-            background_color: "#00FF00".to_string(),
-            games_played: Some(5),
-            games_won: Some(1),
-        };
-
-        let user2 = User {
-            id: Some("3".to_string()),
-            partition_key: Some(202),
-            password_hash: Some("hash2".to_string()),
-            password: Some("password2".to_string()),
-            email: "test2@example.com".to_string(),
-            first_name: "Mike".to_string(),
-            last_name: "Johnson".to_string(),
-            display_name: "mikejohnson".to_string(),
-            picture_url: "https://example.com/picture2.jpg".to_string(),
-            foreground_color: "#0000FF".to_string(),
-            background_color: "#FFFF00".to_string(),
-            games_played: Some(8),
-            games_won: Some(3),
-        };
-        game.add_user(user1);
-        game.add_user(user2);
-        game
-    }
-    #[test]
-    fn test_regular_game() {
-        let mut game = create_and_add_players();
-        game.shuffle();
-        test_desert(&game);
-        test_rolls_and_resources(&game);
-        test_player_order(&mut game);
-        test_serialization(&game);
-    }
-}
+#[path="./tests.rs"]
+mod tests;
