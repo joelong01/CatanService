@@ -1,6 +1,6 @@
 #![allow(unused_imports)]
 
-use crate::{games_service::player::player::Player, shared::models::GameError};
+use crate::{games_service::player::player::Player, shared::models::{GameError, ClientUser}};
 
 use std::{
     borrow::{Borrow, BorrowMut},
@@ -10,12 +10,12 @@ use std::{
 
 use crate::games_service::{
     buildings::{building::Building, building_key::BuildingKey},
-    catan_games::game_enums::Direction,
+    shared::game_enums::Direction,
     harbors::{harbor::Harbor, harbor_key::HarborKey},
     roads::{road::Road, road_key::RoadKey},
     tiles::{tile::Tile, tile_key::TileKey},
 };
-use crate::shared::models::User;
+use crate::shared::models::PersistUser;
 
 use super::game_info_trait::GameInfoTrait;
 
@@ -39,7 +39,7 @@ pub trait CatanGame<'a> {
         Self: Sized;
     fn debug(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result;
 
-    fn add_user(&mut self, user: User);
+    fn add_user(&mut self, user: &ClientUser);
     fn shuffle(&mut self);
     fn set_player_order(&mut self, id_order: Vec<String>) -> Result<(), GameError>;
     fn get_next_player(&mut self) -> Player;

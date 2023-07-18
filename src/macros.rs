@@ -1,8 +1,10 @@
-
 #[macro_export]
 macro_rules! serialize_as_array2 {
     ($key:ty, $value:ty) => {
-        fn serialize_as_array<S>(data: &HashMap<$key, $value>, serializer: S) -> Result<S::Ok, S::Error>
+        fn serialize_as_array<S>(
+            data: &HashMap<$key, $value>,
+            serializer: S,
+        ) -> Result<S::Ok, S::Error>
         where
             S: Serializer,
         {
@@ -14,7 +16,9 @@ macro_rules! serialize_as_array2 {
 #[macro_export]
 macro_rules! deserialize_from_array {
     ($key:ty, $value:ty) => {
-        fn deserialize_from_array<'de, D>(deserializer: D) -> Result<HashMap<$key, $value>, D::Error>
+        fn deserialize_from_array<'de, D>(
+            deserializer: D,
+        ) -> Result<HashMap<$key, $value>, D::Error>
         where
             D: Deserializer<'de>,
         {
@@ -41,7 +45,10 @@ macro_rules! log_return_err {
 #[macro_export]
 macro_rules! serialize_as_array {
     ($key:ty, $value:ty) => {
-        fn serialize_as_array_impl<S>(data: &HashMap<$key, $value>, serializer: S) -> Result<S::Ok, S::Error>
+        fn serialize_as_array_impl<S>(
+            data: &HashMap<$key, $value>,
+            serializer: S,
+        ) -> Result<S::Ok, S::Error>
         where
             S: serde::Serializer,
         {
@@ -52,4 +59,3 @@ macro_rules! serialize_as_array {
         serialize_as_array_impl
     };
 }
-

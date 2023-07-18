@@ -1,15 +1,16 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 #![macro_use]
-use crate::games_service::catan_games::game_enums::GameState;
+use crate::games_service::player::calculated_state::{ResourceCount, CalculatedState};
+use crate::games_service::shared::game_enums::{GamePhase, GameState, Direction};
 use crate::games_service::catan_games::traits::game_info_trait::shuffle_vector;
+use crate::games_service::catan_games::traits::game_state_machine_trait::{
+    StateData, StateMachineTrait,
+};
 use crate::games_service::harbors::harbor_enums::HarborType;
 use crate::games_service::{
     buildings::{building::Building, building_enums::BuildingPosition, building_key::BuildingKey},
-    catan_games::{
-        game_enums::Direction,
-        traits::{game_info_trait::GameInfoTrait, game_trait::CatanGame},
-    },
+    catan_games::traits::{game_info_trait::GameInfoTrait, game_trait::CatanGame},
     game,
     harbors::{harbor::Harbor, harbor_key::HarborKey},
     player::player::Player,
@@ -17,8 +18,8 @@ use crate::games_service::{
     tiles::{self, tile::Tile, tile_enums::TileResource, tile_key::TileKey},
 };
 
-use crate::shared::models::GameError;
-use crate::shared::{models::User, utility::get_id};
+use crate::shared::models::{GameError, ClientUser};
+use crate::shared::{models::PersistUser, utility::get_id};
 
 use actix_web::Resource;
 use rand::seq::SliceRandom;
@@ -31,7 +32,6 @@ use std::{collections::HashMap, fmt};
 use strum::IntoEnumIterator;
 
 use super::game_info::{RegularGameInfo, REGULAR_GAME_INFO};
-use super::game_state::GameStateMachine;
 
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
@@ -50,7 +50,7 @@ pub struct RegularGame {
     pub buildings: HashMap<BuildingKey, Building>,
     pub current_player_id: String,
     pub player_order: Vec<String>,
-    pub state_machine: GameStateMachine,
+    pub state_data: StateData,
     pub creator_id: String,
 }
 
@@ -67,15 +67,28 @@ impl RegularGame {
     /// # Returns
     ///
     /// A new RegularGame instance.
-    pub fn new(creator: User) -> Self {
-        let player = Player::new(creator.clone());
+    pub fn new(creator: &ClientUser) -> Self {
+        let player = {
+            let user = creator.clone();
+            Player {
+                user_data: user.clone(),
+                roads: vec![],
+                buildings: vec![],
+                harbors: vec![],
+                targets: vec![],
+                resource_count: ResourceCount::default(),
+                good_rolls: 0,
+                bad_rolls: 0,
+                state: CalculatedState::default(),
+            }
+        };
         let game_info = &*REGULAR_GAME_INFO;
         let mut tiles = Self::setup_tiles(game_info);
         let roads = Self::setup_roads(&mut tiles);
         let buildings = Self::setup_buildings(&mut tiles);
 
         let mut players = HashMap::new();
-        let player_id = creator.id.unwrap().clone();
+        let player_id = creator.id.clone();
         players.insert(player_id.clone(), player);
 
         let harbors: HashMap<HarborKey, Harbor> = game_info
@@ -93,7 +106,7 @@ impl RegularGame {
             buildings,
             current_player_id: player_id.clone(),
             player_order: vec![],
-            state_machine: GameStateMachine::new(),
+            state_data: StateData::new(GameState::AddingPlayers),
             creator_id: player_id.clone(),
         }
     }
@@ -422,9 +435,22 @@ impl<'a> CatanGame<'a> for RegularGame {
         write!(f, " }}")
     }
 
-    fn add_user(&mut self, user: User) {
+    fn add_user(&mut self, user: &ClientUser) {
         self.players
-            .insert(user.id.clone().unwrap(), Player::new(user));
+            .insert(user.id.clone(), {
+                let user = user;
+                Player {
+                    user_data: user.clone(),
+                    roads: vec![],
+                    buildings: vec![],
+                    harbors: vec![],
+                    targets: vec![],
+                    resource_count: ResourceCount::default(),
+                    good_rolls: 0,
+                    bad_rolls: 0,
+                    state: CalculatedState::default(),
+                }
+            });
     }
 
     fn shuffle(&mut self) {
@@ -491,5 +517,5 @@ impl<'a> CatanGame<'a> for RegularGame {
 }
 
 #[cfg(test)]
-#[path="./tests.rs"]
+#[path = "./tests.rs"]
 mod tests;

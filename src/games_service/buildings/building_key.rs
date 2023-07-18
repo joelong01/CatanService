@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use crate::games_service::catan_games::game_enums::Direction;
+use crate::games_service::shared::game_enums::Direction;
 use crate::games_service::tiles::tile::Tile;
 use crate::games_service::tiles::tile_key::TileKey;
 use serde::{Deserialize, Serialize};

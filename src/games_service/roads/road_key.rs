@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use crate::games_service::catan_games::game_enums::Direction;
+use crate::games_service::shared::game_enums::Direction;
 use crate::games_service::tiles::tile_key::TileKey;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -30,8 +30,8 @@ impl fmt::Display for RoadKey {
             serde_json::to_string(&self.tile_key).map_err(|_| fmt::Error)?
         )
     }
-}
-#[cfg(test)]
+}#
+[cfg(test)]
 mod tests {
     use super::*;
     use crate::games_service::tiles::tile_key::TileKey;

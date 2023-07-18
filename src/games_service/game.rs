@@ -3,14 +3,13 @@ use std::{collections::HashMap, fmt};
 
 use super::{
     catan_games::{
-        game_enums::CatanGames,
         games::regular::{game_info::RegularGameInfo, regular_game::RegularGame},
         traits::game_trait::CatanGame,
     },
     player::player::Player,
-    tiles::{tile::Tile, tile_key::TileKey},
+    tiles::{tile::Tile, tile_key::TileKey}, shared::game_enums::CatanGames,
 };
-use crate::shared::models::User;
+use crate::shared::models::ClientUser;
 
 pub struct GameHolder<'a> {
     pub catan_game: Box<
@@ -62,7 +61,7 @@ impl<'a> PartialEq for GameHolder<'a> {
 // }
 
 impl<'a> GameHolder<'a> {
-    pub fn new(game_type: CatanGames, creator: User) -> Self {
+    pub fn new(game_type: CatanGames, creator: ClientUser) -> Self {
         let game: Box<
             dyn CatanGame<
                 Players = &'a Vec<Player>,
@@ -70,7 +69,7 @@ impl<'a> GameHolder<'a> {
                 GameInfoType = RegularGameInfo,
             >,
         > = match game_type {
-            CatanGames::Regular => Box::new(RegularGame::new(creator)),
+            CatanGames::Regular => Box::new(RegularGame::new(&creator)),
             CatanGames::Expansion => todo!(),
             CatanGames::Seafarers => todo!(),
             CatanGames::Seafarers4Player => todo!(),

@@ -8,3 +8,4 @@ pub mod harbors;
 pub mod player;
 pub mod roads;
 pub mod tiles;
+pub mod shared;

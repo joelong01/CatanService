@@ -13,6 +13,3 @@ thread_local! {
 pub fn get_id() -> String {
     format!("id:{}", RNG.with(|rng| rng.borrow_mut().gen::<u64>()))
 }
-
-
-

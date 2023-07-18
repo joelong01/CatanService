@@ -4,14 +4,14 @@ mod tests {
     use crate::{
         games_service::{
             catan_games::{
-                game_enums::{Direction, GameActions, GameState},
-                games::regular::{game_state::GamePhase, regular_game::RegularGame},
-                traits::game_trait::CatanGame,
+                games::regular::regular_game::RegularGame,
+                traits::{game_state_machine_trait::StateMachineTrait, game_trait::CatanGame},
             },
             roads::road_key::RoadKey,
+            shared::game_enums::{Direction, GameAction, GamePhase, GameState},
             tiles::{tile_enums::TileResource, tile_key::TileKey},
         },
-        shared::models::User,
+        shared::models::{PersistUser, UserProfile, ClientUser},
     };
     use std::io::Write;
     use std::{collections::HashMap, fs::File};
@@ -23,21 +23,19 @@ mod tests {
         println!("test_regular_game");
         let mut game = create_game(); // GameState::AddingPlayers
         test_add_players(&mut game);
-        game.state_machine.next_state(); // GameState::ChoosingBoard
+        game.next_state(None).unwrap(); // GameState::ChoosingBoard
+        assert_eq!(game.current_state().state(), GameState::ChoosingBoard);
         test_shuffle(&mut game);
         test_shuffle(&mut game);
-        game.state_machine.next_state(); // GameState::SettingPlayerOrder
+        game.next_state(None).unwrap(); // GameState::SettingPlayerOrder
+        assert_eq!(game.current_state().state(), GameState::SettingPlayerOrder);
         test_player_order(&mut game);
 
-        game.state_machine.next_state(); // GameState::WaitingForStart
-        verify_state_and_actions(
-            &game,
-            "WaitingForStart",
-            GamePhase::SettingUp,
-            GameState::WaitingForStart,
-            vec![GameActions::Done],
+        game.next_state(None).unwrap(); // GameState::AllocateResourcesForward
+        assert_eq!(
+            game.current_state().state(),
+            GameState::AllocateResourceForward
         );
-        game.state_machine.next_state(); // GameState::AllocateResourcesForward
         test_allocate_resources(&mut game);
 
         test_serialization(&game);
@@ -48,13 +46,13 @@ mod tests {
         name: &str,
         phase: GamePhase,
         expected_state: GameState,
-        expected_actions: Vec<GameActions>,
+        expected_actions: Vec<GameAction>,
     ) {
         println!("{}", name);
-        assert_eq!(game.state_machine.phase, phase);
-        assert_eq!(game.state_machine.game_state, expected_state);
+        assert_eq!(game.current_state().phase(), phase);
+        assert_eq!(game.current_state().state(), expected_state);
 
-        let actions = game.state_machine.actions.clone();
+        let actions = game.current_state().actions().clone();
         assert!(
             expected_actions
                 .iter()
@@ -159,16 +157,13 @@ mod tests {
         assert_eq!(*resource_counts.get(&TileResource::Desert).expect("3"), 1);
     }
     fn test_player_order(game: &mut RegularGame) {
-        println!("test_player_order");
-        assert_eq!(game.state_machine.phase, GamePhase::SettingUp);
-        assert_eq!(game.state_machine.game_state, GameState::SettingPlayerOrder);
-        let expected_actions = vec![GameActions::Done, GameActions::SetOrder];
-        let actions = game.state_machine.actions.clone();
-        assert!(
-            expected_actions
-                .iter()
-                .all(|action| actions.contains(action)),
-            "Not all expected actions are present"
+        let expected_actions = vec![GameAction::Done, GameAction::SetOrder];
+        verify_state_and_actions(
+            game,
+            "test_player_order",
+            GamePhase::SettingUp,
+            GameState::SettingPlayerOrder,
+            expected_actions,
         );
 
         game.set_player_order(vec!["3".to_string(), "2".to_string(), "1".to_string()])
@@ -181,40 +176,40 @@ mod tests {
         assert_eq!(game.current_player_id, "3");
 
         let p = game.get_next_player();
-        assert_eq!(game.current_player_id, p.user_data.id.unwrap());
+        assert_eq!(game.current_player_id, p.user_data.id);
         let p = game.get_next_player();
-        assert_eq!(game.current_player_id, p.user_data.id.unwrap());
+        assert_eq!(game.current_player_id, p.user_data.id);
         assert_eq!(game.current_player_id, "1");
 
         let p = game.get_next_player();
-        assert_eq!(game.current_player_id, p.user_data.id.unwrap());
+        assert_eq!(game.current_player_id, p.user_data.id);
         assert_eq!(game.current_player_id, "3");
     }
 
     fn create_game() -> RegularGame {
         println!("create_game");
-        let user = User {
-            id: Some("1".to_string()),
-            partition_key: Some(456),
-            password_hash: Some("hash".to_string()),
-            password: Some("password".to_string()),
-            email: "test@example.com".to_string(),
-            first_name: "John".to_string(),
-            last_name: "Doe".to_string(),
-            display_name: "johndoe".to_string(),
-            picture_url: "https://example.com/picture.jpg".to_string(),
-            foreground_color: "#000000".to_string(),
-            background_color: "#FFFFFF".to_string(),
-            games_played: Some(10),
-            games_won: Some(2),
+        let user = ClientUser {
+            id: "1".to_owned(),
+            user_profile: UserProfile {
+                email: "test@example.com".to_string(),
+                first_name: "John".to_string(),
+                last_name: "Doe".to_string(),
+                display_name: "johndoe".to_string(),
+                picture_url: "https://example.com/picture.jpg".to_string(),
+                foreground_color: "#000000".to_string(),
+                background_color: "#FFFFFF".to_string(),
+                text_color: format!("0000000"),
+                games_played: Some(10),
+                games_won: Some(2),
+            },
         };
-        RegularGame::new(user)
+        RegularGame::new(&user)
     }
     fn test_add_players(game: &mut RegularGame) {
         let expected_actions = vec![
-            GameActions::AddPlayer,
-            GameActions::RemovePlayer,
-            GameActions::Done,
+            GameAction::AddPlayer,
+            GameAction::RemovePlayer,
+            GameAction::Done,
         ];
         verify_state_and_actions(
             game,
@@ -225,43 +220,44 @@ mod tests {
         );
         //
         //  create 2 more users and add them to the game
-        let user1 = User {
-            id: Some("2".to_string()),
-            partition_key: Some(101),
-            password_hash: Some("hash1".to_string()),
-            password: Some("password1".to_string()),
-            email: "test1@example.com".to_string(),
-            first_name: "Jane".to_string(),
-            last_name: "Smith".to_string(),
-            display_name: "janesmith".to_string(),
-            picture_url: "https://example.com/picture1.jpg".to_string(),
-            foreground_color: "#FF0000".to_string(),
-            background_color: "#00FF00".to_string(),
-            games_played: Some(5),
-            games_won: Some(1),
+        let user1 = ClientUser {
+            id: "2".to_owned(),
+            user_profile: UserProfile {
+                email: "test@example.com".to_string(),
+                first_name: "Doug".to_string(),
+                last_name: "Doe".to_string(),
+                display_name: "johndoe".to_string(),
+                picture_url: "https://example.com/picture.jpg".to_string(),
+                foreground_color: "#000000".to_string(),
+                background_color: "#FFFFFF".to_string(),
+                text_color: format!("0000000"),
+                games_played: Some(10),
+                games_won: Some(2),
+            },
         };
 
-        let user2 = User {
-            id: Some("3".to_string()),
-            partition_key: Some(202),
-            password_hash: Some("hash2".to_string()),
-            password: Some("password2".to_string()),
-            email: "test2@example.com".to_string(),
-            first_name: "Mike".to_string(),
-            last_name: "Johnson".to_string(),
-            display_name: "mikejohnson".to_string(),
-            picture_url: "https://example.com/picture2.jpg".to_string(),
-            foreground_color: "#0000FF".to_string(),
-            background_color: "#FFFF00".to_string(),
-            games_played: Some(8),
-            games_won: Some(3),
+        let user2 = ClientUser {
+            id: "3".to_owned(),
+            
+            user_profile: UserProfile {
+                email: "test@example.com".to_string(),
+                first_name: "Sally".to_string(),
+                last_name: "Doe".to_string(),
+                display_name: "johndoe".to_string(),
+                picture_url: "https://example.com/picture.jpg".to_string(),
+                foreground_color: "#000000".to_string(),
+                background_color: "#FFFFFF".to_string(),
+                text_color: format!("0000000"),
+                games_played: Some(10),
+                games_won: Some(2),
+            },
         };
-        game.add_user(user1);
-        game.add_user(user2);
+        game.add_user(&user1);
+        game.add_user(&user2);
     }
 
     fn test_shuffle(game: &mut RegularGame) {
-        let expected_actions = vec![GameActions::NewBoard, GameActions::Done];
+        let expected_actions = vec![GameAction::NewBoard, GameAction::Done];
         verify_state_and_actions(
             game,
             "test_shuffle",
@@ -275,7 +271,7 @@ mod tests {
         test_rolls_and_resources(game);
     }
     fn test_allocate_resources(game: &mut RegularGame) {
-        let expected_actions = vec![GameActions::Done, GameActions::Build];
+        let expected_actions = vec![GameAction::Done, GameAction::Build];
         verify_state_and_actions(
             game,
             "test_allocate_resources",

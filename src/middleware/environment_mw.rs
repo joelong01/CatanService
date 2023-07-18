@@ -1,4 +1,4 @@
-use crate::shared::models::CatanEnvironmentVariables;
+use crate::shared::models::ConfigEnvironmentVariables;
 /**
  *  this file contains the middleware that injects ServiceContext into the Request.  The data in RequestContext is the
  *  configuration data necessary for the Service to run -- the secrets loaded from the environment, hard coded strings,
@@ -15,8 +15,8 @@ use std::task::{Context, Poll};
 
 // load the environment variables once and only once the first time they are accessed (which is in main() in this case)
 lazy_static! {
-    pub static ref CATAN_ENV: CatanEnvironmentVariables =
-        CatanEnvironmentVariables::load_from_env().unwrap();
+    pub static ref CATAN_ENV: ConfigEnvironmentVariables =
+        ConfigEnvironmentVariables::load_from_env().unwrap();
 }
 /**
  * EnvironmentMiddleWare: This is an implementation of the Transform trait which is required by Actix to define a
@@ -93,11 +93,11 @@ where
 pub struct RequestEnvironmentContext {
     pub is_test: bool,
     pub database_name: String,
-    pub env: &'static CatanEnvironmentVariables,
+    pub env: &'static ConfigEnvironmentVariables,
 }
 
 impl RequestEnvironmentContext {
-    fn new(is_test: bool, catan_env: &'static CatanEnvironmentVariables) -> Self {
+    fn new(is_test: bool, catan_env: &'static ConfigEnvironmentVariables) -> Self {
         let mut db_name: String = catan_env.database_name.clone();
         if is_test {
             db_name += "-test";
@@ -121,7 +121,7 @@ impl RequestEnvironmentContext {
  */
 pub struct ServiceEnvironmentContext {
     pub context: Mutex<RequestEnvironmentContext>,
-    pub env: &'static CatanEnvironmentVariables,
+    pub env: &'static ConfigEnvironmentVariables,
 }
 
 impl ServiceEnvironmentContext {

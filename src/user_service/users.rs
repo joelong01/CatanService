@@ -6,7 +6,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
  */
 use crate::cosmos_db::cosmosdb::UserDb;
 use crate::middleware::environment_mw::{ServiceEnvironmentContext, CATAN_ENV};
-use crate::shared::models::{Claims, Credentials, ServiceResponse, User};
+use crate::shared::models::{Claims, ClientUser, Credentials, PersistUser, ServiceResponse};
 use crate::shared::utility::get_id;
 use actix_web::web::Data;
 use actix_web::{web, HttpRequest, HttpResponse};
@@ -61,39 +61,40 @@ pub async fn setup(data: Data<ServiceEnvironmentContext>) -> HttpResponse {
     }
 }
 
-/**
- *  this creates a user.  it uses web forms to collect the data from the client.  Note that if you are using PostMan
- *  to call this API, set the form data in 'x-www-form-urlencoded', *not* in 'form-data', as that will fail with a
- *  hard-to-figure-out error in actix_web deserialize layer.
- */
+/// Registers a new user by hashing the provided password and creating a `PersistUser` record in the database.
+///
+/// # Arguments
+///
+/// * `user_in` - ClientUser object
+/// * `data` - `ServiceEnvironmentContext` data.
+/// * `req` - `HttpRequest` object containing the request information.
+///
+/// # Returns
+///
+/// Returns an HTTP response indicating the success or failure of the registration process.
 pub async fn register(
-    user_in: web::Json<User>,
+    user_in: web::Json<ClientUser>,
     data: Data<ServiceEnvironmentContext>,
+    req: HttpRequest,
 ) -> HttpResponse {
-    let user_result =
-        internal_find_user("email".to_string(), user_in.email.clone(), data.clone()).await;
-
-    match user_result {
-        Ok(_) => {
-            return create_http_response(
-                StatusCode::Conflict,
-                format!("user already registered {}", user_in.email),
-                "".to_owned(),
-            )
-        }
-        Err(_) => {
-            // expect an error for user not found
-        }
-    };
-
-    let mut user = user_in.clone();
-    user.partition_key = Some(1);
-
-    let password = match user.password {
-        Some(p) => p,
+    // Retrieve the password value from the "X-Password" header
+    let password_value: String = match req.headers().get("X-Password") {
+        Some(header_value) => match header_value.to_str() {
+            Ok(pwd) => pwd.to_string(),
+            Err(e) => {
+                let response = ServiceResponse {
+                    message: format!("X-Password header is set, but the value is not. Err: {}", e),
+                    status: StatusCode::BadRequest,
+                    body: "".to_owned(),
+                };
+                return HttpResponse::BadRequest()
+                    .content_type("application/json")
+                    .json(response);
+            }
+        },
         None => {
             let response = ServiceResponse {
-                message: format!("missing password"),
+                message: format!("X-Password header not set"),
                 status: StatusCode::BadRequest,
                 body: "".to_owned(),
             };
@@ -103,23 +104,56 @@ pub async fn register(
         }
     };
 
-    user.password_hash = match hash(&password, DEFAULT_COST) {
-        Ok(hp) => Some(hp),
+    // Check if the user already exists
+    let user_result = internal_find_user(
+        "email".to_string(),
+        user_in.user_profile.email.clone(),
+        data.clone(),
+    )
+    .await;
+
+    match user_result {
+        Ok(_) => {
+            return create_http_response(
+                StatusCode::Conflict,
+                format!("User already registered: {}", user_in.user_profile.email),
+                "".to_owned(),
+            );
+        }
         Err(_) => {
-            return HttpResponse::InternalServerError().body("Error hashing password");
+            // User not found, continue registration
+        }
+    }
+
+    // Hash the password
+    let password_hash = match hash(&password_value, DEFAULT_COST) {
+        Ok(hp) => hp,
+        Err(_) => {
+            return create_http_response(
+                StatusCode::Conflict,
+                "Error hashing password".to_owned(),
+                "".to_owned(),
+            );
         }
     };
-    user.password = None;
-    user.id = Some(get_id());
+
+    // Create the user record
+    let mut persist_user = PersistUser::from_client_user(&user_in, password_hash.to_owned());
+    // ignore the id passed in by the client and create a new one
+    persist_user.id = get_id();
+    persist_user.user_profile.games_played = Some(0);
+    persist_user.user_profile.games_won = Some(0);
+    // Create the database connection
     let request_context = data.context.lock().unwrap();
     let userdb = UserDb::new(&request_context).await;
 
-    match userdb.create_user(user.clone()).await {
+    // Save the user record to the database
+    match userdb.create_user(persist_user.clone()).await {
         Ok(..) => {
-            user.password_hash = None;
+            persist_user.password_hash = None;
             HttpResponse::Ok()
                 .content_type("application/json")
-                .json(user)
+                .json(ClientUser::from_persist_user(persist_user))
         }
         Err(err) => {
             let response = ServiceResponse {
@@ -133,6 +167,7 @@ pub async fn register(
         }
     }
 }
+
 /**
  * login to the system.
  * a cleartext password is passed in (depending on HTTPS to stop MitM attacks and encrypt payload)
@@ -174,7 +209,7 @@ pub async fn login(
             .unwrap()
             .as_secs()) as usize;
         let claims = Claims {
-            id: user.id.unwrap(), // has to be there as we searched for it above
+            id: user.id, // has to be there as we searched for it above
             sub: creds.username.clone(),
             exp: expire_duration,
         };
@@ -260,16 +295,20 @@ pub async fn find_user_by_id(
     }
 }
 
-async fn internal_find_user(
+pub async fn internal_find_user(
     prop: String,
     id: String,
     data: Data<ServiceEnvironmentContext>,
-) -> AzureResult<User> {
+) -> AzureResult<PersistUser> {
     let request_context = data.context.lock().unwrap();
     let userdb = UserDb::new(&request_context).await;
+    if prop == "id" {
+        userdb.find_user_by_id(&id).await
+    } else {
+        userdb.find_user_by_profile(&prop, &id).await
+    }
 
-    // Get list of users
-    userdb.find_user(&prop, &id).await
+   
 }
 
 pub async fn delete(
@@ -277,6 +316,8 @@ pub async fn delete(
     data: Data<ServiceEnvironmentContext>,
     req: HttpRequest,
 ) -> HttpResponse {
+    //
+    // unwrap is ok here because our middleware put it there.
     let header_id_result = req.headers().get("user_id").unwrap().to_str();
 
     let header_id = match header_id_result {
@@ -324,7 +365,11 @@ pub async fn delete(
     }
 }
 
-fn create_http_response(status_code: StatusCode, message: String, body: String) -> HttpResponse {
+pub fn create_http_response(
+    status_code: StatusCode,
+    message: String,
+    body: String,
+) -> HttpResponse {
     let response = ServiceResponse {
         message: message,
         status: status_code,

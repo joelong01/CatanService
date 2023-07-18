@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::games_service::catan_games::game_enums::Direction;
+use crate::games_service::shared::game_enums::Direction;
 use once_cell::sync::Lazy;
 
 use ::serde::{Deserialize, Serialize};

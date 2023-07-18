@@ -2,9 +2,9 @@
 
 use crate::{
     games_service::{
-        buildings::building_enums::BuildingPosition, catan_games::game_enums::Direction,
+        buildings::building_enums::BuildingPosition, shared::game_enums::Direction,
     },
-    shared::models::User,
+    shared::models::ClientUser,
 };
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -20,7 +20,7 @@ pub struct Road {
     primary_key: RoadKey,      // ids[0]
     aliases: Vec<RoadKey>,     // all the various ways to describe this road
     adjacent_roads: Vec<Road>, // the roads that are connected to this road
-    owner: Option<User>,       // who owns this road?
+    owner: Option<ClientUser>,       // who owns this road?
 }
 impl Road {
     pub fn new(primary_key: RoadKey) -> Self {

@@ -3,7 +3,7 @@
  */
 use crate::log_return_err;
 use crate::middleware::environment_mw::RequestEnvironmentContext;
-use crate::shared::models::User;
+use crate::shared::models::PersistUser;
 use azure_core::error::{ErrorKind, Result as AzureResult};
 use azure_data_cosmos::prelude::{
     AuthorizationToken, CollectionClient, CosmosClient, DatabaseClient, Query, QueryCrossPartition,
@@ -105,7 +105,7 @@ impl UserDb {
             .unwrap()
             // note: this is where the field for the partion key is set -- if you change anything, make sure this is
             // a member of your document struct!
-            .create_collection(self.collection_name.to_string(), "/partition_key")
+            .create_collection(self.collection_name.to_string(), "/partitionKey")
             .await
         {
             Ok(..) => {
@@ -118,8 +118,8 @@ impl UserDb {
     /**
      *  this will return *all* (non paginated) Users in the collection
      */
-    pub async fn list(&self) -> AzureResult<Vec<User>> {
-        let query = r#"SELECT * FROM c WHERE c.partition_key=1"#;
+    pub async fn list(&self) -> AzureResult<Vec<PersistUser>> {
+        let query = r#"SELECT * FROM c WHERE c.partitionKey=1"#;
         match self.execute_query(query).await {
             Ok(users) => Ok(users),
             Err(e) => log_return_err!(e),
@@ -128,7 +128,7 @@ impl UserDb {
     /**
      * Execute an arbitrary query against the user database and return a list of users
      */
-    async fn execute_query(&self, query_string: &str) -> AzureResult<Vec<User>> {
+    async fn execute_query(&self, query_string: &str) -> AzureResult<Vec<PersistUser>> {
         let mut users = Vec::new();
         let query = Query::new(query_string.to_string());
 
@@ -148,7 +148,7 @@ impl UserDb {
                     info!("\n{:#?}", response);
                     for doc in response.documents() {
                         // Process the document
-                        let user: User = serde_json::from_value(doc.clone())?;
+                        let user: PersistUser = serde_json::from_value(doc.clone())?;
                         users.push(user);
                     }
                     return Ok(users); // return user if found
@@ -163,9 +163,9 @@ impl UserDb {
 
     /**
      *  an api that creates a user in the cosmosdb users collection. in this sample, we return
-     *  the full User object in the body, giving the client the partition_key and user id
+     *  the full User object in the body, giving the client the partitionKey and user id
      */
-    pub async fn create_user(&self, user: User) -> AzureResult<()> {
+    pub async fn create_user(&self, user: PersistUser) -> AzureResult<()> {
         match self
             .database
             .as_ref()
@@ -195,8 +195,24 @@ impl UserDb {
     /**
      *  an api that finds a user by the id in the cosmosdb users collection.
      */
-    pub async fn find_user(&self, prop: &str, val: &str) -> AzureResult<User> {
-        let query = format!(r#"SELECT * FROM c WHERE c.{} = '{}'"#, prop, val);
+    pub async fn find_user_by_id(&self, val: &str) -> AzureResult<PersistUser> {
+        let query = format!(r#"SELECT * FROM c WHERE c.id = '{}'"#, val);
+        match self.execute_query(&query).await {
+            Ok(users) => {
+                if !users.is_empty() {
+                    Ok(users.first().unwrap().clone()) // clone is necessary because `first()` returns a reference
+                } else {
+                    Err(azure_core::Error::new(ErrorKind::Other, "User not found"))
+                }
+            }
+            Err(e) => log_return_err!(e),
+        }
+    }
+    pub async fn find_user_by_profile(&self, prop: &str, val: &str) -> AzureResult<PersistUser> {
+        let query = format!(
+            r#"SELECT * FROM c WHERE c.userProfile.{} = '{}'"#,
+            prop, val
+        );
         match self.execute_query(&query).await {
             Ok(users) => {
                 if !users.is_empty() {
@@ -212,11 +228,11 @@ impl UserDb {
 #[cfg(test)]
 mod tests {
 
-    use crate::shared::utility::get_id;
+    use crate::shared::{models::UserProfile, utility::get_id};
 
     use super::*;
+    use bcrypt::{hash, DEFAULT_COST};
     use log::trace;
-
     #[tokio::test]
     async fn test_e2e() {
         let context = RequestEnvironmentContext::create(true);
@@ -233,14 +249,19 @@ mod tests {
         let users = create_users();
         for user in users {
             let user_clone = user.clone();
-            match user_db.create_user(user_clone).await {
-                Ok(..) => trace!("created user {}", user.email),
+            match user_db.create_user(user_clone.clone()).await {
+                Ok(..) => trace!("created user {}", user.user_profile.email),
                 Err(e) => panic!("failed to create user.  err: {}", e),
             }
+
+            let result = user_db.create_user(user_clone.clone()).await;
+            assert!(result.is_err());
         }
 
+        // try to create the same user again:
+
         // get a list of all users
-        let users: Vec<User> = match user_db.list().await {
+        let users: Vec<PersistUser> = match user_db.list().await {
             Ok(u) => {
                 trace!("all_users returned success");
                 u
@@ -249,11 +270,11 @@ mod tests {
         };
 
         if let Some(first_user) = users.first() {
-            let u = user_db
-                .find_user("id", first_user.id.as_ref().unwrap())
-                .await;
+            let u = user_db.find_user_by_id(&first_user.id).await;
             match u {
-                Ok(found_user) => trace!("found user with email: {}", found_user.email),
+                Ok(found_user) => {
+                    trace!("found user with email: {}", found_user.user_profile.email)
+                }
                 Err(e) => panic!("failed to find user that we just inserted. error: {}", e),
             }
         } else {
@@ -262,10 +283,10 @@ mod tests {
         //
         //  delete all the users
         for user in users {
-            let result = user_db.delete_user(&user.id.unwrap()).await;
+            let result = user_db.delete_user(&user.id).await;
             match result {
                 Ok(_) => {
-                    trace!("deleted user with email: {}", &user.email);
+                    trace!("deleted user with email: {}", &user.user_profile.email);
                 }
                 Err(e) => {
                     panic!("failed to delete user. error: {:#?}", e)
@@ -274,7 +295,7 @@ mod tests {
         }
 
         // get the list of users again -- should be empty
-        let users: Vec<User> = match user_db.list().await {
+        let users: Vec<PersistUser> = match user_db.list().await {
             Ok(u) => {
                 trace!("all_users returned success");
                 u
@@ -286,24 +307,28 @@ mod tests {
         }
     }
 
-    fn create_users() -> Vec<User> {
+    fn create_users() -> Vec<PersistUser> {
         let mut users = Vec::new();
 
         for i in 1..=5 {
-            let user = User {
-                partition_key: Some(1),
-                id: Some(get_id()),
-                password_hash: None,
-                password: Some(format!("long_password_that_is_ a test {}", i)),
-                email: format!("test{}@example.com", i),
-                first_name: format!("Test{}", i),
-                last_name: format!("User{}", i),
-                display_name: format!("Test User{}", i),
-                picture_url: format!("https://example.com/pic{}.jpg", i),
-                foreground_color: format!("#00000{}", i),
-                background_color: format!("#FFFFFF{}", i),
-                games_played: Some(10 * i as u16),
-                games_won: Some(5 * i as u16),
+            let password = format!("long_password_that_is_ a test {}", i);
+            let password_hash = hash(&password, DEFAULT_COST).unwrap();
+            let user = PersistUser {
+                partition_key: 1,
+                id: get_id(),
+                password_hash: Some(password_hash.to_owned()),
+                user_profile: UserProfile {
+                    email: format!("test{}@example.com", i),
+                    first_name: format!("Test{}", i),
+                    last_name: format!("User{}", i),
+                    display_name: format!("Test User{}", i),
+                    picture_url: format!("https://example.com/pic{}.jpg", i),
+                    foreground_color: format!("#00000{}", i),
+                    background_color: format!("#FFFFFF{}", i),
+                    text_color: format!("0000000"),
+                    games_played: Some(10 * i as u16),
+                    games_won: Some(5 * i as u16),
+                },
             };
 
             users.push(user);

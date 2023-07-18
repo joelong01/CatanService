@@ -1,11 +1,38 @@
-use crate::shared::{models::ServiceResponse, utility::get_id};
-use actix_web::{web::Path, HttpResponse, Responder};
+use crate::{
+    middleware::environment_mw::ServiceEnvironmentContext,
+    shared::models::{ServiceResponse, ClientUser},
+    user_service::users::{create_http_response, internal_find_user},
+};
+use actix_web::{
+    web::{Data, Path},
+    HttpRequest, HttpResponse, Responder,
+};
 use azure_core::StatusCode;
 
-use crate::games_service::catan_games::game_enums::{CatanGames, GameData, SupportedGames};
+use crate::games_service::shared::game_enums::{CatanGames, SupportedGames};
 
-pub async fn new_game(game_type: Path<CatanGames>) -> impl Responder {
+use super::catan_games::{games::regular::regular_game::RegularGame, traits::game_trait::CatanGame};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
+// Define a global HashMap wrapped in Arc<Mutex>
+lazy_static::lazy_static! {
+    static ref GAME_MAP: Arc<Mutex<HashMap<String, RegularGame>>> = Arc::new(Mutex::new(HashMap::new()));
+}
+
+///
+/// creates a new game and returns a gamedId that is used for all subsequent game* apis.
+/// the user header is filled in by the auth middleware.  a JWT token from login must be
+/// passed in.  this creates a game and stores it in a global HashMap so that multiple
+/// cames can be run at the same time.
+pub async fn new_game(
+    game_type: Path<CatanGames>,
+    data: Data<ServiceEnvironmentContext>,
+    req: HttpRequest,
+) -> impl Responder {
     let game_type = game_type.into_inner();
+    let user_id = req.headers().get("user_id").unwrap().to_str().unwrap();
+
     if game_type != CatanGames::Regular {
         let response = ServiceResponse {
             message: format!("Game not supported: {:#?}", game_type),
@@ -16,13 +43,31 @@ pub async fn new_game(game_type: Path<CatanGames>) -> impl Responder {
             .content_type("application/json")
             .json(response);
     }
-    let game_data = GameData {
-        id: get_id(),
-        players: vec![],
+
+    let user_result = internal_find_user("id".to_owned(), user_id.to_owned(), data).await;
+
+    let user = match user_result {
+        Ok(u) => u,
+        Err(_) => {
+            return create_http_response(
+                StatusCode::NotFound,
+                format!("invalid user id: {}", user_id),
+                "".to_owned(),
+            );
+        }
     };
+
+    let mut game = RegularGame::new(&ClientUser::from_persist_user(user));
+    game.shuffle();
+
+    //
+    //  store GameId --> Game for later lookup
+    let mut game_map = GAME_MAP.lock().unwrap();
+    game_map.insert(game.id.clone(), game.clone());
+
     HttpResponse::Ok()
         .content_type("application/json")
-        .json(game_data)
+        .json(game)
 }
 
 pub async fn supported_games() -> impl Responder {

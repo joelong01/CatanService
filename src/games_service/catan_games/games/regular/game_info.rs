@@ -3,12 +3,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     games_service::{
-        catan_games::{game_enums::Direction, traits::game_info_trait::GameInfoTrait},
+        shared::game_enums::Direction,
+        catan_games::traits::game_info_trait::GameInfoTrait,
         harbors::{harbor::Harbor, harbor_enums::HarborType, harbor_key::HarborKey},
         tiles::{tile_enums::TileResource, tile_key::TileKey},
     },
     harbor_data,
 };
+
+use super::regular_game::RegularGame;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -115,8 +118,7 @@ fn create_regular_game_info() -> RegularGameInfo {
 
 pub static REGULAR_GAME_INFO: Lazy<RegularGameInfo> = Lazy::new(|| create_regular_game_info());
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RegularGame;
+
 
 impl GameInfoTrait for RegularGame {
     fn name(&self) -> &str {

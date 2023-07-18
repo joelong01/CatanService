@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 use serde::{Deserialize, Serialize};
 
-use crate::shared::models::User;
+use crate::shared::models::ClientUser;
 
 use crate::games_service::{
     buildings::building::Building, harbors::harbor::Harbor, roads::road::Road,
@@ -17,7 +17,7 @@ use super::player_enums::Target;
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Player {
-    pub user_data: User,
+    pub user_data: ClientUser,
     pub roads: Vec<Road>,
     pub buildings: Vec<Building>,
     pub harbors: Vec<Harbor>,
@@ -29,17 +29,5 @@ pub struct Player {
 }
 
 impl Player {
-    pub fn new(user: User) -> Self {
-        Self {
-            user_data: user.clone(),
-            roads: vec![],
-            buildings: vec![],
-            harbors: vec![],
-            targets: vec![],
-            resource_count: ResourceCount::default(),
-            good_rolls: 0,
-            bad_rolls: 0,
-            state: CalculatedState::default(),
-        }
-    }
+    
 }

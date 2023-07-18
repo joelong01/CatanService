@@ -3,10 +3,10 @@
  */
 mod cosmos_db;
 mod games_service;
+mod macros;
 mod middleware;
 mod shared;
 mod user_service;
-mod macros;
 
 use actix::Actor;
 // dependencies...

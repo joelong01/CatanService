@@ -1,29 +1,34 @@
+
+#![allow(dead_code)]
 use azure_core::StatusCode;
 /**
  * this is the module where I define the structures needed for the data in Cosmos
  */
 use azure_data_cosmos::CosmosEntity;
 use serde::{Deserialize, Serialize};
-use strum_macros::Display;
 use std::env;
+use strum_macros::Display;
 
 use anyhow::{Context, Result};
+
+use super::utility::get_id;
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, Display)]
 pub enum GameError {
     PlayerMismatch,
     MissingPlayerId,
     IdNotFoundInOrder,
+    BadActionData,
 }
 
 /**
  *  Every CosmosDb document needs to define the partition_key.  In Rust we do this via this trait.
  */
-impl CosmosEntity for User {
+impl CosmosEntity for PersistUser {
     type Entity = u64;
 
     fn partition_key(&self) -> Self::Entity {
-        self.partition_key.unwrap()
+        self.partition_key
     }
 }
 
@@ -37,11 +42,44 @@ impl CosmosEntity for User {
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct User {
-    pub id: Option<String>,            // not set by client
-    pub partition_key: Option<u64>,    // Option<> so that the client can skip this
+pub struct PersistUser {
+    pub id: String,                    // not set by client
+    pub partition_key: u64,            // Option<> so that the client can skip this
     pub password_hash: Option<String>, // when it is pulled from Cosmos, the hash is set
-    pub password: Option<String>,      // when the user is registered, the password is set
+    pub user_profile: UserProfile,
+}
+
+impl PersistUser {
+    pub fn new() -> Self {
+        Self {
+            id: get_id(),
+            partition_key: 1,
+            password_hash: None,
+            user_profile: UserProfile::default(),
+        }
+    }
+}
+impl PersistUser {
+    pub fn from_client_user(client_user: &ClientUser, hash: String) -> Self {
+        Self {
+            id: client_user.id.clone(),
+            partition_key: 1,
+            password_hash: Some(hash.to_owned()),
+            user_profile: client_user.user_profile.clone(),
+        }
+    }
+}
+impl Default for PersistUser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+///
+/// UserProfile is just information about the client.  this can be as much or little information as the app needs
+/// to run
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UserProfile {
     pub email: String,
     pub first_name: String,
     pub last_name: String,
@@ -49,8 +87,52 @@ pub struct User {
     pub picture_url: String,
     pub foreground_color: String,
     pub background_color: String,
+    pub text_color: String,
     pub games_played: Option<u16>,
     pub games_won: Option<u16>,
+}
+impl Default for UserProfile {
+    fn default() -> Self {
+        UserProfile {
+            email: String::default(),
+            first_name: String::default(),
+            last_name: String::default(),
+            display_name: String::default(),
+            picture_url: String::default(),
+            foreground_color: String::default(),
+            background_color: String::default(),
+            text_color: String::default(),
+            games_played: None,
+            games_won: None,
+        }
+    }
+}
+///
+/// This is the struct that is returned to the clien whenever User data needs to be returned.  it is also the format
+/// that data is passed from the client to the service.  Note that the password is not in this structure -- it passes
+/// from the client in a header, as does the JWT token when it is needed.
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ClientUser {
+    pub id: String,
+    pub user_profile: UserProfile,
+}
+
+impl ClientUser {
+    /// Creates a new [`ClientUser`].
+    fn new(id: String) -> Self {
+        Self {
+            id,
+            user_profile: UserProfile::default(),
+        }
+    }
+
+    pub fn from_persist_user(persist_user: PersistUser) -> Self {
+        Self {
+            id: persist_user.id,
+            user_profile: persist_user.user_profile.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -82,7 +164,7 @@ pub struct ServiceResponse {
  *  holds them so that they are more convinient to use
  */
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct CatanEnvironmentVariables {
+pub struct ConfigEnvironmentVariables {
     pub cosmos_token: String,
     pub cosmos_account: String,
     pub ssl_key_location: String,
@@ -93,7 +175,7 @@ pub struct CatanEnvironmentVariables {
     pub rust_log: String,
 }
 
-impl CatanEnvironmentVariables {
+impl ConfigEnvironmentVariables {
     pub fn load_from_env() -> Result<Self> {
         let cosmos_token =
             env::var("COSMOS_AUTH_TOKEN").context("COSMOS_AUTH_TOKEN not found in environment")?;
@@ -105,10 +187,10 @@ impl CatanEnvironmentVariables {
             env::var("SSL_CERT_FILE").context("SSL_CERT_FILE not found in environment")?;
         let login_secret_key =
             env::var("LOGIN_SECRET_KEY").context("LOGIN_SECRET_KEY not found in environment")?;
-        let database_name = env::var("CATAN_USER_DATABASE_NAME")
-            .context("CATAN_USER_DATABASE_NAME not found in environment")?;
-        let container_name = env::var("CATAN_USER_CONTAINER_NAME")
-            .context("CATAN_USER_CONTAINER_NAME not found in environment")?;
+        let database_name = env::var("USER_DATABASE_NAME")
+            .context("USER_DATABASE_NAME not found in environment")?;
+        let container_name = env::var("USER_CONTAINER_NAME")
+            .context("USER_CONTAINER_NAME not found in environment")?;
         let rust_log = env::var("RUST_LOG").context("RUST_LOG not found in environment")?;
 
         Ok(Self {
@@ -123,7 +205,7 @@ impl CatanEnvironmentVariables {
         })
     }
 }
-impl Default for CatanEnvironmentVariables {
+impl Default for ConfigEnvironmentVariables {
     fn default() -> Self {
         Self {
             cosmos_token: "".to_owned(),
