@@ -8,9 +8,7 @@ use super::{harbor_enums::HarborType, harbor_key::HarborKey};
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Harbor {
-    #[serde(rename = "HarborKey")]
-    pub key: HarborKey,
-    #[serde(rename = "HarborType")]
+    pub harbor_key: HarborKey,
     pub harbor_type: HarborType,
 }
 
@@ -28,6 +26,23 @@ impl Harbor {
     ///
     /// A new Harbor instance.
     pub fn new(key: HarborKey, harbor_type: HarborType) -> Self {
-        Self { key, harbor_type }
+        Self { harbor_key: key, harbor_type }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::games_service::{tiles::tile_key::TileKey, shared::game_enums::Direction};
+
+    #[test]
+    fn test_harbor_key_serialization() {
+        let key = HarborKey::new(TileKey::new(-1, 2, 3), Direction::South);
+        let tk_json = serde_json::to_string(&key).unwrap();
+        let deserialized_key: HarborKey = serde_json::from_str(&tk_json).unwrap();
+        assert_eq!(key, deserialized_key);
+        let harbor = Harbor::new(deserialized_key, HarborType::Ore);
+        let harbor_json = serde_json::to_string(&harbor).unwrap();
+        let deserialized_harbor: Harbor = serde_json::from_str(&harbor_json).unwrap();
+        assert_eq!(deserialized_harbor, harbor);
     }
 }

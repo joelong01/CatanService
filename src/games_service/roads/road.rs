@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
 
-use super::road_key::RoadKey;
+use super::{road_key::RoadKey, road_enums::RoadState};
 
 // RoadProps struct
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -21,6 +21,7 @@ pub struct Road {
     aliases: Vec<RoadKey>,     // all the various ways to describe this road
     adjacent_roads: Vec<Road>, // the roads that are connected to this road
     owner: Option<ClientUser>,       // who owns this road?
+    state: RoadState
 }
 impl Road {
     pub fn new(primary_key: RoadKey) -> Self {
@@ -29,6 +30,7 @@ impl Road {
             aliases: vec![],
             adjacent_roads: vec![],
             owner: None,
+            state: RoadState::Unbuilt
         }
     }
 }

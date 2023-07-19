@@ -12,14 +12,10 @@ pub enum BuildingPosition {
     TopRight,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub enum BuildingState {
-    #[serde(rename = "Empty")]
     Empty,
-    #[serde(rename = "Settlement")]
     Settlement,
-    #[serde(rename = "City")]
     City,
-    #[serde(rename = "Pips")]
     Pips,
 }

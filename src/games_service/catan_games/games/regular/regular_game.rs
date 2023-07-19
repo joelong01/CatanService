@@ -1,13 +1,13 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 #![macro_use]
-use crate::games_service::player::calculated_state::{ResourceCount, CalculatedState};
-use crate::games_service::shared::game_enums::{GamePhase, GameState, Direction};
 use crate::games_service::catan_games::traits::game_info_trait::shuffle_vector;
 use crate::games_service::catan_games::traits::game_state_machine_trait::{
     StateData, StateMachineTrait,
 };
 use crate::games_service::harbors::harbor_enums::HarborType;
+use crate::games_service::player::calculated_state::{CalculatedState, ResourceCount};
+use crate::games_service::shared::game_enums::{Direction, GamePhase, GameState};
 use crate::games_service::{
     buildings::{building::Building, building_enums::BuildingPosition, building_key::BuildingKey},
     catan_games::traits::{game_info_trait::GameInfoTrait, game_trait::CatanGame},
@@ -18,7 +18,7 @@ use crate::games_service::{
     tiles::{self, tile::Tile, tile_enums::TileResource, tile_key::TileKey},
 };
 
-use crate::shared::models::{GameError, ClientUser};
+use crate::shared::models::{ClientUser, GameError};
 use crate::shared::{models::PersistUser, utility::get_id};
 
 use actix_web::Resource;
@@ -52,6 +52,7 @@ pub struct RegularGame {
     pub player_order: Vec<String>,
     pub state_data: StateData,
     pub creator_id: String,
+    pub baron_tile: TileKey,
 }
 
 impl RegularGame {
@@ -94,7 +95,7 @@ impl RegularGame {
         let harbors: HashMap<HarborKey, Harbor> = game_info
             .harbor_data()
             .into_iter()
-            .map(|data| (data.key.clone(), data.clone()))
+            .map(|data| (data.harbor_key.clone(), data.clone()))
             .collect();
 
         Self {
@@ -108,6 +109,7 @@ impl RegularGame {
             player_order: vec![],
             state_data: StateData::new(GameState::AddingPlayers),
             creator_id: player_id.clone(),
+            baron_tile: TileKey::new(0, 0, 0),
         }
     }
 
@@ -188,18 +190,18 @@ impl RegularGame {
                         tile.roads.insert(direction, road.clone());
                         roads.insert(road_key.clone(), road.clone());
                     }
-                }
 
-                let neighbor_key = tile_key.get_neighbor_key(direction);
-                let neighbor_direction = RegularGame::get_neighbor_direction(direction);
-                let neighbor_road_key = RoadKey::new(neighbor_direction, neighbor_key.clone());
-                if let Some(neighbor_tile) = tiles.get_mut(&neighbor_key) {
-                    if !neighbor_tile.roads.contains_key(&neighbor_direction) {
-                        let neighbor_road = Road::new(neighbor_road_key.clone());
-                        neighbor_tile
-                            .roads
-                            .insert(neighbor_direction, neighbor_road.clone());
-                        roads.insert(neighbor_road_key.clone(), neighbor_road.clone());
+                    let neighbor_key = tile_key.get_neighbor_key(direction);
+                    let neighbor_direction = RegularGame::get_neighbor_direction(direction);
+                    let neighbor_road_key = RoadKey::new(neighbor_direction, neighbor_key.clone());
+                    if let Some(neighbor_tile) = tiles.get_mut(&neighbor_key) {
+                        if !neighbor_tile.roads.contains_key(&neighbor_direction) {
+                            let neighbor_road = Road::new(neighbor_road_key.clone());
+                            neighbor_tile
+                                .roads
+                                .insert(neighbor_direction, neighbor_road.clone());
+                            // roads.insert(neighbor_road_key.clone(), neighbor_road.clone());
+                        }
                     }
                 }
             }
@@ -278,18 +280,23 @@ impl RegularGame {
         let mut tiles: Vec<Tile> = self.tiles.values().cloned().collect();
         let mut resources: Vec<TileResource> = tiles
             .iter()
-            .filter(|tile| tile.current_resource != TileResource::Desert)
             .map(|tile| tile.current_resource.clone())
             .collect();
         let mut rolls: Vec<u32> = tiles
             .iter()
-            .filter(|tile| tile.roll != 7)
             .map(|tile| tile.roll)
             .collect();
 
         shuffle_vector(&mut resources);
         shuffle_vector(&mut rolls);
 
+        let mut resources_iter = resources.into_iter();
+        let mut rolls_iter = rolls.into_iter();
+        for tile in &mut tiles {
+            tile.current_resource = resources_iter.next().expect("Ran out of resources!");
+            tile.original_resource = tile.current_resource;
+            tile.roll = rolls_iter.next().expect("Ran out of rolls!");
+        }
         let desert_tile_index = tiles
             .iter()
             .position(|tile| tile.current_resource == TileResource::Desert)
@@ -302,21 +309,11 @@ impl RegularGame {
 
         tiles[seven_tile_index].roll = tiles[desert_tile_index].roll;
         tiles[desert_tile_index].roll = 7;
-
-        let mut resources_iter = resources.into_iter();
-        let mut rolls_iter = rolls.into_iter();
-        for tile in &mut tiles {
-            if tile.current_resource == TileResource::Desert || tile.roll == 7 {
-                continue;
-            }
-            tile.current_resource = resources_iter.next().expect("Ran out of resources!");
-            tile.original_resource = tile.current_resource;
-            tile.roll = rolls_iter.next().expect("Ran out of rolls!");
-        }
+        self.baron_tile = tiles[desert_tile_index].tile_key.clone();
 
         self.tiles.clear();
         for tile in tiles {
-            self.tiles.insert(tile.key.clone(), tile);
+            self.tiles.insert(tile.tile_key.clone(), tile);
         }
     }
 
@@ -336,7 +333,7 @@ impl RegularGame {
             new_harbors.insert(
                 *key,
                 Harbor {
-                    key: *key,
+                    harbor_key: *key,
                     harbor_type,
                 },
             );
@@ -395,7 +392,7 @@ impl<'a> CatanGame<'a> for RegularGame {
     }
 
     fn get_neighbor(&'a mut self, tile: &Tile, direction: Direction) -> Option<Tile> {
-        let current_coord = &tile.key;
+        let current_coord = &tile.tile_key;
         let neighbor_coord = current_coord.get_neighbor_key(direction);
         self.get_tiles().get(&neighbor_coord).cloned()
     }
@@ -436,21 +433,20 @@ impl<'a> CatanGame<'a> for RegularGame {
     }
 
     fn add_user(&mut self, user: &ClientUser) {
-        self.players
-            .insert(user.id.clone(), {
-                let user = user;
-                Player {
-                    user_data: user.clone(),
-                    roads: vec![],
-                    buildings: vec![],
-                    harbors: vec![],
-                    targets: vec![],
-                    resource_count: ResourceCount::default(),
-                    good_rolls: 0,
-                    bad_rolls: 0,
-                    state: CalculatedState::default(),
-                }
-            });
+        self.players.insert(user.id.clone(), {
+            let user = user;
+            Player {
+                user_data: user.clone(),
+                roads: vec![],
+                buildings: vec![],
+                harbors: vec![],
+                targets: vec![],
+                resource_count: ResourceCount::default(),
+                good_rolls: 0,
+                bad_rolls: 0,
+                state: CalculatedState::default(),
+            }
+        });
     }
 
     fn shuffle(&mut self) {
@@ -468,7 +464,6 @@ impl<'a> CatanGame<'a> for RegularGame {
             }
         }
 
-        println!("looped {} times", count);
         self.shuffle_harbors();
     }
     /// Sets the order of the players in the game.

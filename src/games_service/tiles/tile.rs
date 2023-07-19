@@ -16,7 +16,7 @@ pub struct Tile {
     pub current_resource: TileResource, // the resource (including a temp resource) that the tile currently holds
     pub original_resource: TileResource, // the orginal resource the tile started with
     pub roll: u32,                      // the Catan Number that the tile should display
-    pub key: TileKey,                   // the position of the tile on the board
+    pub tile_key: TileKey,                   // the position of the tile on the board
 
     #[serde_as(as = "Vec<(_, _)>")]
     pub roads: HashMap<Direction, Road>, // all the roads around the tile
@@ -27,7 +27,7 @@ pub struct Tile {
 impl Tile {
     pub fn new(key: TileKey, roll: u32, resource: TileResource) -> Self {
         Self {
-            key: key,
+            tile_key: key,
             roll,
             current_resource: resource.clone(),
             original_resource: resource.clone(),

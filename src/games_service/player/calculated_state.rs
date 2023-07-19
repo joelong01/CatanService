@@ -4,11 +4,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct CalculatedState {
-    #[serde(rename = "KnightsPlayed")]
     knights_played: i8,
-    #[serde(rename = "LongestRoad")]
     longest_road: i8,
-
     total_resources: i8,
     won_resources: WonResources,
     has_longest_road: bool,
