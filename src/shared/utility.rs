@@ -11,5 +11,5 @@ thread_local! {
     static RNG: RefCell<StdRng> = RefCell::new(StdRng::from_entropy());
 }
 pub fn get_id() -> String {
-    format!("id:{}", RNG.with(|rng| rng.borrow_mut().gen::<u64>()))
+    format!("id-{}", RNG.with(|rng| rng.borrow_mut().gen::<u64>()))
 }

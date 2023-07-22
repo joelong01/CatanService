@@ -106,6 +106,7 @@ impl Default for UserProfile {
             games_won: None,
         }
     }
+
 }
 ///
 /// This is the struct that is returned to the clien whenever User data needs to be returned.  it is also the format

@@ -267,6 +267,29 @@ pub async fn list_users(data: Data<ServiceEnvironmentContext>) -> HttpResponse {
         }
     }
 }
+pub async fn get_profile(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> HttpResponse {
+   
+    let header_id = req.headers().get("user_id").unwrap().to_str().unwrap();
+    match internal_find_user("id".to_string(), header_id.to_string(), data).await {
+        Ok(user) => {
+            HttpResponse::Ok()
+                .content_type("application/json")
+                .json(user.user_profile)
+        }
+        Err(err) => {
+            let response = ServiceResponse {
+                message: format!("Failed to find user: {}", err),
+                status: StatusCode::NotFound,
+                body: "".to_owned(),
+            };
+            HttpResponse::NotFound()
+                .content_type("application/json")
+                .json(response)
+        }
+    }
+}
+
+
 /**
  *  this will get a list of all documents.  Note this does *not* do pagination. This would be a reasonable next step to
  *  show in the sample

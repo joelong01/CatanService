@@ -1,23 +1,73 @@
 use crate::{
     middleware::environment_mw::ServiceEnvironmentContext,
-    shared::models::{ServiceResponse, ClientUser},
+    shared::models::{ClientUser, ServiceResponse},
     user_service::users::{create_http_response, internal_find_user},
 };
 use actix_web::{
-    web::{Data, Path},
+    web::{self, Data, Path},
     HttpRequest, HttpResponse, Responder,
 };
 use azure_core::StatusCode;
 
 use crate::games_service::shared::game_enums::{CatanGames, SupportedGames};
 
-use super::catan_games::{games::regular::regular_game::RegularGame, traits::game_trait::CatanGame};
+use super::catan_games::{
+    games::regular::regular_game::RegularGame, traits::game_trait::CatanGame,
+};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 // Define a global HashMap wrapped in Arc<Mutex>
 lazy_static::lazy_static! {
     static ref GAME_MAP: Arc<Mutex<HashMap<String, RegularGame>>> = Arc::new(Mutex::new(HashMap::new()));
+}
+///
+/// check the state to make sure the request is valid
+/// randomize the board and the harbors
+/// post the response to websocket
+pub async fn shuffle_game(
+    game_id: web::Path<String>,
+    req: HttpRequest,
+) -> impl Responder {
+    let mut game_map = GAME_MAP.lock().unwrap();
+
+    let game = match game_map.get_mut(game_id.as_str()) {
+        Some(game) => game,
+        None => {
+            let response = ServiceResponse {
+                message: format!("Bad gameId"),
+                status: StatusCode::BadRequest,
+                body: "".to_owned(),
+            };
+            return HttpResponse::BadRequest()
+                .content_type("application/json")
+                .json(response);
+        }
+    };
+
+    let user_id = req
+        .headers()
+        .get("user_id")
+        .and_then(|header| header.to_str().ok())
+        .unwrap_or_default();
+    if user_id != game.creator_id {
+        let response = ServiceResponse {
+            message: format!(
+                "Only the creator can shuffle the board, and you are not the creator."
+            ),
+            status: StatusCode::BadRequest,
+            body: "".to_owned(),
+        };
+        return HttpResponse::BadRequest()
+            .content_type("application/json")
+            .json(response);
+    }
+
+    game.shuffle();
+
+    HttpResponse::Ok()
+        .content_type("application/json")
+        .json(game)
 }
 
 ///
