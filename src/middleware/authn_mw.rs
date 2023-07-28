@@ -8,14 +8,11 @@ use futures::{
     future::{ok, Ready},
     Future,
 };
-
 use jsonwebtoken::{decode, Algorithm, DecodingKey, TokenData, Validation};
 use reqwest::header::{HeaderName, HeaderValue};
-
 use crate::shared::models::Claims;
 
 use super::environment_mw::CATAN_ENV;
-
 // AuthenticationMiddlewareFactory serves as a factory to create instances of AuthenticationMiddleware
 // which is the actual middleware component. It implements the Transform trait required by
 // Actix to apply transformations to requests/responses as they pass through the middleware.
@@ -72,6 +69,7 @@ where
     fn call(&self, mut req: ServiceRequest) -> Self::Future {
         // fetch the authorization header
         let auth_header = req.headers().get("Authorization");
+        
 
         match auth_header {
             Some(header_value) => {
@@ -102,13 +100,13 @@ where
                 return Box::pin(fut);
             }
         }
-
+      
         let fut = self.service.call(req);
         Box::pin(fut)
     }
 }
 
-fn is_token_valid(token: &str) -> Option<TokenData<Claims>> {
+pub fn is_token_valid(token: &str) -> Option<TokenData<Claims>> {
     let validation = Validation::new(Algorithm::HS512);
     decode::<Claims>(
         &token,

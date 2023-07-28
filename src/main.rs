@@ -8,19 +8,15 @@ mod middleware;
 mod shared;
 mod user_service;
 
-use actix::Actor;
 // dependencies...
 use actix_cors::Cors;
 use actix_web::{
     middleware::Logger,
     web::{self, Data},
-    App, HttpServer,
+    App, HttpResponse, HttpServer,
 };
 
-use games_service::{
-    catanws::{self, Broker},
-    game_handlers,
-};
+use games_service::game_handlers;
 use middleware::authn_mw::AuthenticationMiddlewareFactory;
 use middleware::environment_mw::{
     EnvironmentMiddleWareFactory, ServiceEnvironmentContext, CATAN_ENV,
@@ -29,6 +25,8 @@ use once_cell::sync::OnceCell;
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
 use std::env;
 use user_service::users;
+
+use crate::games_service::catanws;
 
 /**
  *  Code to pick a port in a threadsafe way -- either specified in an environment variable named COSMOS_RUST_SAMPLE_PORT
@@ -85,20 +83,21 @@ async fn main() -> std::io::Result<()> {
         .set_certificate_chain_file(CATAN_ENV.ssl_cert_location.to_owned())
         .unwrap();
 
-    let broker_addr = Broker::new().start();
-
     //
     // set up the HttpServer - pass in the broker service as part of App data
     HttpServer::new(move || {
         App::new()
-            .app_data(Data::new(ServiceEnvironmentContext::new()))
-            .app_data(broker_addr.clone())
             .wrap(Logger::default())
+            .service(
+                web::scope("api/ws").route("/wsbootstrap", web::get().to(catanws::ws_bootstrap)),
+            )
+            .app_data(Data::new(ServiceEnvironmentContext::new()))
             .wrap(EnvironmentMiddleWareFactory)
             .wrap(Cors::permissive())
             .service(
                 web::scope("/api").service(
                     web::scope("/v1")
+                        .route("/version", web::get().to(get_version))
                         .route("/users/setup", web::post().to(users::setup))
                         .route("/users/register", web::post().to(users::register))
                         .route("/users/login", web::post().to(users::login)),
@@ -109,23 +108,37 @@ async fn main() -> std::io::Result<()> {
                     .wrap(AuthenticationMiddlewareFactory)
                     .service(
                         web::scope("/v1")
-                            .route("/users", web::get().to(users::list_users))
-                            .route("/users/{id}", web::delete().to(users::delete))
-                            .route("/users/{id}", web::get().to(users::find_user_by_id))
-                         
-                            .route(
-                                "/games/{game_type}",
-                                web::post().to(game_handlers::new_game),
+                            .service(
+                                web::scope("users")
+                                    .route("", web::get().to(users::list_users))
+                                    .route("/{id}", web::delete().to(users::delete))
+                                    .route("/{id}", web::get().to(users::find_user_by_id)),
                             )
-                            .route("/games", web::get().to(game_handlers::supported_games))
-                            .route("/games/shuffle/{game_id}", web::post().to(game_handlers::shuffle_game))
-                            .route("/profile", web::get().to(users::get_profile))
-                            .route("/ws/{user_id}", web::get().to(catanws::ws_index)),
-                            
+                            .service(
+                                web::scope("games")
+                                    .wrap(Cors::permissive())
+                                    .route("/", web::get().to(game_handlers::supported_games))
+                                    .route("/{game_type}", web::post().to(game_handlers::new_game))
+                                    .route("/longpoll", web::get().to(users::long_poll))
+                                    .route(
+                                        "/shuffle/{game_id}",
+                                        web::post().to(game_handlers::shuffle_game),
+                                    ),
+                            )
+                            .service(
+                                web::scope("profile")
+                                    .route("/profile", web::get().to(users::get_profile)),
+                            ),
                     ),
             )
     })
     .bind_openssl(format!("0.0.0.0:{}", port), builder)?
     .run()
     .await
+}
+
+async fn get_version() -> HttpResponse {
+    HttpResponse::Ok()
+        .content_type("text/plain")
+        .body("version 1.0")
 }

@@ -53,6 +53,7 @@ pub struct RegularGame {
     pub state_data: StateData,
     pub creator_id: String,
     pub baron_tile: TileKey,
+    pub can_undo: bool
 }
 
 impl RegularGame {
@@ -110,6 +111,7 @@ impl RegularGame {
             state_data: StateData::new(GameState::AddingPlayers),
             creator_id: player_id.clone(),
             baron_tile: TileKey::new(0, 0, 0),
+            can_undo: true
         }
     }
 

@@ -1,14 +1,36 @@
 #[cfg(test)]
 mod tests {
+    use crate::games_service::catanws;
+    use crate::get_version;
+    use crate::middleware::environment_mw::{ServiceEnvironmentContext, EnvironmentMiddleWareFactory};
     use crate::user_service::users;
+    use actix_cors::Cors;
     use actix_web::http::{header, StatusCode};
+    use actix_web::middleware::Logger;
+    use actix_web::web::Data;
     use actix_web::{test, web, App};
 
     #[actix_rt::test]
     async fn test_setup_no_test_header() {
         let mut app = test::init_service(
             App::new()
-                .service(web::scope("/api/v1").route("/users/setup", web::post().to(users::setup))),
+                .wrap(Logger::default())
+                .service(
+                    web::scope("api/ws")
+                        .route("/wsbootstrap", web::get().to(catanws::ws_bootstrap)),
+                )
+                .app_data(Data::new(ServiceEnvironmentContext::new()))
+                .wrap(EnvironmentMiddleWareFactory)
+                .wrap(Cors::permissive())
+                .service(
+                    web::scope("/api").service(
+                        web::scope("/v1")
+                            .route("/version", web::get().to(get_version))
+                            .route("/users/setup", web::post().to(users::setup))
+                            .route("/users/register", web::post().to(users::register))
+                            .route("/users/login", web::post().to(users::login)),
+                    ),
+                ),
         )
         .await;
 
@@ -24,7 +46,24 @@ mod tests {
     #[actix_rt::test]
     async fn test_setup_with_test_header() {
         let mut app = test::init_service(
-            App::new().route("api/v1/users/setup", web::post().to(users::setup)),
+            App::new()
+                .wrap(Logger::default())
+                .service(
+                    web::scope("api/ws")
+                        .route("/wsbootstrap", web::get().to(catanws::ws_bootstrap)),
+                )
+                .app_data(Data::new(ServiceEnvironmentContext::new()))
+                .wrap(EnvironmentMiddleWareFactory)
+                .wrap(Cors::permissive())
+                .service(
+                    web::scope("/api").service(
+                        web::scope("/v1")
+                            .route("/version", web::get().to(get_version))
+                            .route("/users/setup", web::post().to(users::setup))
+                            .route("/users/register", web::post().to(users::register))
+                            .route("/users/login", web::post().to(users::login)),
+                    ),
+                ),
         )
         .await;
 
@@ -41,11 +80,5 @@ mod tests {
 
     // Add more test functions as needed
 
-    // Integration test that runs all the tests
-    #[actix_rt::test]
-    async fn test_all() {
-        test_setup_no_test_header();
-        test_setup_with_test_header();
-        // Call other test functions here
-    }
+  
 }

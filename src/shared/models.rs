@@ -19,6 +19,7 @@ pub enum GameError {
     MissingPlayerId,
     IdNotFoundInOrder,
     BadActionData,
+    InvalidGameId
 }
 
 /**

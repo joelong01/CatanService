@@ -5,6 +5,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
  * a User document in CosmosDb
  */
 use crate::cosmos_db::cosmosdb::UserDb;
+use crate::games_service::game_container::game_container::GameContainer;
 use crate::middleware::environment_mw::{ServiceEnvironmentContext, CATAN_ENV};
 use crate::shared::models::{Claims, ClientUser, Credentials, PersistUser, ServiceResponse};
 use crate::shared::utility::get_id;
@@ -268,14 +269,11 @@ pub async fn list_users(data: Data<ServiceEnvironmentContext>) -> HttpResponse {
     }
 }
 pub async fn get_profile(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> HttpResponse {
-   
     let header_id = req.headers().get("user_id").unwrap().to_str().unwrap();
     match internal_find_user("id".to_string(), header_id.to_string(), data).await {
-        Ok(user) => {
-            HttpResponse::Ok()
-                .content_type("application/json")
-                .json(user.user_profile)
-        }
+        Ok(user) => HttpResponse::Ok()
+            .content_type("application/json")
+            .json(user.user_profile),
         Err(err) => {
             let response = ServiceResponse {
                 message: format!("Failed to find user: {}", err),
@@ -288,7 +286,39 @@ pub async fn get_profile(data: Data<ServiceEnvironmentContext>, req: HttpRequest
         }
     }
 }
-
+/**
+ *  a GET that is a long polling get.  the call waits here until the game changes and then the service will signal
+ *  and the call will complete.
+ */
+pub async fn long_poll(req: HttpRequest) -> HttpResponse {
+    
+    let game_id = req.headers().get("X-Game-Id").unwrap().to_str().unwrap();
+    let result = GameContainer::wait_for_change(game_id.to_owned()).await;
+    match result {
+        Ok(lastest_game) => {
+            let response = ServiceResponse {
+                message: "new game ready".to_owned(),
+                status: StatusCode::Ok,
+                body: serde_json::to_string(&lastest_game).unwrap(),
+            };
+            return HttpResponse::Ok()
+                .content_type("application/json")
+                .json(response);
+        }
+        Err(e) => {
+            let response = ServiceResponse {
+                message: format!("unexpected error: {}", e),
+                status: StatusCode::InternalServerError,
+                body: "".to_owned(),
+            };
+            return HttpResponse::InternalServerError()
+                .content_type("application/json")
+                .json(response);
+        }
+    }
+    
+    
+}
 
 /**
  *  this will get a list of all documents.  Note this does *not* do pagination. This would be a reasonable next step to
@@ -330,8 +360,6 @@ pub async fn internal_find_user(
     } else {
         userdb.find_user_by_profile(&prop, &id).await
     }
-
-   
 }
 
 pub async fn delete(

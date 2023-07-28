@@ -1,76 +1,125 @@
-use actix::{Actor, StreamHandler};
-use actix_web::{web, Error, HttpRequest, HttpResponse};
-use actix_web_actors::ws;
-
+#![allow(dead_code)]
 use actix::prelude::*;
+use actix::{Actor, StreamHandler};
+use actix_web::error::{ErrorUnauthorized, ErrorInternalServerError};
+use actix_web::http::header::HeaderMap;
+use actix_web::web::{Query, Payload};
+use actix_web::{Error, HttpRequest, HttpResponse};
+use actix_web_actors::ws;
+use lazy_static::lazy_static;
+use parking_lot::RwLock;
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use crate::middleware::authn_mw::is_token_valid;
 
-use actix::SystemService;
-impl Supervised for Broker {}
-impl SystemService for Broker {
-    fn service_started(&mut self, _ctx: &mut Context<Self>) {
-        println!("Broker started!");
-    }
-}
+const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
+const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Define broker
-pub struct Broker {
-    // Map of User IDs to WebSocket addresses.
-    clients: HashMap<String, Addr<CatanWebSocket>>,
-}
-impl Broker {
-    pub fn new() -> Self {
-        Broker {
-            clients: HashMap::new(),
-        }
-    }
-}
-impl Default for Broker {
-    fn default() -> Broker {
-        Broker {
-            clients: HashMap::new(),
-        }
-    }
+// The user context struct, you can define it based on your requirements
+pub struct UserContext {
+    player_id: String,
+    client_address: Recipient<WebSocketMessage>,
+
 }
 
-impl Actor for Broker {
-    type Context = Context<Self>;
-}
-/// Define Connect message
-pub struct Connect {
-    pub id: String,
-    pub addr: Addr<CatanWebSocket>,
+impl UserContext {
+    // Add any other methods and fields as needed
+
+    // Method to send a message to the user's WebSocket
+    
 }
 
-impl Message for Connect {
+// Define a custom message type for sending messages to the WebSocket actor
+pub struct WebSocketMessage(pub String);
+
+// Implement the Message trait for WebSocketMessage
+impl Message for WebSocketMessage {
     type Result = ();
 }
 
-impl Handler<Connect> for Broker {
-    type Result = ();
+// Lobby contains all connected user contexts
+type Lobby = Arc<RwLock<HashMap<String, CatanWebSocket>>>;
 
-    fn handle(&mut self, msg: Connect, _ctx: &mut Context<Self>) {
-        self.clients.insert(msg.id, msg.addr);
-    }
+// We'll use this to store connected users in a lazy_static Mutex
+lazy_static! {
+    static ref LOBBY: Lobby = Arc::new(RwLock::new(HashMap::new()));
 }
-
-/// Define HTTP actor
-/// Define HTTP actor
+#[derive(Debug, Clone)]
 pub struct CatanWebSocket {
-    pub id: String,
-    pub broker: Addr<Broker>,
+    pub player_id: String,
+    pub hb: Instant,
+    pub client_address: Option<Recipient<WebSocketMessage>>
 }
 
 impl Actor for CatanWebSocket {
     type Context = ws::WebsocketContext<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        // Send Connect message to Broker when WebSocket starts up.
-        let addr = ctx.address();
-        Broker::from_registry().do_send(Connect {
-            id: self.id.clone(),
-            addr: addr.clone(),
+        // Send Connect message to LOBBY when WebSocket starts up.
+        self.heart_beat(ctx);
+
+        self.client_address = Some(ctx.address().recipient::<WebSocketMessage>());
+
+        // Acquire a write lock to add the user to the LOBBY
+        let mut lobby = LOBBY.write();
+        lobby.insert(self.player_id.clone(), self.clone());
+    }
+
+    fn stopped(&mut self, _: &mut Self::Context) {
+        // User WebSocket has been disconnected, remove from LOBBY
+
+        // Acquire a write lock to remove the user from the LOBBY
+        let mut lobby = LOBBY.write();
+        lobby.remove(&self.player_id);
+    }
+}
+
+impl CatanWebSocket {
+    pub fn new (player_id: String) -> Self {
+        Self {
+            player_id,
+            hb: Instant::now(),
+            client_address: None
+        }
+    }
+
+    fn send_message(&self, message: &str) -> Result<(), ()> {
+        let _ = self.client_address.as_ref().unwrap().send(WebSocketMessage(message.to_owned()));
+        Ok(())
+    }
+
+    fn heart_beat(&self, ctx: &mut ws::WebsocketContext<Self>) {
+        ctx.run_interval(HEARTBEAT_INTERVAL, |act, ctx| {
+            if Instant::now().duration_since(act.hb) > CLIENT_TIMEOUT {
+                println!("Disconnecting failed heartbeat");
+                ctx.stop();
+                return;
+            }
+
+            ctx.ping(b"hi");
         });
+    }
+
+    // Function to send a message to the user's WebSocket
+    pub fn send_client_message(player_id: &str, message: &str) -> Result<(), String> {
+        // Acquire a read lock to access the LOBBY
+        let lobby = LOBBY.read();
+
+        // Get the UserContext from the LOBBY
+        if let Some(client_ws) = lobby.get(player_id) {
+            // Send the message to the user's WebSocket
+            if let Err(_) = client_ws.send_message(message) {
+                // If there was an error sending the message, return an error
+                Err(format!("Failed to send message to user: {}", player_id))
+            } else {
+                // Message sent successfully
+                Ok(())
+            }
+        } else {
+            // User not found in the LOBBY
+            Err(format!("User not connected: {}", player_id))
+        }
     }
 }
 
@@ -86,90 +135,60 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for CatanWebSocket {
         }
     }
 }
+impl Handler<WebSocketMessage> for CatanWebSocket {
+    type Result = ();
 
-pub async fn ws_index(
+    fn handle(&mut self, msg: WebSocketMessage, ctx: &mut Self::Context) {
+        // Handle the WebSocketMessage here (e.g., sending the message to the WebSocket)
+        ctx.text(msg.0);
+    }
+}
+pub fn dump_headers(headers: &HeaderMap) {
+    // Iterate through all headers and log their name and values
+    for (name, value) in headers.iter() {
+        // Since the header value is stored as a comma-separated string,
+        // we need to join the values to get the actual header value
+        let value_str = value.to_str().unwrap_or("Invalid UTF-8");
+
+        // Log the name and values of the header
+        log::info!("Header Name: {:?}, Value: {:?}", name, value_str);
+    }
+}
+
+pub async fn ws_bootstrap(
+    query_params: Query<HashMap<String, String>>,
     req: HttpRequest,
-    stream: web::Payload,
-    broker: web::Data<Addr<Broker>>,
+    stream: Payload,
 ) -> Result<HttpResponse, Error> {
-    let user_id: String = req.match_info().get("user_id").unwrap().parse().unwrap();
-    let resp = ws::start(
-        CatanWebSocket {
-            id: user_id,
-            broker: broker.get_ref().clone(),
-        },
-        &req,
-        stream,
-    );
-    println!("{:?}", resp);
-    resp
-}
+    // Extract the JWT token from the query parameter
+    let token: String = query_params
+        .get("token")
+        .ok_or_else(|| ErrorUnauthorized("JWT token not provided"))?
+        .to_string();
 
-//
-//
+    // Validate the token and extract claims
+    let claims = match is_token_valid(&token) {
+        Some(claims) => claims.claims,
+        None => return Err(ErrorUnauthorized("No Authorization Parameter")),
+    };
 
-// define in your messages section
-pub struct ClientMessage {
-    pub id: String,
-    pub msg: String,
-}
-
-impl Message for ClientMessage {
-    type Result = ();
-}
-
-impl Handler<ClientMessage> for Broker {
-    type Result = ();
-
-    fn handle(&mut self, msg: ClientMessage, _ctx: &mut Self::Context) {
-        if let Some(addr) = self.clients.get(&msg.id) {
-            addr.do_send(ServerMessage {
-                msg: msg.msg.clone(),
+    // Start the WebSocket handshake with the CatanWebSocket actor
+    match ws::start(CatanWebSocket::new(claims.id), &req, stream) {
+        Ok(_resp) => {
+            // Handle the WebSocket response or any other response as needed
+            // For now, we'll just return a successful response with a message indicating successful connection
+            let response_body = serde_json::json!({
+                "message": "connected successfully"
             });
+
+            Ok(HttpResponse::Ok()
+                .content_type("application/json")
+                .json(response_body))
         }
-    }
-}
-#[allow(dead_code)]
-pub async fn send_client_message(broker_addr: Addr<Broker>, id: String, msg: String) {
-    broker_addr.do_send(ClientMessage { id, msg });
-}
-
-pub struct BroadcastMessage {
-    pub msg: String,
-}
-
-impl Message for BroadcastMessage {
-    type Result = ();
-}
-
-impl Handler<BroadcastMessage> for Broker {
-    type Result = ();
-
-    fn handle(&mut self, msg: BroadcastMessage, _ctx: &mut Self::Context) {
-        for addr in self.clients.values() {
-            addr.do_send(ServerMessage {
-                msg: msg.msg.clone(),
-            });
+        Err(err) => {
+            Err(ErrorInternalServerError(format!(
+                "WebSocket connection failed: {:?}", err
+            )))
         }
-    }
-}
-#[allow(dead_code)]
-pub async fn broadcast_message(broker_addr: Addr<Broker>, msg: String) {
-    broker_addr.do_send(BroadcastMessage { msg });
-}
-
-pub struct ServerMessage {
-    pub msg: String,
-}
-
-impl Message for ServerMessage {
-    type Result = ();
-}
-
-impl Handler<ServerMessage> for CatanWebSocket {
-    type Result = ();
-
-    fn handle(&mut self, msg: ServerMessage, ctx: &mut Self::Context) {
-        ctx.text(msg.msg);
     }
 }

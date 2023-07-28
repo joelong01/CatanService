@@ -1,6 +1,6 @@
 #![allow(unused_imports)]
 
-use crate::{games_service::player::player::Player, shared::models::{GameError, ClientUser}};
+use crate::{games_service::{player::player::Player, catan_games::games::regular::regular_game::RegularGame}, shared::models::{GameError, ClientUser}};
 
 use std::{
     borrow::{Borrow, BorrowMut},

@@ -9,3 +9,5 @@ pub mod player;
 pub mod roads;
 pub mod tiles;
 pub mod shared;
+
+pub mod game_container;
