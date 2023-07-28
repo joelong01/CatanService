@@ -77,10 +77,10 @@ function setup_tests() {
   echo ""
   echo_warning "Start setup_tests"
 
-  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location --request POST "$NO_AUTH_SERVER_URI/users/setup")
+  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location --request POST "$NO_AUTH_SERVER_URI/test/setup")
   check_response "$status" 401 "setup, no test header"
 
-  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location --request POST "$NO_AUTH_SERVER_URI/users/setup" -H 'is_test: true')
+  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location --request POST "$NO_AUTH_SERVER_URI/test/setup" -H 'is_test: true')
   check_response "$status" 200 "setup with test header"
 }
 function list_users() {

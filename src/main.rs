@@ -94,18 +94,18 @@ async fn main() -> std::io::Result<()> {
             .app_data(Data::new(ServiceEnvironmentContext::new()))
             .wrap(EnvironmentMiddleWareFactory)
             .wrap(Cors::permissive())
-            .service(
+            .service( // these are the hopefully small set of non-authenticated end points
                 web::scope("/api").service(
                     web::scope("/v1")
                         .route("/version", web::get().to(get_version))
-                        .route("/users/setup", web::post().to(users::setup))
                         .route("/users/register", web::post().to(users::register))
-                        .route("/users/login", web::post().to(users::login)),
+                        .route("/users/login", web::post().to(users::login))
+                        .route("/test/setup", web::post().to(users::setup)) /* TEST ONLY */
                 ),
             )
             .service(
                 web::scope("auth/api")
-                    .wrap(AuthenticationMiddlewareFactory)
+                    .wrap(AuthenticationMiddlewareFactory) /* everything below is authenticated */
                     .service(
                         web::scope("/v1")
                             .service(
@@ -116,7 +116,6 @@ async fn main() -> std::io::Result<()> {
                             )
                             .service(
                                 web::scope("games")
-                                    .wrap(Cors::permissive())
                                     .route("/", web::get().to(game_handlers::supported_games))
                                     .route("/{game_type}", web::post().to(game_handlers::new_game))
                                     .route("/longpoll", web::get().to(users::long_poll))

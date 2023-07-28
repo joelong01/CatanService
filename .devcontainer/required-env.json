@@ -52,12 +52,6 @@
             "default": "Users-db"
         },
         {
-            "environmentVariable": "CATAN_USER_CONTAINER_NAME",
-            "description": "the name of the User container",
-            "shellscript": "",
-            "default": "User-Container"
-        },
-        {
             "environmentVariable": "AZURE_COMMUNICATION_CONNECTION_STRING",
             "description": "the azure communication connection string",
             "shellscript": ".devcontainer/get_azure_email_info.sh",

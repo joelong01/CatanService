@@ -1,3 +1,5 @@
+use std::{collections::HashMap, fmt};
+
 /**
  *  this is the class that calls directly to CosmosDb --
  */
@@ -8,8 +10,32 @@ use azure_core::error::{ErrorKind, Result as AzureResult};
 use azure_data_cosmos::prelude::{
     AuthorizationToken, CollectionClient, CosmosClient, DatabaseClient, Query, QueryCrossPartition,
 };
+
 use futures::StreamExt;
 use log::info;
+/**
+ *  we have 3 cosmos container that we are currently using:  User, Profile, and (eventually) Game.
+ *  this just makes sure we consistently use them throughout the code.
+ */
+#[derive(PartialEq, Eq, Hash)]
+enum CosmosCollectionName {
+    User,
+    Profile,
+    Game,
+}
+
+//
+//  this converts them to string
+impl fmt::Display for CosmosCollectionName {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            CosmosCollectionName::User => write!(f, "User-Collection"),
+            CosmosCollectionName::Profile => write!(f, "Profile-Collection"),
+            CosmosCollectionName::Game => write!(f, "Game-Collection"),
+        }
+    }
+}
+
 /**
  *  this is a convinient way to pass around meta data about CosmosDb.  UserDb will also expose methods for calling
  *  cosmos (see below)
@@ -17,8 +43,7 @@ use log::info;
 pub struct UserDb {
     client: Option<CosmosClient>,
     database: Option<DatabaseClient>,
-    users_collection: Option<CollectionClient>,
-    collection_name: String,
+    collection_clients: HashMap<CosmosCollectionName, CollectionClient>,
     database_name: String,
 }
 /**
@@ -52,17 +77,24 @@ impl UserDb {
     pub async fn new(context: &RequestEnvironmentContext) -> Self {
         let client = public_client(&context.env.cosmos_account, &context.env.cosmos_token);
         let database_name = context.database_name.clone();
-        let collection_name = context.env.container_name.clone();
-
+        let collection_names = vec![
+            CosmosCollectionName::User,
+            CosmosCollectionName::Profile,
+            CosmosCollectionName::Game,
+        ];
         let database = client.database_client(database_name.clone());
-        let collection = database.collection_client(collection_name.clone());
+        let mut collection_clients: HashMap<CosmosCollectionName, CollectionClient> =
+            HashMap::new();
+        for name in collection_names {
+            let client = database.collection_client(name.to_string());
+            collection_clients.insert(name, client);
+        }
 
         Self {
             client: Some(client),
             database: Some(database),
-            users_collection: Some(collection),
+            collection_clients,
             database_name,
-            collection_name,
         }
     }
 
@@ -99,28 +131,30 @@ impl UserDb {
         }
 
         info!("Creating collections");
-        match self
-            .database
-            .as_ref()
-            .unwrap()
-            // note: this is where the field for the partion key is set -- if you change anything, make sure this is
-            // a member of your document struct!
-            .create_collection(self.collection_name.to_string(), "/partitionKey")
-            .await
-        {
-            Ok(..) => {
-                info!("\tCreated {} collection", self.collection_name);
-                Ok(())
+        for name in self.collection_clients.keys() {
+            match self
+                .database
+                .as_ref()
+                .unwrap()
+                // note: this is where the field for the partion key is set -- if you change anything, make sure this is
+                // a member of your document struct!
+                .create_collection(name.to_string(), "/partitionKey")
+                .await
+            {
+                Ok(..) => {
+                    info!("\tCreated {} collection", name);
+                }
+                Err(e) => log_return_err!(e),
             }
-            Err(e) => log_return_err!(e),
         }
+        Ok(())
     }
     /**
      *  this will return *all* (non paginated) Users in the collection
      */
     pub async fn list(&self) -> AzureResult<Vec<PersistUser>> {
         let query = r#"SELECT * FROM c WHERE c.partitionKey=1"#;
-        match self.execute_query(query).await {
+        match self.execute_query(CosmosCollectionName::User, query).await {
             Ok(users) => Ok(users),
             Err(e) => log_return_err!(e),
         }
@@ -128,14 +162,15 @@ impl UserDb {
     /**
      * Execute an arbitrary query against the user database and return a list of users
      */
-    async fn execute_query(&self, query_string: &str) -> AzureResult<Vec<PersistUser>> {
+    async fn execute_query(
+        &self,
+        collection_name: CosmosCollectionName,
+        query_string: &str,
+    ) -> AzureResult<Vec<PersistUser>> {
         let mut users = Vec::new();
         let query = Query::new(query_string.to_string());
-
-        let mut stream = self
-            .users_collection
-            .as_ref()
-            .unwrap()
+        let collection = self.collection_clients.get(&collection_name).unwrap();
+        let mut stream = collection
             .query_documents(query)
             .query_cross_partition(QueryCrossPartition::Yes)
             .into_stream::<serde_json::Value>();
@@ -170,7 +205,7 @@ impl UserDb {
             .database
             .as_ref()
             .unwrap()
-            .collection_client(self.collection_name.to_string())
+            .collection_client(CosmosCollectionName::User.to_string())
             .create_document(user.clone())
             .await
         {
@@ -185,7 +220,10 @@ impl UserDb {
      *  delete the user with the unique id
      */
     pub async fn delete_user(&self, unique_id: &str) -> AzureResult<()> {
-        let collection = self.users_collection.as_ref().unwrap();
+        let collection = self
+            .collection_clients
+            .get(&CosmosCollectionName::User)
+            .unwrap();
         let doc_client = collection.document_client(unique_id, &1)?;
         match doc_client.delete_document().await {
             Ok(..) => Ok(()),
@@ -197,7 +235,7 @@ impl UserDb {
      */
     pub async fn find_user_by_id(&self, val: &str) -> AzureResult<PersistUser> {
         let query = format!(r#"SELECT * FROM c WHERE c.id = '{}'"#, val);
-        match self.execute_query(&query).await {
+        match self.execute_query(CosmosCollectionName::User, &query).await {
             Ok(users) => {
                 if !users.is_empty() {
                     Ok(users.first().unwrap().clone()) // clone is necessary because `first()` returns a reference
@@ -213,7 +251,7 @@ impl UserDb {
             r#"SELECT * FROM c WHERE c.userProfile.{} = '{}'"#,
             prop, val
         );
-        match self.execute_query(&query).await {
+        match self.execute_query(CosmosCollectionName::User, &query).await {
             Ok(users) => {
                 if !users.is_empty() {
                     Ok(users.first().unwrap().clone()) // clone is necessary because `first()` returns a reference
