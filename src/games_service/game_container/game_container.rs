@@ -20,16 +20,16 @@ lazy_static::lazy_static! {
 
 pub struct GameContainer {
     game_id: String,
-    player_ids: Box<Vec<String>>,
+    user_ids: Box<Vec<String>>,
     undo_stack: Vec<RegularGame>,
     redo_stack: Vec<RegularGame>,
     notify: broadcast::Sender<CatanMessage>,
 }
 
 impl GameContainer {
-    pub async fn insert_container(player_id: String, game_id: String, game: &mut RegularGame) {
+    pub async fn insert_container(user_id: String, game_id: String, game: &mut RegularGame) {
         {
-            let game_container = GameContainer::new(player_id, game_id.to_owned());
+            let game_container = GameContainer::new(user_id, game_id.to_owned());
             let mut game_map = GAME_MAP.write().await; // Acquire write lock
             game_map.insert(game_id.to_owned(), Arc::new(RwLock::new(game_container)));
         }
@@ -37,12 +37,12 @@ impl GameContainer {
         GameContainer::push_game(&game_id, game).await;
     }
 
-    fn new(player_id: String, game_id: String) -> Self {
+    fn new(user_id: String, game_id: String) -> Self {
         // Create a new broadcast channel with a capacity of 10...i don't think there are any Catan Games with > 7 players
         let (tx, _) = broadcast::channel(10);
         Self {
             game_id: game_id.clone(),
-            player_ids: Box::new(vec![player_id]),
+            user_ids: Box::new(vec![user_id]),
             undo_stack: vec![],
             redo_stack: vec![],
             notify: tx, // Use the Sender from the new channel
@@ -79,10 +79,10 @@ impl GameContainer {
         message
     }
 
-    pub async fn add_player(game_id: &String, player_id: String) {
+    pub async fn add_player(game_id: &String, user_id: String) {
         let game_container = Self::get_locked_container(game_id).await.unwrap();
         let mut rw_game_container = game_container.write().await;
-        rw_game_container.player_ids.push(player_id);
+        rw_game_container.user_ids.push(user_id);
         let _ = rw_game_container
             .notify
             .send(game_update_message!(rw_game_container
@@ -135,7 +135,7 @@ impl GameContainer {
     pub async fn get_players(game_id: &String) -> Box<Vec<String>> {
         let game_container = Self::get_locked_container(game_id).await.unwrap();
         let game_container = game_container.read().await;
-        game_container.player_ids.clone()
+        game_container.user_ids.clone()
     }
 }
 /**
@@ -148,7 +148,11 @@ pub async fn long_poll_handler(req: HttpRequest) -> HttpResponse {
             let game_id = header.to_str().unwrap().to_string();
             GameContainer::wait_for_change(game_id.to_owned()).await
         }
-        None => Lobby::wait_for_invite().await,
+        None => 
+        {
+            let user_id = req.headers().get("X:user_id").unwrap().to_str().unwrap();
+            Lobby::wait_for_invite(user_id).await
+        }
     };
 
     return HttpResponse::Ok()

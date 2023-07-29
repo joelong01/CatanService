@@ -18,7 +18,7 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
 // The user context struct, you can define it based on your requirements
 pub struct UserContext {
-    player_id: String,
+    user_id: String,
     client_address: Recipient<WebSocketMessage>,
 
 }
@@ -47,7 +47,7 @@ lazy_static! {
 }
 #[derive(Debug, Clone)]
 pub struct CatanWebSocket {
-    pub player_id: String,
+    pub user_id: String,
     pub hb: Instant,
     pub client_address: Option<Recipient<WebSocketMessage>>
 }
@@ -63,7 +63,7 @@ impl Actor for CatanWebSocket {
 
         // Acquire a write lock to add the user to the LOBBY
         let mut lobby = LOBBY.write();
-        lobby.insert(self.player_id.clone(), self.clone());
+        lobby.insert(self.user_id.clone(), self.clone());
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
@@ -71,14 +71,14 @@ impl Actor for CatanWebSocket {
 
         // Acquire a write lock to remove the user from the LOBBY
         let mut lobby = LOBBY.write();
-        lobby.remove(&self.player_id);
+        lobby.remove(&self.user_id);
     }
 }
 
 impl CatanWebSocket {
-    pub fn new (player_id: String) -> Self {
+    pub fn new (user_id: String) -> Self {
         Self {
-            player_id,
+            user_id,
             hb: Instant::now(),
             client_address: None
         }
@@ -102,23 +102,23 @@ impl CatanWebSocket {
     }
 
     // Function to send a message to the user's WebSocket
-    pub fn send_client_message(player_id: &str, message: &str) -> Result<(), String> {
+    pub fn send_client_message(user_id: &str, message: &str) -> Result<(), String> {
         // Acquire a read lock to access the LOBBY
         let lobby = LOBBY.read();
 
         // Get the UserContext from the LOBBY
-        if let Some(client_ws) = lobby.get(player_id) {
+        if let Some(client_ws) = lobby.get(user_id) {
             // Send the message to the user's WebSocket
             if let Err(_) = client_ws.send_message(message) {
                 // If there was an error sending the message, return an error
-                Err(format!("Failed to send message to user: {}", player_id))
+                Err(format!("Failed to send message to user: {}", user_id))
             } else {
                 // Message sent successfully
                 Ok(())
             }
         } else {
             // User not found in the LOBBY
-            Err(format!("User not connected: {}", player_id))
+            Err(format!("User not connected: {}", user_id))
         }
     }
 }

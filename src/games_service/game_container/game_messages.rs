@@ -4,20 +4,20 @@ use serde::{Deserialize, Serialize};
 
 use crate::games_service::catan_games::games::regular::regular_game::RegularGame;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct InviteData {
     pub from: String,
     pub to: String,
 }
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ErrorData {
     pub status_code: i32,
     pub message: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum CatanMessage {
     GameUpdate(RegularGame),

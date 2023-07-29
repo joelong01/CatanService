@@ -26,7 +26,7 @@ use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
 use std::env;
 use user_service::users;
 
-use crate::games_service::{catanws, game_container::game_container};
+use crate::games_service::{catanws, game_container::game_container, lobby::lobby_handlers};
 
 /**
  *  Code to pick a port in a threadsafe way -- either specified in an environment variable named COSMOS_RUST_SAMPLE_PORT
@@ -94,13 +94,14 @@ async fn main() -> std::io::Result<()> {
             .app_data(Data::new(ServiceEnvironmentContext::new()))
             .wrap(EnvironmentMiddleWareFactory)
             .wrap(Cors::permissive())
-            .service( // these are the hopefully small set of non-authenticated end points
+            .service(
+                // these are the hopefully small set of non-authenticated end points
                 web::scope("/api").service(
                     web::scope("/v1")
                         .route("/version", web::get().to(get_version))
                         .route("/users/register", web::post().to(users::register))
                         .route("/users/login", web::post().to(users::login))
-                        .route("/test/setup", web::post().to(users::setup)) /* TEST ONLY */
+                        .route("/test/setup", web::post().to(users::setup)), /* TEST ONLY */
                 ),
             )
             .service(
@@ -114,12 +115,20 @@ async fn main() -> std::io::Result<()> {
                                     .route("/{id}", web::delete().to(users::delete))
                                     .route("/{id}", web::get().to(users::find_user_by_id)),
                             )
-                            .route("/longpoll", web::get().to(game_container::long_poll_handler))
+                            .route(
+                                "/longpoll",
+                                web::get().to(game_container::long_poll_handler),
+                            )
+                            .service(
+                                web::scope("lobby")
+                                    .route("", web::get().to(lobby_handlers::get_lobby))
+                                    .route("/invite/{id}", web::post().to(lobby_handlers::post_invite))
+                                    .route("/join", web::post().to(lobby_handlers::join_game))
+                            )
                             .service(
                                 web::scope("games")
                                     .route("/", web::get().to(game_handlers::supported_games))
                                     .route("/{game_type}", web::post().to(game_handlers::new_game))
-                                   
                                     .route(
                                         "/shuffle/{game_id}",
                                         web::post().to(game_handlers::shuffle_game),

@@ -273,7 +273,7 @@ pub async fn list_users(data: Data<ServiceEnvironmentContext>) -> HttpResponse {
     }
 }
 pub async fn get_profile(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> HttpResponse {
-    let header_id = req.headers().get("user_id").unwrap().to_str().unwrap();
+    let header_id = req.headers().get("X:user_id").unwrap().to_str().unwrap();
     match internal_find_user("id".to_string(), header_id.to_string(), data).await {
         Ok(user) => HttpResponse::Ok()
             .content_type("application/json")
@@ -340,7 +340,7 @@ pub async fn delete(
 ) -> HttpResponse {
     //
     // unwrap is ok here because our middleware put it there.
-    let header_id_result = req.headers().get("user_id").unwrap().to_str();
+    let header_id_result = req.headers().get("X:user_id").unwrap().to_str();
 
     let header_id = match header_id_result {
         Ok(val) => val,

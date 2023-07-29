@@ -92,8 +92,8 @@ impl RegularGame {
         let buildings = Self::setup_buildings(&mut tiles);
 
         let mut players = HashMap::new();
-        let player_id = creator.id.clone();
-        players.insert(player_id.clone(), player);
+        let user_id = creator.id.clone();
+        players.insert(user_id.clone(), player);
 
         let harbors: HashMap<HarborKey, Harbor> = game_info
             .harbor_data()
@@ -108,10 +108,10 @@ impl RegularGame {
             harbors,
             roads,
             buildings,
-            current_player_id: player_id.clone(),
+            current_player_id: user_id.clone(),
             player_order: vec![],
             state_data: StateData::new(GameState::AddingPlayers),
-            creator_id: player_id.clone(),
+            creator_id: user_id.clone(),
             baron_tile: TileKey::new(0, 0, 0),
             can_undo: true,
             shuffle_count: 1
@@ -409,10 +409,10 @@ impl<'a> CatanGame<'a> for RegularGame {
             .expect("How did the player ID not be in the list?");
 
         let next_player_index = (current_player_index + 1) % self.player_order.len();
-        let next_player_id = &self.player_order[next_player_index];
-        self.current_player_id = next_player_id.to_owned();
+        let next_user_id = &self.player_order[next_player_index];
+        self.current_player_id = next_user_id.to_owned();
         self.players
-            .get(next_player_id)
+            .get(next_user_id)
             .expect("Player should be in the map")
             .clone()
     }

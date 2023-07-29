@@ -13,7 +13,7 @@ use crate::games_service::shared::game_enums::{CatanGames, SupportedGames};
 
 use super::{
     catan_games::{games::regular::regular_game::RegularGame, traits::game_trait::CatanGame},
-    game_container::game_container::GameContainer,
+    game_container::game_container::GameContainer, lobby::lobby::Lobby,
 };
 
 
@@ -64,7 +64,7 @@ pub async fn new_game(
     req: HttpRequest,
 ) -> impl Responder {
     let game_type = game_type.into_inner();
-    let player_id = req.headers().get("user_id").unwrap().to_str().unwrap();
+    let user_id = req.headers().get("X:user_id").unwrap().to_str().unwrap();
 
     if game_type != CatanGames::Regular {
         let response = ServiceResponse {
@@ -77,14 +77,14 @@ pub async fn new_game(
             .json(response);
     }
 
-    let user_result = internal_find_user("id".to_owned(), player_id.to_owned(), data).await;
+    let user_result = internal_find_user("id".to_owned(), user_id.to_owned(), data).await;
 
     let user = match user_result {
         Ok(u) => u,
         Err(_) => {
             return create_http_response(
                 StatusCode::NotFound,
-                format!("invalid user id: {}", player_id),
+                format!("invalid user id: {}", user_id),
                 "".to_owned(),
             );
         }
@@ -94,9 +94,12 @@ pub async fn new_game(
     game.shuffle();
 
     //
-    //  store GameId --> Game for later lookup
+    //  leave the lobby
+    Lobby::leave_lobby(user_id).await;
 
-    GameContainer::insert_container(player_id.to_owned(), game.id.to_owned(), &mut game).await;
+    //
+    //  store GameId --> Game for later lookup
+    GameContainer::insert_container(user_id.to_owned(), game.id.to_owned(), &mut game).await;
 
     HttpResponse::Ok()
         .content_type("application/json")

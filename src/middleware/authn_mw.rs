@@ -81,7 +81,7 @@ where
 
                     // Insert the id and sub into the headers
                     req.headers_mut().insert(
-                        HeaderName::from_static("user_id"),
+                        HeaderName::from_static("X:user_id"),
                         HeaderValue::from_str(id).unwrap(),
                     );
                     req.headers_mut().insert(
