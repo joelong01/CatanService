@@ -122,7 +122,7 @@ async fn main() -> std::io::Result<()> {
                             .service(
                                 web::scope("lobby")
                                     .route("", web::get().to(lobby_handlers::get_lobby))
-                                    .route("/invite/{id}", web::post().to(lobby_handlers::post_invite))
+                                    .route("/invite", web::post().to(lobby_handlers::post_invite))
                                     .route("/join", web::post().to(lobby_handlers::join_game))
                             )
                             .service(

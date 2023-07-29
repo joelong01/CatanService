@@ -84,16 +84,12 @@ impl Lobby {
     }
 
     /// Sends an invitation and notifies the recipient via the one-shot channel.
-    pub async fn send_invite(from_id: &str, to_id: &str) -> Result<(), String> {
+    pub async fn send_invite(invitation: &InviteData) -> Result<(), String> {
         let lobby = LOBBY.read().await;
-        if let Some(visitor) = lobby.visitors.get(to_id) {
-            let invite_data = InviteData {
-                from: from_id.to_string(),
-                to: to_id.to_string(),
-            };
+        if let Some(visitor) = lobby.visitors.get(&invitation.to_id) {
             let mut notify = visitor.notify.write().await;
             if let Some(tx) = notify.take() {
-                tx.send(CatanMessage::Invite(invite_data))
+                tx.send(CatanMessage::Invite(invitation.clone()))
                     .unwrap_or_else(|_| {
                         println!("Failed to send the invite");
                     });
@@ -110,20 +106,21 @@ impl Lobby {
 mod tests {
     use super::Lobby; // Assuming the test is in the same module as the Lobby implementation
     use crate::games_service::game_container::game_messages::{CatanMessage, InviteData};
-    use std::sync::Arc;
     use log::info;
+    use std::sync::Arc;
     use tokio::sync::Barrier;
-
 
     #[tokio::test]
     async fn test_lobby_invite_flow() {
-        env_logger::init();
+        env_logger::try_init().ok();
         info!("starting test_lobby_invite_flow");
         // 1. Create a lobby, add 2 users to it
         Lobby::join_lobby("user1".to_string()).await;
         Lobby::join_lobby("user2".to_string()).await;
 
         let barrier = Arc::new(Barrier::new(3));
+        let message = "Join my game!".to_string();
+        let picture_url = "https://example.com/pic.jpg".to_string();
 
         // Signal to synchronize tasks
         let barrier_clone = barrier.clone();
@@ -133,7 +130,7 @@ mod tests {
             loop {
                 match Lobby::wait_for_invite("user1").await {
                     CatanMessage::Invite(invite_data) => {
-                        if invite_data.from == "user3" {
+                        if invite_data.from_id == "user3" {
                             break CatanMessage::Invite(invite_data);
                         }
                     }
@@ -149,7 +146,7 @@ mod tests {
             loop {
                 match Lobby::wait_for_invite("user2").await {
                     CatanMessage::Invite(invite_data) => {
-                        if invite_data.from == "user3" {
+                        if invite_data.from_id == "user3" {
                             break CatanMessage::Invite(invite_data);
                         }
                     }
@@ -162,28 +159,94 @@ mod tests {
         barrier.wait().await; // Wait for the main task
         info!("through the barrier");
 
-   
+        let invitation_to_user1 = InviteData {
+            from_id: "user3".to_string(),
+            to_id: "user1".to_string(),
+            from_name: "User3".to_string(),
+            message: message.clone(),
+            picture_url: picture_url.clone(),
+        };
+        let invitation_to_user2 = InviteData {
+            from_id: "user3".to_string(),
+            to_id: "user2".to_string(),
+            from_name: "User3".to_string(),
+            message: message.clone(),
+            picture_url: picture_url.clone(),
+        };
 
-        // 3. Signal one user and ensure that it wakes up and returns the correct value; the other does not
-        Lobby::send_invite("user3", "user1").await.unwrap();
-        Lobby::send_invite("user3", "user2").await.unwrap(); // Simulate success
+        Lobby::send_invite(&invitation_to_user1).await.unwrap();
+        Lobby::send_invite(&invitation_to_user2).await.unwrap(); // Simulate success
+
+        let negative_test_invite = InviteData {
+            from_id: "user30".to_string(),
+            to_id: "user20".to_string(),
+            from_name: "User3".to_string(),
+            message: message.clone(),
+            picture_url: picture_url.clone(),
+        };
+
+        // send an invite to a non-existing user
+        assert!(!Lobby::send_invite(&negative_test_invite).await.is_ok()); //
 
         let user1_result = user1_wait.await.unwrap();
-        assert_eq!(
-            user1_result,
-            CatanMessage::Invite(InviteData {
-                from: "user3".to_string(),
-                to: "user1".to_string()
-            })
-        );
+        assert_eq!(user1_result, CatanMessage::Invite(invitation_to_user1));
 
         let user2_result = user2_wait.await.unwrap();
+        assert_eq!(user2_result, CatanMessage::Invite(invitation_to_user2));
+
+        Lobby::leave_lobby("user1").await;
+        Lobby::leave_lobby("user2").await;
+        info!(
+            "{}",
+            serde_json::to_string(&Lobby::copy_lobby().await).unwrap()
+        );
+    }
+    #[tokio::test]
+    async fn test_lobby_join_leave_flow() {
+        env_logger::try_init().ok();
+        info!("starting test_lobby_join_leave_flow");
+
+        // Define user ID specific to this test
+        let user_id = "test_lobby_join_leave_flow:user1".to_string();
+
+        // Attempt to join the lobby
+        Lobby::join_lobby(user_id.clone()).await;
+        let lobby_after_join = Lobby::copy_lobby().await;
+        assert!(
+            lobby_after_join.contains(&user_id),
+            "Lobby should contain user after joining"
+        );
+
+        // Attempt to join the lobby again (double join)
+        Lobby::join_lobby(user_id.clone()).await;
+        let lobby_after_double_join = Lobby::copy_lobby().await;
+        assert!(
+            lobby_after_double_join.contains(&user_id),
+            "Lobby should still contain user after double joining"
+        );
         assert_eq!(
-            user2_result,
-            CatanMessage::Invite(InviteData {
-                from: "user3".to_string(),
-                to: "user2".to_string()
-            })
+            lobby_after_double_join
+                .iter()
+                .filter(|&id| *id == user_id)
+                .count(),
+            1,
+            "Lobby should contain exactly one instance of the user ID after double joining"
+        );
+
+        // Attempt to leave the lobby
+        Lobby::leave_lobby(&user_id).await;
+        let lobby_after_leave = Lobby::copy_lobby().await;
+        assert!(
+            !lobby_after_leave.contains(&user_id),
+            "Lobby should not contain user after leaving"
+        );
+
+        // Attempt to leave the lobby again (double leave)
+        Lobby::leave_lobby(&user_id).await;
+        let lobby_after_double_leave = Lobby::copy_lobby().await;
+        assert!(
+            !lobby_after_double_leave.contains(&user_id),
+            "Lobby should still not contain user after double leaving"
         );
     }
 }

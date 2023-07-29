@@ -7,8 +7,11 @@ use crate::games_service::catan_games::games::regular::regular_game::RegularGame
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct InviteData {
-    pub from: String,
-    pub to: String,
+    pub from_id: String,
+    pub to_id: String,
+    pub from_name: String,
+    pub message: String,
+    pub picture_url: String,
 }
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -27,10 +30,13 @@ pub enum CatanMessage {
 
 #[macro_export]
 macro_rules! invite_message {
-    ($from:expr, $to:expr) => {
+    ($from:expr, $to:expr, $name:expr, $msg:expr, $url:expr) => {
         CatanMessage::Invite(InviteData {
-            from: $from.to_string(),
-            to: $to.to_string(),
+            from_id: $from.to_string(),
+            to_id: $to.to_string(),
+            message: $msg.to_string(),
+            picture_url: $url.to_string()
+            name: $name.to_string()
         })
     };
 }
