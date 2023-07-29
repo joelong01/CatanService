@@ -1,7 +1,7 @@
 use crate::{
     middleware::environment_mw::ServiceEnvironmentContext,
     shared::models::{ClientUser, ServiceResponse},
-    user_service::users::{create_http_response, internal_find_user},
+    user_service::users::{create_http_response, internal_find_user}, 
 };
 use actix_web::{
     web::{self, Data, Path},
@@ -16,6 +16,9 @@ use super::{
     game_container::game_container::GameContainer,
 };
 
+
+
+
 ///
 /// check the state to make sure the request is valid
 /// randomize the board and the harbors
@@ -26,6 +29,7 @@ pub async fn shuffle_game(game_id_path: web::Path<String>, _req: HttpRequest) ->
     match GameContainer::current(&game_id.to_owned()).await {
         Ok(game) => {
             let mut new_game = game.clone();
+            new_game.shuffle_count = new_game.shuffle_count + 1;
             new_game.shuffle();
             GameContainer::push_game(&game_id.to_owned(), &new_game).await;
             HttpResponse::Ok()

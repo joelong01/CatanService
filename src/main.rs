@@ -26,7 +26,7 @@ use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
 use std::env;
 use user_service::users;
 
-use crate::games_service::catanws;
+use crate::games_service::{catanws, game_container::game_container};
 
 /**
  *  Code to pick a port in a threadsafe way -- either specified in an environment variable named COSMOS_RUST_SAMPLE_PORT
@@ -114,11 +114,12 @@ async fn main() -> std::io::Result<()> {
                                     .route("/{id}", web::delete().to(users::delete))
                                     .route("/{id}", web::get().to(users::find_user_by_id)),
                             )
+                            .route("/longpoll", web::get().to(game_container::long_poll_handler))
                             .service(
                                 web::scope("games")
                                     .route("/", web::get().to(game_handlers::supported_games))
                                     .route("/{game_type}", web::post().to(game_handlers::new_game))
-                                    .route("/longpoll", web::get().to(users::long_poll))
+                                   
                                     .route(
                                         "/shuffle/{game_id}",
                                         web::post().to(game_handlers::shuffle_game),

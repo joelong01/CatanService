@@ -53,7 +53,8 @@ pub struct RegularGame {
     pub state_data: StateData,
     pub creator_id: String,
     pub baron_tile: TileKey,
-    pub can_undo: bool
+    pub can_undo: bool,
+    pub shuffle_count: i32
 }
 
 impl RegularGame {
@@ -82,6 +83,7 @@ impl RegularGame {
                 good_rolls: 0,
                 bad_rolls: 0,
                 state: CalculatedState::default(),
+                
             }
         };
         let game_info = &*REGULAR_GAME_INFO;
@@ -111,7 +113,8 @@ impl RegularGame {
             state_data: StateData::new(GameState::AddingPlayers),
             creator_id: player_id.clone(),
             baron_tile: TileKey::new(0, 0, 0),
-            can_undo: true
+            can_undo: true,
+            shuffle_count: 1
         }
     }
 

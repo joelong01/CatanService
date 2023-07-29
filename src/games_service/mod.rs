@@ -11,3 +11,4 @@ pub mod tiles;
 pub mod shared;
 
 pub mod game_container;
+pub mod lobby;

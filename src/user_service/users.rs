@@ -5,7 +5,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
  * a User document in CosmosDb
  */
 use crate::cosmos_db::cosmosdb::UserDb;
-use crate::games_service::game_container::game_container::GameContainer;
+use crate::games_service::lobby::lobby::Lobby;
 use crate::middleware::environment_mw::{ServiceEnvironmentContext, CATAN_ENV};
 use crate::shared::models::{Claims, ClientUser, Credentials, PersistUser, ServiceResponse};
 use crate::shared::utility::get_id;
@@ -210,7 +210,7 @@ pub async fn login(
             .unwrap()
             .as_secs()) as usize;
         let claims = Claims {
-            id: user.id, // has to be there as we searched for it above
+            id: user.id.clone(), // has to be there as we searched for it above
             sub: creds.username.clone(),
             exp: expire_duration,
         };
@@ -222,7 +222,10 @@ pub async fn login(
         );
 
         match token_result {
-            Ok(token) => create_http_response(StatusCode::Ok, "".to_owned(), token),
+            Ok(token) => {
+                Lobby::join_lobby(user.id).await;
+                create_http_response(StatusCode::Ok, "".to_owned(), token)
+            }
             Err(_) => create_http_response(
                 StatusCode::InternalServerError,
                 "error hashing token".to_owned(),
@@ -247,14 +250,15 @@ pub async fn list_users(data: Data<ServiceEnvironmentContext>) -> HttpResponse {
 
     // Get list of users
     match userdb.list().await {
-        Ok(mut users) => {
-            for user in users.iter_mut() {
-                user.password_hash = None;
+        Ok(users) => {
+            let mut client_users = Vec::new();
+            for user in users.iter() {
+                client_users.push(ClientUser::from_persist_user(user.clone()));
             }
 
             HttpResponse::Ok()
                 .content_type("application/json")
-                .json(users)
+                .json(client_users)
         }
         Err(err) => {
             let response = ServiceResponse {
@@ -285,39 +289,6 @@ pub async fn get_profile(data: Data<ServiceEnvironmentContext>, req: HttpRequest
                 .json(response)
         }
     }
-}
-/**
- *  a GET that is a long polling get.  the call waits here until the game changes and then the service will signal
- *  and the call will complete.
- */
-pub async fn long_poll(req: HttpRequest) -> HttpResponse {
-    
-    let game_id = req.headers().get("X-Game-Id").unwrap().to_str().unwrap();
-    let result = GameContainer::wait_for_change(game_id.to_owned()).await;
-    match result {
-        Ok(lastest_game) => {
-            let response = ServiceResponse {
-                message: "new game ready".to_owned(),
-                status: StatusCode::Ok,
-                body: serde_json::to_string(&lastest_game).unwrap(),
-            };
-            return HttpResponse::Ok()
-                .content_type("application/json")
-                .json(response);
-        }
-        Err(e) => {
-            let response = ServiceResponse {
-                message: format!("unexpected error: {}", e),
-                status: StatusCode::InternalServerError,
-                body: "".to_owned(),
-            };
-            return HttpResponse::InternalServerError()
-                .content_type("application/json")
-                .json(response);
-        }
-    }
-    
-    
 }
 
 /**
