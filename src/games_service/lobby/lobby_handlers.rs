@@ -18,7 +18,7 @@ pub async fn post_invite(
     to_id: Path<String>,
     invite_data: web::Json<InviteData>,
 ) -> HttpResponse {
-    let from_id = req.headers().get("X:user_id").unwrap().to_str().unwrap();
+    let from_id = req.headers().get("x-user-id").unwrap().to_str().unwrap();
     let to_id: &str = &to_id;
 
     // match Lobby::send_invite(from_id, to_id) {

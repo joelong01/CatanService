@@ -266,7 +266,7 @@ impl UserDb {
 #[cfg(test)]
 mod tests {
 
-    use crate::shared::{models::UserProfile, utility::get_id};
+    use crate::{shared::{models::UserProfile, utility::get_id}, tests::init_env_logger};
 
     use super::*;
     use bcrypt::{hash, DEFAULT_COST};
@@ -274,8 +274,8 @@ mod tests {
     #[tokio::test]
     async fn test_e2e() {
         let context = RequestEnvironmentContext::create(true);
-        env_logger::init();
-        let _ = env_logger::builder().is_test(true).try_init();
+     
+        init_env_logger().await;
 
         // create the database -- note this will DELETE the database as well
         let user_db = UserDb::new(&context).await;

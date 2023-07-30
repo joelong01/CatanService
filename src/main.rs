@@ -9,11 +9,9 @@ mod shared;
 mod user_service;
 
 // dependencies...
-use actix_cors::Cors;
+
 use actix_web::{
-    middleware::Logger,
-    web::{self, Data},
-    App, HttpResponse, HttpServer,
+HttpResponse, HttpServer, Scope, web,
 };
 
 use games_service::game_handlers;
@@ -26,7 +24,7 @@ use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
 use std::env;
 use user_service::users;
 
-use crate::games_service::{catanws, game_container::game_container, lobby::lobby_handlers};
+use crate::games_service::{game_container::game_container, lobby::lobby_handlers};
 
 /**
  *  Code to pick a port in a threadsafe way -- either specified in an environment variable named COSMOS_RUST_SAMPLE_PORT
@@ -85,62 +83,7 @@ async fn main() -> std::io::Result<()> {
 
     //
     // set up the HttpServer - pass in the broker service as part of App data
-    HttpServer::new(move || {
-        App::new()
-            .wrap(Logger::default())
-            .service(
-                web::scope("api/ws").route("/wsbootstrap", web::get().to(catanws::ws_bootstrap)),
-            )
-            .app_data(Data::new(ServiceEnvironmentContext::new()))
-            .wrap(EnvironmentMiddleWareFactory)
-            .wrap(Cors::permissive())
-            .service(
-                // these are the hopefully small set of non-authenticated end points
-                web::scope("/api").service(
-                    web::scope("/v1")
-                        .route("/version", web::get().to(get_version))
-                        .route("/users/register", web::post().to(users::register))
-                        .route("/users/login", web::post().to(users::login))
-                        .route("/test/setup", web::post().to(users::setup)), /* TEST ONLY */
-                ),
-            )
-            .service(
-                web::scope("auth/api")
-                    .wrap(AuthenticationMiddlewareFactory) /* everything below is authenticated */
-                    .service(
-                        web::scope("/v1")
-                            .service(
-                                web::scope("users")
-                                    .route("", web::get().to(users::list_users))
-                                    .route("/{id}", web::delete().to(users::delete))
-                                    .route("/{id}", web::get().to(users::find_user_by_id)),
-                            )
-                            .route(
-                                "/longpoll",
-                                web::get().to(game_container::long_poll_handler),
-                            )
-                            .service(
-                                web::scope("lobby")
-                                    .route("", web::get().to(lobby_handlers::get_lobby))
-                                    .route("/invite", web::post().to(lobby_handlers::post_invite))
-                                    .route("/join", web::post().to(lobby_handlers::join_game))
-                            )
-                            .service(
-                                web::scope("games")
-                                    .route("/", web::get().to(game_handlers::supported_games))
-                                    .route("/{game_type}", web::post().to(game_handlers::new_game))
-                                    .route(
-                                        "/shuffle/{game_id}",
-                                        web::post().to(game_handlers::shuffle_game),
-                                    ),
-                            )
-                            .service(
-                                web::scope("profile")
-                                    .route("/profile", web::get().to(users::get_profile)),
-                            ),
-                    ),
-            )
-    })
+    HttpServer::new(move || create_app!())
     .bind_openssl(format!("0.0.0.0:{}", port), builder)?
     .run()
     .await
@@ -150,4 +93,302 @@ async fn get_version() -> HttpResponse {
     HttpResponse::Ok()
         .content_type("text/plain")
         .body("version 1.0")
+}
+
+/**
+ * Creates a set of unauthenticated services under the "/api/v1" path.
+ * These endpoints are accessible without any user authentication and are mainly used for:
+ *
+ * - Version Information:
+ *   - Retrieves the version information of the application.
+ *   - URL: `https://localhost:8080/api/v1/version`
+ *   - Method: `GET`
+ *
+ * - User Registration:
+ *   - Registers a new user with the provided information.
+ *   - URL: `https://localhost:8080/api/v1/users/register`
+ *   - Method: `POST`
+ *
+ * - User Login:
+ *   - Authenticates a user and returns a token or session information.
+ *   - URL: `https://localhost:8080/api/v1/users/login`
+ *   - Method: `POST`
+ *
+ * - Test Setup:
+ *   - A special endpoint used only for testing purposes to set up test data.
+ *   - URL: `https://localhost:8080/api/v1/test/setup`
+ *   - Method: `POST`
+ */
+fn create_unauthenticated_service() -> Scope {
+    web::scope("/api").service(
+        web::scope("/v1")
+            .route("/version", web::get().to(get_version))
+            .route("/users/register", web::post().to(users::register))
+            .route("/users/login", web::post().to(users::login))
+            .route("/test/setup", web::post().to(users::setup)), /* TEST ONLY */
+    )
+}
+
+/**
+ * Creates a set of user-related services under the "/users" path.
+ * These endpoints allow for user management and are typically restricted to authenticated users:
+ *
+ * - List Users:
+ *   - Retrieves a list of all users in the system.
+ *   - URL: `https://localhost:8080/auth/api/v1/users`
+ *   - Method: `GET`
+ *
+ * - Delete User:
+ *   - Deletes a user with the given ID.
+ *   - URL: `https://localhost:8080/auth/api/v1/users/{id}` (replace `{id}` with the user's ID)
+ *   - Method: `DELETE`
+ *
+ * - Find User by ID:
+ *   - Retrieves details of a specific user by their ID.
+ *   - URL: `https://localhost:8080/auth/api/v1/users/{id}` (replace `{id}` with the user's ID)
+ *   - Method: `GET`
+ */
+fn user_service() -> Scope {
+    web::scope("/users")
+        .route("", web::get().to(users::list_users))
+        .route("/{id}", web::delete().to(users::delete))
+        .route("/{id}", web::get().to(users::find_user_by_id))
+}
+
+/**
+ * Creates a set of lobby-related services under the "/lobby" path.
+ * These endpoints allow for handling lobby operations within the game, such as inviting and joining games.
+ * They are typically restricted to authenticated users:
+ *
+ * - Get Lobby:
+ *   - Retrieves information about the current lobby.
+ *   - URL: `https://localhost:8080/auth/api/v1/lobby`
+ *   - Method: `GET`
+ *
+ * - Invite to Lobby:
+ *   - Sends an invite to another user to join the current lobby.
+ *   - URL: `https://localhost:8080/auth/api/v1/lobby/invite`
+ *   - Method: `POST`
+ *
+ * - Join Game:
+ *   - Allows a user to join a game via the lobby.
+ *   - URL: `https://localhost:8080/auth/api/v1/lobby/joingame`
+ *   - Method: `POST`
+ */
+fn lobby_service() -> Scope {
+    web::scope("/lobby")
+        .route("", web::get().to(lobby_handlers::get_lobby))
+        .route("/invite", web::post().to(lobby_handlers::post_invite))
+        .route("/joingame", web::post().to(lobby_handlers::join_game))
+}
+
+/**
+ * Creates a set of game-related services under the "/games" path.
+ * These endpoints enable various game operations, such as fetching supported games, creating a new game, and shuffling an existing game.
+ * They are typically restricted to authenticated users:
+ *
+ * - Supported Games:
+ *   - Retrieves information about the supported game types.
+ *   - URL: `https://localhost:8080/auth/api/v1/games/`
+ *   - Method: `GET`
+ *
+ * - New Game:
+ *   - Creates a new game of the specified type.
+ *   - URL: `https://localhost:8080/auth/api/v1/games/{game_type}`
+ *   - Method: `POST`
+ *
+ * - Shuffle Game:
+ *   - Initiates the shuffling of the specified game.
+ *   - URL: `https://localhost:8080/auth/api/v1/games/shuffle/{game_id}`
+ *   - Method: `POST`
+ */
+fn game_service() -> Scope {
+    web::scope("/games")
+        .route("/", web::get().to(game_handlers::supported_games))
+        .route("/{game_type}", web::post().to(game_handlers::new_game))
+        .route(
+            "/shuffle/{game_id}",
+            web::post().to(game_handlers::shuffle_game),
+        )
+}
+
+fn longpoll_service() -> Scope {
+    web::scope("/longpoll").route("", web::get().to(game_container::long_poll_handler))
+}
+
+fn profile_service() -> Scope {
+    web::scope("profile").route("", web::get().to(users::get_profile))
+}
+
+#[cfg(test)]
+mod tests {
+    use actix_web::{
+        http::header,
+        test,
+    };
+    use log::{trace, info};
+    use reqwest::StatusCode;
+    use serde_json::json;
+    use crate::{create_unauthenticated_service, create_test_service, setup_test, shared::models::{UserProfile, ServiceResponse, ClientUser}};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use lazy_static::lazy_static;
+    use tokio::sync::Mutex;
+
+    lazy_static! {
+        static ref LOGGER_INIT: AtomicBool = AtomicBool::new(false);
+        static ref LOGGER_INIT_LOCK: Mutex<()> = Mutex::new(());
+    }
+    
+    pub async fn init_env_logger() {
+        if LOGGER_INIT.load(Ordering::Relaxed) {
+            info!("env logger already created");
+            return
+        }
+        let _lock_guard = LOGGER_INIT_LOCK.lock().await;
+        if LOGGER_INIT.load(Ordering::Relaxed) {
+            info!("env logger already created");
+            return
+        }
+    
+        match env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).try_init(){
+            Ok(()) => {
+                info!("logger initialized");
+            }
+            Err(e) =>  info!("logger failt to init -- already inited?: {:#?}", e)
+        }
+        LOGGER_INIT.store(true, Ordering::Relaxed);
+    }
+  
+
+    #[actix_rt::test]
+    async fn test_version_and_log_intialized() {
+        init_env_logger().await;
+        init_env_logger().await;
+        let mut app = create_test_service!();
+        let req = test::TestRequest::get().uri("/api/v1/version").to_request();
+
+        let resp = test::call_service(&mut app, req).await;
+        assert_eq!(resp.status(), 200);
+
+        // You can also assert the response body if you want.
+        let body = test::read_body(resp).await;
+        assert_eq!(body, "version 1.0");
+    }
+
+    #[actix_rt::test]
+    async fn create_user_login_check_profile() {
+        let mut app = create_test_service!();
+        setup_test!(app);
+
+        const USER_1_PASSWORD: &'static str = "password";
+
+        // 1. Register the user
+        let mut user1_profile = UserProfile {
+            email: "testuser@example.com".into(),
+            first_name: "Test".into(),
+            last_name: "User".into(),
+            display_name: "TestUser".into(),
+            picture_url: "https://example.com/photo.jpg".into(),
+            foreground_color: "#000000".into(),
+            background_color: "#FFFFFF".into(),
+            text_color: "#000000".into(),
+            games_played: Some(10),
+            games_won: Some(1),
+        };
+        let req = test::TestRequest::post()
+            .uri("/api/v1/users/register")
+            .append_header((header::CONTENT_TYPE, "application/json"))
+            .append_header(("is_test", "true"))
+            .append_header(("X-Password".to_owned(), USER_1_PASSWORD))
+            .set_json(&user1_profile)
+            .to_request();
+
+        let response = test::call_service(&mut app, req).await;
+        let status = response.status();
+        let body = test::read_body(response).await;
+        if status != 200 {
+            trace!("user_1 already registered");
+            assert_eq!(status, 409);
+            let resp: ServiceResponse =
+                serde_json::from_slice(&body).expect("failed to deserialize into ServiceResponse");
+            assert_eq!(resp.status, 409);
+            assert_eq!(resp.body, "");
+        } else {
+            // Deserialize the body into a ClientUser object
+            let client_user: ClientUser =
+                serde_json::from_slice(&body).expect("Failed to deserialize response body");
+
+            let pretty_json =
+                serde_json::to_string_pretty(&client_user).expect("Failed to pretty-print JSON");
+
+            // Check if the pretty-printed JSON contains any underscores
+            assert!(
+                !pretty_json.contains('_'),
+                "JSON contains an underscore character"
+            );
+
+            trace!("registered client_user: {:#?}", pretty_json);
+        }
+
+        // 2. Login the user
+        let login_payload = json!({
+            "username": user1_profile.email,
+            "password": USER_1_PASSWORD
+        });
+        let req = test::TestRequest::post()
+            .uri("/api/v1/users/login")
+            .append_header(("is_test", "true"))
+            .set_json(&login_payload)
+            .to_request();
+
+        let resp = test::call_service(&mut app, req).await;
+        assert_eq!(resp.status(), 200);
+
+        let body = test::read_body(resp).await;
+        let service_response: ServiceResponse =
+            serde_json::from_slice(&body).expect("failed to deserialize into ServiceResponse");
+
+        // Extract auth token from response
+        let auth_token = service_response.body;
+        assert!(auth_token.len() > 10, "auth token appears invalid");
+
+        // 4. Get profile
+        let req = test::TestRequest::get()
+            .uri("/auth/api/v1/profile")
+            .append_header((header::CONTENT_TYPE, "application/json"))
+            .append_header(("is_test", "true"))
+            .append_header(("Authorization", auth_token))
+            .to_request();
+
+        let resp = test::call_service(&mut app, req).await;
+        assert_eq!(resp.status(), 200);
+        let body = test::read_body(resp).await;
+        let profile_from_service: UserProfile =
+            serde_json::from_slice(&body).expect("error deserializing profile");
+        user1_profile.games_played = Some(0);
+        user1_profile.games_won = Some(0); // service sets this when regisering.
+        assert!(
+            profile_from_service.is_equal_byval(&user1_profile),
+            "profile returned by service different than the one sent in"
+        );
+    }
+    #[actix_rt::test]
+    async fn test_setup_no_test_header() {
+       
+        let mut app = create_test_service!();
+
+        let request = test::TestRequest::post()
+            .uri("/api/v1/test/setup")
+            .to_request();
+
+        let response = test::call_service(&mut app, request).await;
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[actix_rt::test]
+    pub async fn find_or_create_test_db() {
+        let mut app = create_test_service!();
+        setup_test!(app);
+    }
 }

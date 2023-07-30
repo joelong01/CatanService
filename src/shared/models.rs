@@ -69,6 +69,14 @@ impl PersistUser {
             user_profile: client_user.user_profile.clone(),
         }
     }
+    pub fn from_user_profile(profile: &UserProfile, hash: String) -> Self {
+        Self {
+            id: get_id(),
+            partition_key: 1,
+            password_hash: Some(hash.to_owned()),
+            user_profile: profile.clone(),
+        }
+    }
 }
 impl Default for PersistUser {
     fn default() -> Self {
@@ -108,6 +116,21 @@ impl Default for UserProfile {
         }
     }
 
+}
+
+impl UserProfile {
+    pub fn is_equal_byval(&self, other: &UserProfile) -> bool {
+        self.email == other.email &&
+        self.first_name == other.first_name &&
+        self.last_name == other.last_name &&
+        self.display_name == other.display_name &&
+        self.picture_url == other.picture_url &&
+        self.foreground_color == other.foreground_color &&
+        self.background_color == other.background_color &&
+        self.text_color == other.text_color &&
+        self.games_played.unwrap_or(0) == other.games_played.unwrap_or(0) &&
+        self.games_won.unwrap_or(0) == other.games_won.unwrap_or(0)
+    }
 }
 ///
 /// This is the struct that is returned to the clien whenever User data needs to be returned.  it is also the format
@@ -154,7 +177,7 @@ pub struct Claims {
  *  We want every response to be in JSON format so that it is easier to script calling the service...when
  *  we don't have "natural" JSON (e.g. when we call 'setup'), we return the JSON of this object.
  */
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, Deserialize)]
 pub struct ServiceResponse {
     pub message: String,
     pub status: StatusCode,
@@ -191,8 +214,8 @@ impl ConfigEnvironmentVariables {
             env::var("LOGIN_SECRET_KEY").context("LOGIN_SECRET_KEY not found in environment")?;
         let database_name = env::var("USER_DATABASE_NAME")
             .context("USER_DATABASE_NAME not found in environment")?;
-        let container_name = env::var("USER_CONTAINER_NAME")
-            .context("USER_CONTAINER_NAME not found in environment")?;
+        let container_name = env::var("USER_DATABASE_NAME")
+            .context("USER_DATABASE_NAME not found in environment")?;
         let rust_log = env::var("RUST_LOG").context("RUST_LOG not found in environment")?;
 
         Ok(Self {
@@ -205,6 +228,17 @@ impl ConfigEnvironmentVariables {
             container_name,
             rust_log,
         })
+    }
+
+    pub fn dump_values(&self) {
+        log::info!("cosmos_token: {}", self.cosmos_token);
+        log::info!("cosmos_account: {}", self.cosmos_account);
+        log::info!("ssl_key_location: {}", self.ssl_key_location);
+        log::info!("ssl_cert_location: {}", self.ssl_cert_location);
+        log::info!("login_secret_key: {}", self.login_secret_key);
+        log::info!("database_name: {}", self.database_name);
+        log::info!("container_name: {}", self.container_name);
+        log::info!("rust_log: {}", self.rust_log);
     }
 }
 impl Default for ConfigEnvironmentVariables {

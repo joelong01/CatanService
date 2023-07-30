@@ -64,7 +64,7 @@ pub async fn new_game(
     req: HttpRequest,
 ) -> impl Responder {
     let game_type = game_type.into_inner();
-    let user_id = req.headers().get("X:user_id").unwrap().to_str().unwrap();
+    let user_id = req.headers().get("x-user-id").unwrap().to_str().unwrap();
 
     if game_type != CatanGames::Regular {
         let response = ServiceResponse {

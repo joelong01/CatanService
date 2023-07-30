@@ -1,3 +1,5 @@
+
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /**
@@ -7,14 +9,21 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use crate::cosmos_db::cosmosdb::UserDb;
 use crate::games_service::lobby::lobby::Lobby;
 use crate::middleware::environment_mw::{ServiceEnvironmentContext, CATAN_ENV};
-use crate::shared::models::{Claims, ClientUser, Credentials, PersistUser, ServiceResponse};
-use crate::shared::utility::get_id;
+use crate::shared::models::{Claims, ClientUser, Credentials, PersistUser, ServiceResponse, UserProfile};
 use actix_web::web::Data;
 use actix_web::{web, HttpRequest, HttpResponse};
 use azure_core::error::Result as AzureResult;
 use azure_core::StatusCode;
 use bcrypt::{hash, verify, DEFAULT_COST};
 use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
+use tokio::sync::Mutex;
+use lazy_static::lazy_static;
+
+
+lazy_static! {
+    static ref DB_SETUP: AtomicBool = AtomicBool::new(false);
+    static ref SETUP_LOCK: Mutex<()> = Mutex::new(());
+}
 
 /**
  * this sets up CosmosDb to make the sample run. the only prereq is the secrets set in
@@ -24,9 +33,46 @@ use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
  * the users database will be created out of band and this path is just for test users.
  */
 pub async fn setup(data: Data<ServiceEnvironmentContext>) -> HttpResponse {
-    //  do not check claims as the db doesn't exist yet.
-
     let request_context = data.context.lock().unwrap();
+     //  do not check claims as the db doesn't exist yet.
+     if !request_context.is_test {
+        return create_http_response(
+            StatusCode::Unauthorized,
+            format!("setup is only available when the test header is set."),
+            "".to_owned(),
+        );
+    }
+     if DB_SETUP.load(Ordering::Relaxed) {
+        let response = ServiceResponse {
+            message: format!(
+                "database: {} container: {} exists",
+                request_context.database_name, request_context.env.container_name
+            ),
+            status: StatusCode::Accepted,
+            body: "".to_owned(),
+        };
+      return  HttpResponse::Accepted()
+            .content_type("application/json")
+            .json(response) 
+    }
+    
+    let _lock_guard = SETUP_LOCK.lock().await;
+
+    if DB_SETUP.load(Ordering::Relaxed) {
+        let response = ServiceResponse {
+            message: format!(
+                "database: {} container: {} created",
+                request_context.database_name, request_context.env.container_name
+            ),
+            status: StatusCode::Accepted,
+            body: "".to_owned(),
+        };
+      return  HttpResponse::Accepted()
+            .content_type("application/json")
+            .json(response) 
+    }
+
+    //  do not check claims as the db doesn't exist yet.
     if !request_context.is_test {
         return create_http_response(
             StatusCode::Unauthorized,
@@ -37,15 +83,16 @@ pub async fn setup(data: Data<ServiceEnvironmentContext>) -> HttpResponse {
     let userdb = UserDb::new(&request_context).await;
     match userdb.setupdb().await {
         Ok(..) => {
+            DB_SETUP.store(true, Ordering::Relaxed);
             let response = ServiceResponse {
                 message: format!(
                     "database: {} container: {} created",
                     request_context.database_name, request_context.env.container_name
                 ),
-                status: StatusCode::Ok,
+                status: StatusCode::Created,
                 body: "".to_owned(),
             };
-            HttpResponse::Ok()
+            HttpResponse::Created()
                 .content_type("application/json")
                 .json(response)
         }
@@ -66,15 +113,18 @@ pub async fn setup(data: Data<ServiceEnvironmentContext>) -> HttpResponse {
 ///
 /// # Arguments
 ///
-/// * `user_in` - ClientUser object
+/// * `user_in` - UserProfile object
 /// * `data` - `ServiceEnvironmentContext` data.
 /// * `req` - `HttpRequest` object containing the request information.
+/// 
+/// # Headers
+/// * X-Password - The new password for the user
 ///
 /// # Returns
 ///
 /// Returns an HTTP response indicating the success or failure of the registration process.
 pub async fn register(
-    user_in: web::Json<ClientUser>,
+    profile_in: web::Json<UserProfile>,
     data: Data<ServiceEnvironmentContext>,
     req: HttpRequest,
 ) -> HttpResponse {
@@ -108,7 +158,7 @@ pub async fn register(
     // Check if the user already exists
     let user_result = internal_find_user(
         "email".to_string(),
-        user_in.user_profile.email.clone(),
+        profile_in.email.clone(),
         data.clone(),
     )
     .await;
@@ -117,7 +167,7 @@ pub async fn register(
         Ok(_) => {
             return create_http_response(
                 StatusCode::Conflict,
-                format!("User already registered: {}", user_in.user_profile.email),
+                format!("User already registered: {}", profile_in.email),
                 "".to_owned(),
             );
         }
@@ -139,9 +189,8 @@ pub async fn register(
     };
 
     // Create the user record
-    let mut persist_user = PersistUser::from_client_user(&user_in, password_hash.to_owned());
-    // ignore the id passed in by the client and create a new one
-    persist_user.id = get_id();
+    let mut persist_user = PersistUser::from_user_profile(&profile_in, password_hash.to_owned());
+    // ignore the game stats passed in by the client and create a new one
     persist_user.user_profile.games_played = Some(0);
     persist_user.user_profile.games_won = Some(0);
     // Create the database connection
@@ -273,7 +322,7 @@ pub async fn list_users(data: Data<ServiceEnvironmentContext>) -> HttpResponse {
     }
 }
 pub async fn get_profile(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> HttpResponse {
-    let header_id = req.headers().get("X:user_id").unwrap().to_str().unwrap();
+    let header_id = req.headers().get("x-user-id").unwrap().to_str().unwrap();
     match internal_find_user("id".to_string(), header_id.to_string(), data).await {
         Ok(user) => HttpResponse::Ok()
             .content_type("application/json")
@@ -340,7 +389,7 @@ pub async fn delete(
 ) -> HttpResponse {
     //
     // unwrap is ok here because our middleware put it there.
-    let header_id_result = req.headers().get("X:user_id").unwrap().to_str();
+    let header_id_result = req.headers().get("x-user-id").unwrap().to_str();
 
     let header_id = match header_id_result {
         Ok(val) => val,

@@ -46,7 +46,7 @@
             "default": "actix_web=trace,actix_server=trace,rust=trace"
         },
         {
-            "environmentVariable": "CATAN_USER_DATABASE_NAME",
+            "environmentVariable": "USER_DATABASE_NAME",
             "description": "the name of the User database",
             "shellscript": "",
             "default": "Users-db"

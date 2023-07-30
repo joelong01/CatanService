@@ -150,7 +150,7 @@ pub async fn long_poll_handler(req: HttpRequest) -> HttpResponse {
         }
         None => 
         {
-            let user_id = req.headers().get("X:user_id").unwrap().to_str().unwrap();
+            let user_id = req.headers().get("x-user-id").unwrap().to_str().unwrap();
             Lobby::wait_for_invite(user_id).await
         }
     };
