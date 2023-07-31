@@ -266,7 +266,7 @@ impl UserDb {
 #[cfg(test)]
 mod tests {
 
-    use crate::{shared::{models::UserProfile, utility::get_id}, tests::init_env_logger};
+    use crate::{shared::{models::UserProfile, utility::get_id},init_env_logger};
 
     use super::*;
     use bcrypt::{hash, DEFAULT_COST};

@@ -68,7 +68,7 @@ where
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
         // fetch is_test flag from the header
-        let is_test = req.headers().contains_key("is_test");
+        let is_test = req.headers().contains_key("x-is_test");
 
         let app_state = req
             .app_data::<Data<ServiceEnvironmentContext>>()

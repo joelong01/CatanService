@@ -69,10 +69,10 @@ macro_rules! setup_test {
         let request = test::TestRequest::post()
             .uri("/api/v1/test/setup")
             .append_header((header::CONTENT_TYPE, "application/json"))
-            .append_header(("is_test", "true"))
+            .append_header(("x-is_test", "true"))
             .to_request();
 
-        let response = test::call_service(&mut $app, request).await;
+        let response = test::call_service($app, request).await;
         assert!(response.status().is_success());
     }};
 }
@@ -84,6 +84,8 @@ macro_rules! create_app {
         use crate::EnvironmentMiddleWareFactory;
         use actix_cors::Cors;
         use actix_web::{middleware::Logger, web, App};
+        use crate::create_unauthenticated_service;
+
 
         use crate::ServiceEnvironmentContext;
         use crate::{game_service, lobby_service, longpoll_service, profile_service, user_service};
@@ -111,6 +113,8 @@ macro_rules! create_test_service {
     () => {{
         use crate::create_app;
         use actix_web::test;
+        use crate::init_env_logger;
+
         init_env_logger().await;
 
         let app = test::init_service(create_app!()).await;
