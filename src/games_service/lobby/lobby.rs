@@ -165,6 +165,7 @@ mod tests {
             from_name: "User3".to_string(),
             message: message.clone(),
             picture_url: picture_url.clone(),
+            game_id: "TODO!".to_owned()
         };
         let invitation_to_user2 = InviteData {
             from_id: "user3".to_string(),
@@ -172,6 +173,7 @@ mod tests {
             from_name: "User3".to_string(),
             message: message.clone(),
             picture_url: picture_url.clone(),
+            game_id: "TODO!".to_owned()
         };
 
         Lobby::send_invite(&invitation_to_user1).await.unwrap();
@@ -183,6 +185,7 @@ mod tests {
             from_name: "User3".to_string(),
             message: message.clone(),
             picture_url: picture_url.clone(),
+            game_id: "TODO!".to_owned()
         };
 
         // send an invite to a non-existing user

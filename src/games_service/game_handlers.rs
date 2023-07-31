@@ -1,7 +1,7 @@
 use crate::{
     middleware::environment_mw::ServiceEnvironmentContext,
     shared::models::{ClientUser, ServiceResponse},
-    user_service::users::{create_http_response, internal_find_user}, 
+    user_service::users::{create_http_response, internal_find_user},
 };
 use actix_web::{
     web::{self, Data, Path},
@@ -13,11 +13,9 @@ use crate::games_service::shared::game_enums::{CatanGames, SupportedGames};
 
 use super::{
     catan_games::{games::regular::regular_game::RegularGame, traits::game_trait::CatanGame},
-    game_container::game_container::GameContainer, lobby::lobby::Lobby,
+    game_container::game_container::GameContainer,
+    lobby::lobby::Lobby,
 };
-
-
-
 
 ///
 /// check the state to make sure the request is valid
@@ -33,10 +31,10 @@ pub async fn shuffle_game(game_id_path: web::Path<String>, _req: HttpRequest) ->
             new_game.shuffle();
             GameContainer::push_game(&game_id.to_owned(), &new_game).await;
             HttpResponse::Ok()
-            .content_type("application/json")
-            .json(game)
+                .content_type("application/json")
+                .json(game)
         }
-        Err(_e)=>{
+        Err(_e) => {
             let response = ServiceResponse {
                 message: format!(
                     "Only the creator can shuffle the board, and you are not the creator."
@@ -48,10 +46,8 @@ pub async fn shuffle_game(game_id_path: web::Path<String>, _req: HttpRequest) ->
                 .content_type("application/json")
                 .json(response);
         }
-        }
     }
-
-
+}
 
 ///
 /// creates a new game and returns a gamedId that is used for all subsequent game* apis.
@@ -67,14 +63,11 @@ pub async fn new_game(
     let user_id = req.headers().get("x-user-id").unwrap().to_str().unwrap();
 
     if game_type != CatanGames::Regular {
-        let response = ServiceResponse {
-            message: format!("Game not supported: {:#?}", game_type),
-            status: StatusCode::BadRequest,
-            body: "".to_owned(),
-        };
-        return HttpResponse::BadRequest()
-            .content_type("application/json")
-            .json(response);
+        return create_http_response(
+            StatusCode::BadRequest,
+            format!("Game not supported: {:#?}", game_type),
+            "".to_owned(),
+        );
     }
 
     let user_result = internal_find_user("id".to_owned(), user_id.to_owned(), data).await;

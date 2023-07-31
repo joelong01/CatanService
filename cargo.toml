@@ -9,7 +9,7 @@ cargo-make = "0.36.11"
 [dependencies]
 azure_data_cosmos = "0.13.0"
 azure_core = "0.13.0"
-tokio = { version = "1.28.2", features = ["macros"] }
+tokio = { version = "1.28.2", features = ["full", "test-util"] }
 actix-cors = "0.6.4"
 actix-rt = "2.2.0"
 actix-web = { version = "4.3.1", features = ["openssl"] }
@@ -37,3 +37,4 @@ strum = "0.25.0"
 strum_macros = "0.25.1"
 serde_with = "3.0.0"
 parking_lot = "0.12.1"
+actix-web-test = "0.0.1"

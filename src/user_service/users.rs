@@ -1,4 +1,3 @@
-
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -9,16 +8,17 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use crate::cosmos_db::cosmosdb::UserDb;
 use crate::games_service::lobby::lobby::Lobby;
 use crate::middleware::environment_mw::{ServiceEnvironmentContext, CATAN_ENV};
-use crate::shared::models::{Claims, ClientUser, Credentials, PersistUser, ServiceResponse, UserProfile};
+use crate::shared::models::{
+    Claims, ClientUser, Credentials, PersistUser, ServiceResponse, UserProfile,
+};
 use actix_web::web::Data;
 use actix_web::{web, HttpRequest, HttpResponse};
 use azure_core::error::Result as AzureResult;
 use azure_core::StatusCode;
 use bcrypt::{hash, verify, DEFAULT_COST};
 use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
-use tokio::sync::Mutex;
 use lazy_static::lazy_static;
-
+use tokio::sync::Mutex;
 
 lazy_static! {
     static ref DB_SETUP: AtomicBool = AtomicBool::new(false);
@@ -34,44 +34,6 @@ lazy_static! {
  */
 pub async fn setup(data: Data<ServiceEnvironmentContext>) -> HttpResponse {
     let request_context = data.context.lock().unwrap();
-     //  do not check claims as the db doesn't exist yet.
-     if !request_context.is_test {
-        return create_http_response(
-            StatusCode::Unauthorized,
-            format!("setup is only available when the test header is set."),
-            "".to_owned(),
-        );
-    }
-     if DB_SETUP.load(Ordering::Relaxed) {
-        let response = ServiceResponse {
-            message: format!(
-                "database: {} container: {} exists",
-                request_context.database_name, request_context.env.container_name
-            ),
-            status: StatusCode::Accepted,
-            body: "".to_owned(),
-        };
-      return  HttpResponse::Accepted()
-            .content_type("application/json")
-            .json(response) 
-    }
-    
-    let _lock_guard = SETUP_LOCK.lock().await;
-
-    if DB_SETUP.load(Ordering::Relaxed) {
-        let response = ServiceResponse {
-            message: format!(
-                "database: {} container: {} created",
-                request_context.database_name, request_context.env.container_name
-            ),
-            status: StatusCode::Accepted,
-            body: "".to_owned(),
-        };
-      return  HttpResponse::Accepted()
-            .content_type("application/json")
-            .json(response) 
-    }
-
     //  do not check claims as the db doesn't exist yet.
     if !request_context.is_test {
         return create_http_response(
@@ -80,32 +42,48 @@ pub async fn setup(data: Data<ServiceEnvironmentContext>) -> HttpResponse {
             "".to_owned(),
         );
     }
+    if DB_SETUP.load(Ordering::Relaxed) {
+        return create_http_response(
+            StatusCode::Accepted,
+            format!(
+                "database: {} container: {} already exists",
+                request_context.database_name, request_context.env.container_name
+            ),
+            "".to_owned(),
+        );
+    }
+
+    let _lock_guard = SETUP_LOCK.lock().await;
+
+    if DB_SETUP.load(Ordering::Relaxed) {
+        return create_http_response(
+            StatusCode::Accepted,
+            format!(
+                "database: {} container: {} already exists",
+                request_context.database_name, request_context.env.container_name
+            ),
+            "".to_owned(),
+        );
+    }
+
     let userdb = UserDb::new(&request_context).await;
     match userdb.setupdb().await {
         Ok(..) => {
             DB_SETUP.store(true, Ordering::Relaxed);
-            let response = ServiceResponse {
-                message: format!(
+            create_http_response(
+                StatusCode::Created,
+                format!(
                     "database: {} container: {} created",
                     request_context.database_name, request_context.env.container_name
                 ),
-                status: StatusCode::Created,
-                body: "".to_owned(),
-            };
-            HttpResponse::Created()
-                .content_type("application/json")
-                .json(response)
+                "".to_owned(),
+            )
         }
-        Err(err) => {
-            let response = ServiceResponse {
-                message: format!("Failed to create database/collection: {}", err),
-                status: StatusCode::BadRequest,
-                body: "".to_owned(),
-            };
-            HttpResponse::BadRequest()
-                .content_type("application/json")
-                .json(response)
-        }
+        Err(err) => create_http_response(
+            StatusCode::BadRequest,
+            format!("Failed to create database/collection: {}", err),
+            "".to_owned(),
+        ),
     }
 }
 
@@ -116,7 +94,7 @@ pub async fn setup(data: Data<ServiceEnvironmentContext>) -> HttpResponse {
 /// * `user_in` - UserProfile object
 /// * `data` - `ServiceEnvironmentContext` data.
 /// * `req` - `HttpRequest` object containing the request information.
-/// 
+///
 /// # Headers
 /// * X-Password - The new password for the user
 ///
@@ -133,35 +111,25 @@ pub async fn register(
         Some(header_value) => match header_value.to_str() {
             Ok(pwd) => pwd.to_string(),
             Err(e) => {
-                let response = ServiceResponse {
-                    message: format!("X-Password header is set, but the value is not. Err: {}", e),
-                    status: StatusCode::BadRequest,
-                    body: "".to_owned(),
-                };
-                return HttpResponse::BadRequest()
-                    .content_type("application/json")
-                    .json(response);
+                return create_http_response(
+                    StatusCode::BadRequest,
+                    format!("X-Password header is set, but the value is not. Err: {}", e),
+                    "".to_owned(),
+                )
             }
         },
         None => {
-            let response = ServiceResponse {
-                message: format!("X-Password header not set"),
-                status: StatusCode::BadRequest,
-                body: "".to_owned(),
-            };
-            return HttpResponse::BadRequest()
-                .content_type("application/json")
-                .json(response);
+            return create_http_response(
+                StatusCode::BadRequest,
+                format!("X-Password header not set"),
+                "".to_owned(),
+            )
         }
     };
 
     // Check if the user already exists
-    let user_result = internal_find_user(
-        "email".to_string(),
-        profile_in.email.clone(),
-        data.clone(),
-    )
-    .await;
+    let user_result =
+        internal_find_user("email".to_string(), profile_in.email.clone(), data.clone()).await;
 
     match user_result {
         Ok(_) => {
@@ -205,16 +173,11 @@ pub async fn register(
                 .content_type("application/json")
                 .json(ClientUser::from_persist_user(persist_user))
         }
-        Err(err) => {
-            let response = ServiceResponse {
-                message: format!("Failed to add user to collection: {}", err),
-                status: StatusCode::BadRequest,
-                body: "".to_owned(),
-            };
-            HttpResponse::BadRequest()
-                .content_type("application/json")
-                .json(response)
-        }
+        Err(err) => create_http_response(
+            StatusCode::BadRequest,
+            format!("Failed to add user to collection: {}", err),
+            "".to_owned(),
+        ),
     }
 }
 
@@ -424,14 +387,12 @@ pub async fn delete(
                 .json(response)
         }
         Err(err) => {
-            let response = ServiceResponse {
-                message: format!("Failed to delete user: {}", err),
-                status: StatusCode::BadRequest,
-                body: "".to_owned(),
-            };
-            HttpResponse::BadRequest()
-                .content_type("application/json")
-                .json(response)
+            
+            create_http_response(
+                StatusCode::BadRequest,
+                format!("Failed to delete user: {}", err),
+                "".to_owned(),
+            )
         }
     }
 }
@@ -452,6 +413,8 @@ pub fn create_http_response(
         StatusCode::InternalServerError => HttpResponse::InternalServerError().json(response),
         StatusCode::NotFound => HttpResponse::NotFound().json(response),
         StatusCode::Conflict => HttpResponse::Conflict().json(response),
+        StatusCode::Accepted => HttpResponse::Accepted().json(response),
+        StatusCode::Created => HttpResponse::Created().json(response),
         _ => HttpResponse::BadRequest().json(response),
     }
 }

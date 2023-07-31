@@ -12,6 +12,7 @@ pub struct InviteData {
     pub from_name: String,
     pub message: String,
     pub picture_url: String,
+    pub game_id: String
 }
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]

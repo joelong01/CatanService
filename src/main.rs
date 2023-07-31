@@ -10,9 +10,7 @@ mod user_service;
 
 // dependencies...
 
-use actix_web::{
-HttpResponse, HttpServer, Scope, web,
-};
+use actix_web::{web, HttpResponse, HttpServer, Scope};
 
 use games_service::game_handlers;
 use middleware::authn_mw::AuthenticationMiddlewareFactory;
@@ -83,12 +81,16 @@ async fn main() -> std::io::Result<()> {
 
     //
     // set up the HttpServer - pass in the broker service as part of App data
+    // we use the create_app! macro so that we always create the same shape of app in our tests
     HttpServer::new(move || create_app!())
-    .bind_openssl(format!("0.0.0.0:{}", port), builder)?
-    .run()
-    .await
+        .bind_openssl(format!("0.0.0.0:{}", port), builder)?
+        .run()
+        .await
 }
 
+/**
+ * this is the simplest possible GET handler that can be run from a browser to test connectivity
+ */
 async fn get_version() -> HttpResponse {
     HttpResponse::Ok()
         .content_type("text/plain")
@@ -222,43 +224,44 @@ fn profile_service() -> Scope {
 
 #[cfg(test)]
 mod tests {
-    use actix_web::{
-        http::header,
-        test,
+    use crate::{
+        create_test_service, create_unauthenticated_service, setup_test,
+        shared::models::{ClientUser, ServiceResponse, UserProfile},
     };
-    use log::{trace, info};
+    use actix_web::{http::header, test};
+    use lazy_static::lazy_static;
+    use log::{info, trace};
     use reqwest::StatusCode;
     use serde_json::json;
-    use crate::{create_unauthenticated_service, create_test_service, setup_test, shared::models::{UserProfile, ServiceResponse, ClientUser}};
     use std::sync::atomic::{AtomicBool, Ordering};
-    use lazy_static::lazy_static;
     use tokio::sync::Mutex;
 
     lazy_static! {
         static ref LOGGER_INIT: AtomicBool = AtomicBool::new(false);
         static ref LOGGER_INIT_LOCK: Mutex<()> = Mutex::new(());
     }
-    
+
     pub async fn init_env_logger() {
         if LOGGER_INIT.load(Ordering::Relaxed) {
             info!("env logger already created");
-            return
+            return;
         }
         let _lock_guard = LOGGER_INIT_LOCK.lock().await;
         if LOGGER_INIT.load(Ordering::Relaxed) {
             info!("env logger already created");
-            return
+            return;
         }
-    
-        match env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).try_init(){
+
+        match env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+            .try_init()
+        {
             Ok(()) => {
                 info!("logger initialized");
             }
-            Err(e) =>  info!("logger failt to init -- already inited?: {:#?}", e)
+            Err(e) => info!("logger failt to init -- already inited?: {:#?}", e),
         }
         LOGGER_INIT.store(true, Ordering::Relaxed);
     }
-  
 
     #[actix_rt::test]
     async fn test_version_and_log_intialized() {
@@ -374,7 +377,6 @@ mod tests {
     }
     #[actix_rt::test]
     async fn test_setup_no_test_header() {
-       
         let mut app = create_test_service!();
 
         let request = test::TestRequest::post()
@@ -390,5 +392,130 @@ mod tests {
     pub async fn find_or_create_test_db() {
         let mut app = create_test_service!();
         setup_test!(app);
+    }
+
+   
+
+    /**
+     * 1. create the app
+     * 2. add 3 users
+     * 3. user 1 and 2 wait for invites
+     * 4. user 3 creates the game
+     * 5. user 3 sends an invite to user 2.
+     * 6. User 2 accepts invite and then waits for game changes
+     * 7. user 3 sends invite to user 1
+     * 8. user 1 accepts invite
+     * 9. user 3 starts game.
+     *
+     * TODO:  test the reject path
+     */
+    #[actix_rt::test]
+    async fn test_lobby_invite_flow() {
+        let mut app = create_test_service!();
+        setup_test!(app);
+        info!("starting test_lobby_invite_flow");
+
+        struct UserInfo {
+            auth_token: String,
+            user_profile: UserProfile,
+            client_id: String,
+        }
+        let mut user_info_list: Vec<UserInfo> = Vec::new();
+        for i in 0..3 {
+            let email = format!("test_lobby_invite_flow_{}@example.com", i);
+            let password = "password".to_string();
+            let mut client_id: String = "".to_string();
+            let user_profile = UserProfile {
+                email: email.clone(),
+                first_name: "Test".into(),
+                last_name: "User".into(),
+                display_name: format!("TestUser{}", i),
+                picture_url: "https://example.com/photo.jpg".into(),
+                foreground_color: "#000000".into(),
+                background_color: "#FFFFFF".into(),
+                text_color: "#000000".into(),
+                games_played: Some(0),
+                games_won: Some(0),
+            };
+
+            let req = test::TestRequest::post()
+                .uri("/api/v1/users/register")
+                .append_header((header::CONTENT_TYPE, "application/json"))
+                .append_header(("is_test", "true"))
+                .append_header(("X-Password".to_owned(), password.clone()))
+                .set_json(&user_profile)
+                .to_request();
+
+            let response = test::call_service(&mut app, req).await;
+            let status = response.status();
+            let body = test::read_body(response).await;
+            if status != 200 {
+                trace!("{} already registered", email);
+                assert_eq!(status, 409);
+                let resp: ServiceResponse = serde_json::from_slice(&body)
+                    .expect("failed to deserialize into ServiceResponse");
+                assert_eq!(resp.status, 409);
+                assert_eq!(resp.body, "");
+            } else {
+                // Deserialize the body into a ClientUser object
+                let client_user: ClientUser =
+                    serde_json::from_slice(&body).expect("Failed to deserialize response body");
+                client_id = client_user.id;
+            }
+
+            // 2. Login the user
+            let login_payload = json!({
+                "username": email.to_string(),
+                "password": password.clone()
+            });
+            let req = test::TestRequest::post()
+                .uri("/api/v1/users/login")
+                .append_header(("is_test", "true"))
+                .set_json(&login_payload)
+                .to_request();
+
+            let resp = test::call_service(&mut app, req).await;
+            assert_eq!(resp.status(), 200);
+
+            let body = test::read_body(resp).await;
+            let service_response: ServiceResponse =
+                serde_json::from_slice(&body).expect("failed to deserialize into ServiceResponse");
+
+            // Extract auth token from response
+            let auth_token = service_response.body;
+
+            // 4. Get profile
+            let req = test::TestRequest::get()
+                .uri("/auth/api/v1/profile")
+                .append_header((header::CONTENT_TYPE, "application/json"))
+                .append_header(("is_test", "true"))
+                .append_header(("Authorization", auth_token.clone()))
+                .to_request();
+
+            let resp = test::call_service(&mut app, req).await;
+            assert_eq!(resp.status(), 200);
+            let body = test::read_body(resp).await;
+            let profile_from_service: UserProfile =
+                serde_json::from_slice(&body).expect("error deserializing profile");
+
+            assert!(
+                profile_from_service.is_equal_byval(&user_profile),
+                "profile returned by service different than the one sent in"
+            );
+            let user_info = UserInfo {
+                auth_token: auth_token.clone(),
+                user_profile: profile_from_service.clone(),
+                client_id: client_id.clone(),
+            };
+            user_info_list.push(user_info);
+        }
+        for info in user_info_list {
+            info!(
+                "email {}, token-len: {}, id: {}",
+                info.user_profile.email,
+                info.auth_token.len(),
+                info.client_id
+            );
+        }
     }
 }
