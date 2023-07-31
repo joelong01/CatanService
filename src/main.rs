@@ -6,14 +6,16 @@ mod games_service;
 mod macros;
 mod middleware;
 mod shared;
-mod user_service;
 mod test;
+mod user_service;
 
 // dependencies...
 
 use actix_web::{web, HttpResponse, HttpServer, Scope};
 
+use crate::games_service::{game_container::game_container, lobby::lobby_handlers};
 use games_service::game_handlers;
+use lazy_static::lazy_static;
 use log::info;
 use middleware::authn_mw::AuthenticationMiddlewareFactory;
 use middleware::environment_mw::{
@@ -24,8 +26,6 @@ use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
 use std::env;
 use std::sync::atomic::{AtomicBool, Ordering};
 use user_service::users;
-use lazy_static::lazy_static;
-use crate::games_service::{game_container::game_container, lobby::lobby_handlers};
 
 /**
  *  Code to pick a port in a threadsafe way -- either specified in an environment variable named COSMOS_RUST_SAMPLE_PORT
@@ -255,18 +255,14 @@ pub async fn init_env_logger() {
 #[cfg(test)]
 mod tests {
     use crate::{
-        create_test_service, setup_test,
-        shared::models::{ClientUser, ServiceResponse, UserProfile}, init_env_logger,
+        create_test_service, init_env_logger, setup_test,
+        shared::models::{ClientUser, ServiceResponse, UserProfile},
     };
     use actix_web::{http::header, test};
 
     use log::trace;
     use reqwest::StatusCode;
     use serde_json::json;
-
-
-
-    
 
     #[actix_rt::test]
     async fn test_version_and_log_intialized() {
@@ -286,7 +282,7 @@ mod tests {
     #[actix_rt::test]
     async fn create_user_login_check_profile() {
         let mut app = create_test_service!();
-        setup_test!(app);
+        setup_test!(&app);
 
         const USER_1_PASSWORD: &'static str = "password";
 
@@ -395,11 +391,7 @@ mod tests {
 
     #[actix_rt::test]
     pub async fn find_or_create_test_db() {
-        let mut app = create_test_service!();
-        setup_test!(app);
+        let app = create_test_service!();
+        setup_test!(&app);
     }
-
-   
-
-
 }

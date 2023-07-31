@@ -67,7 +67,8 @@ impl StateData {
             ],
             GameState::Supplemental => {
                 vec![GameAction::Done, GameAction::Buy, GameAction::Build]
-            }
+            },
+            GameState::GameOver => todo!()
         }
     }
 }

@@ -59,6 +59,7 @@ impl StateMachineTrait for RegularGame {
             GameState::MustMoveBaron => todo!(),
             GameState::BuyingAndTrading => todo!(),
             GameState::Supplemental => todo!(),
+            GameState::GameOver => todo!()
         };
     
         self.state_data = StateData::new(state);

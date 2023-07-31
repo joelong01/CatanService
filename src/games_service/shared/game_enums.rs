@@ -78,6 +78,7 @@ pub enum GameState {
     MustMoveBaron,
     BuyingAndTrading,
     Supplemental,
+    GameOver
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

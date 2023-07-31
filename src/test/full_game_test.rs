@@ -1,15 +1,20 @@
 mod test {
     #![allow(unused_imports)]
+    #![allow(dead_code)]
     use std::sync::Arc;
 
     use crate::{
-        create_test_service, setup_test,
-        shared::models::{ClientUser, ServiceResponse, UserProfile}, create_app,
+        create_app, create_test_service, setup_test,
+        shared::models::{ClientUser, ServiceResponse, UserProfile}, games_service::{game_container::game_messages::CatanMessage, shared::game_enums::GameState},
     };
-    use actix_web::{http::header, test};
+    use actix_web::{http::header, test, HttpServer};
     use log::{info, trace};
+    use reqwest::Client;
+    use serde::{Deserialize, Serialize};
     use serde_json::json;
+    use std::io;
     use tokio::sync::{Barrier, RwLock};
+
     #[allow(unused_macros)]
     macro_rules! call_service {
         ($app:expr, $req:expr) => {
@@ -20,14 +25,19 @@ mod test {
             }
         };
     }
-
+    async fn start_server() -> io::Result<()> {
+        HttpServer::new(move || create_app!())
+            .bind("127.0.0.1:8082")?
+            .run()
+            .await
+    }
     /**
-     * 
+     *
      * I have to create a "real" web server to send the requests to instead of starting a test service because
      * I need to spawn and call from different threads and passing the app to the threads proved to be difficult/
      * impossible. this starts a service (the same as it would in main) and then calls it like a rust client would.
      * the only difference is I don't bother using HTTPS
-     * 
+     *
      * 1. create the app
      * 2. add 3 users
      * 3. user 1 and 2 wait for invites
@@ -42,15 +52,12 @@ mod test {
      */
     #[actix_rt::test]
     async fn full_game_test() {
-        let app = create_test_service!();
-        let locked_app = Arc::new(RwLock::new(app));
+        start_server().await.unwrap();
 
-       let app_clone = locked_app.read().await;
-        setup_test!(&*app_clone);
-
+        let client = Client::new();
 
         info!("starting test_lobby_invite_flow");
-     
+        #[derive(Clone, Serialize, Deserialize, Eq, PartialEq)]
         struct UserInfo {
             auth_token: String,
             user_profile: UserProfile,
@@ -73,71 +80,73 @@ mod test {
                 games_played: Some(0),
                 games_won: Some(0),
             };
+            let register_url = "http://127.0.0.1:8082/api/v1/users/register";
+            let response = client
+                .post(register_url)
+                .header("x-is_test", "true")
+                .header("X-Password", password.clone())
+                .json(&user_profile)
+                .send()
+                .await
+                .unwrap();
 
-            let req = test::TestRequest::post()
-                .uri("/api/v1/users/register")
-                .append_header((header::CONTENT_TYPE, "application/json"))
-                .append_header(("x-is_test", "true"))
-                .append_header(("X-Password".to_owned(), password.clone()))
-                .set_json(&user_profile)
-                .to_request();
-
-            let response = call_service!(&mut locked_app, req);
             let status = response.status();
-            let body = test::read_body(response).await;
+            let body = response.text().await.unwrap();
             if status != 200 {
                 trace!("{} already registered", email);
                 assert_eq!(status, 409);
-                let resp: ServiceResponse = serde_json::from_slice(&body)
+                let resp: ServiceResponse = serde_json::from_str(&body)
                     .expect("failed to deserialize into ServiceResponse");
                 assert_eq!(resp.status, 409);
                 assert_eq!(resp.body, "");
             } else {
                 // Deserialize the body into a ClientUser object
                 let client_user: ClientUser =
-                    serde_json::from_slice(&body).expect("Failed to deserialize response body");
+                    serde_json::from_str(&body).expect("Failed to deserialize response body");
                 client_id = client_user.id;
             }
 
-            // 2. Login the user
+            let login_url = "http://127.0.0.1:8082/api/v1/users/login"; // Adjust the URL as needed
             let login_payload = json!({
                 "username": email.to_string(),
                 "password": password.clone()
             });
-            let req = test::TestRequest::post()
-                .uri("/api/v1/users/login")
-                .append_header(("x-is_test", "true"))
-                .set_json(&login_payload)
-                .to_request();
 
-            let resp = call_service!(&mut locked_app, req);
-            assert_eq!(resp.status(), 200);
+            let response = client // Reusing the existing client
+                .post(login_url)
+                .header("x-is_test", "true")
+                .json(&login_payload)
+                .send()
+                .await
+                .unwrap();
 
-            let body = test::read_body(resp).await;
-            let service_response: ServiceResponse =
-                serde_json::from_slice(&body).expect("failed to deserialize into ServiceResponse");
+            assert_eq!(response.status(), 200);
+
+            let service_response: ServiceResponse = response.json().await.unwrap();
 
             // Extract auth token from response
             let auth_token = service_response.body;
 
-            // 4. Get profile
-            let req = test::TestRequest::get()
-                .uri("/auth/api/v1/profile")
-                .append_header((header::CONTENT_TYPE, "application/json"))
-                .append_header(("x-is_test", "true"))
-                .append_header(("Authorization", auth_token.clone()))
-                .to_request();
+            let profile_url = "http://127.0.0.1:8082/auth/api/v1/profile"; // Adjust the URL as needed
 
-            let resp = call_service!(&mut locked_app, req);
-            assert_eq!(resp.status(), 200);
-            let body = test::read_body(resp).await;
-            let profile_from_service: UserProfile =
-                serde_json::from_slice(&body).expect("error deserializing profile");
+            let response = client // Reusing the existing client
+                .get(profile_url)
+                .header(header::CONTENT_TYPE, "application/json")
+                .header("x-is_test", "true")
+                .header("Authorization", auth_token.clone())
+                .send()
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), 200);
+
+            let profile_from_service: UserProfile = response.json().await.unwrap();
 
             assert!(
                 profile_from_service.is_equal_byval(&user_profile),
                 "profile returned by service different than the one sent in"
             );
+
             let user_info = UserInfo {
                 auth_token: auth_token.clone(),
                 user_profile: profile_from_service.clone(),
@@ -145,7 +154,7 @@ mod test {
             };
             user_info_list.push(user_info);
         }
-        for info in user_info_list {
+        for info in user_info_list.clone() {
             info!(
                 "email {}, token-len: {}, id: {}",
                 info.user_profile.email,
@@ -162,29 +171,53 @@ mod test {
         for info in user_info_list {
             let auth_token_clone = info.auth_token.clone();
             let barrier_clone = barrier.clone();
-            let message = "Join my game!".to_string();
-            let app_clone = locked_app.clone(); // note this clones the arc, not the actuall app
-            let cloned_app = app.clone();
-            let user1_wait = tokio::spawn(async move {
+          //  let invite_message = "Join my game!".to_string();
+            let longpoll_url = "http://127.0.0.1:8082/auth/api/v1/longpoll"; // Adjust the URL as needed
+
+            let _ = tokio::spawn(async move {
+                // Create the client inside the spawned task
+                let client = reqwest::Client::new();
+
                 info!(
                     "{} thread started.  calling barrier_clone().wait().await",
                     info.client_id
                 );
                 barrier_clone.wait().await; // barrier at 3
-                let game_id = "";
+                let mut game_id = "".to_string();
 
                 loop {
-                    let req = test::TestRequest::post()
-                        .uri("/auth/api/v1/longpoll")
-                        .append_header((header::CONTENT_TYPE, "application/json"))
-                        .append_header(("x-is_test", "true"))
-                        .append_header(("x-game_id", game_id))
-                        .append_header(("Authorization", auth_token_clone.clone()))
-                        .to_request();
+                    let response = client
+                        .post(longpoll_url)
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .header("x-is_test", "true")
+                        .header("x-game_id", game_id.to_owned())
+                        .header("Authorization", auth_token_clone.clone())
+                        .send()
+                        .await
+                        .unwrap();
 
-                    let app_read_guard = app_clone.read().await; // Acquire a read lock
-                    let resp = test::call_service(&mut *app_read_guard, req).await;
-                    
+                    assert_eq!(response.status(), 200);
+
+                    let message:CatanMessage = response.json().await.unwrap();
+
+                    match message {
+                        CatanMessage::GameUpdate(regular_game) => {
+                            info!("players: {:#?}", regular_game.players);
+                            if regular_game.state_data.state() == GameState::GameOver {
+                                break;
+                            }
+                        },
+                        CatanMessage::Invite(invite_data) => {
+                            game_id = invite_data.game_id.to_owned();
+                            assert_eq!(invite_data.from_name, "TestUser1");
+                        },
+                        CatanMessage::Error(error_data) => {
+                           assert!(false, "error returned:  {:#?}", error_data);
+                           break;
+                        },
+                    }
+
+                    // Optionally, you may want to add a delay or condition to break the loop if needed.
                 }
             });
         }
