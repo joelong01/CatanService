@@ -13,7 +13,7 @@ use crate::games_service::shared::game_enums::{CatanGames, SupportedGames};
 
 use super::{
     catan_games::{games::regular::regular_game::RegularGame, traits::game_trait::CatanGame},
-    game_container::game_container::GameContainer,
+    game_container::{game_container::GameContainer, game_messages::GameHeaders},
     lobby::lobby::Lobby,
 };
 
@@ -60,7 +60,7 @@ pub async fn new_game(
     req: HttpRequest,
 ) -> impl Responder {
     let game_type = game_type.into_inner();
-    let user_id = req.headers().get("x-user-id").unwrap().to_str().unwrap();
+    let user_id = req.headers().get(GameHeaders::USER_ID).unwrap().to_str().unwrap();
 
     if game_type != CatanGames::Regular {
         return create_http_response(
@@ -94,6 +94,10 @@ pub async fn new_game(
     //  store GameId --> Game for later lookup
     GameContainer::insert_container(user_id.to_owned(), game.id.to_owned(), &mut game).await;
 
+    //
+    //  pull the user from the lobby
+    let _ = Lobby::game_created(&game.id, user_id).await;
+    Lobby::leave_lobby(user_id).await;
     HttpResponse::Ok()
         .content_type("application/json")
         .json(game)

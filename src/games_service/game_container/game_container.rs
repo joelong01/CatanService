@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use super::game_messages::{CatanMessage, ErrorData};
+use super::game_messages::{CatanMessage, ErrorData, GameHeaders};
 use actix_web::{HttpRequest, HttpResponse};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -143,14 +143,14 @@ impl GameContainer {
  *  and the call will complete, returning a CatanMessage.  TODO:  this should
  */
 pub async fn long_poll_handler(req: HttpRequest) -> HttpResponse {
-    let message = match req.headers().get("X-Game-Id") {
+    let message = match req.headers().get(GameHeaders::GAME_ID) {
         Some(header) => {
             let game_id = header.to_str().unwrap().to_string();
             GameContainer::wait_for_change(game_id.to_owned()).await
         }
         None => 
         {
-            let user_id = req.headers().get("x-user-id").unwrap().to_str().unwrap();
+            let user_id = req.headers().get(GameHeaders::USER_ID).unwrap().to_str().unwrap();
             Lobby::wait_for_invite(user_id).await
         }
     };

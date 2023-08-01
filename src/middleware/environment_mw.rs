@@ -1,3 +1,4 @@
+use crate::games_service::game_container::game_messages::GameHeaders;
 use crate::shared::models::ConfigEnvironmentVariables;
 /**
  *  this file contains the middleware that injects ServiceContext into the Request.  The data in RequestContext is the
@@ -68,7 +69,7 @@ where
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
         // fetch is_test flag from the header
-        let is_test = req.headers().contains_key("x-is_test");
+        let is_test = req.headers().contains_key(GameHeaders::IS_TEST);
 
         let app_state = req
             .app_data::<Data<ServiceEnvironmentContext>>()

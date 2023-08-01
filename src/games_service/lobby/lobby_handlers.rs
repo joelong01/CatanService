@@ -5,7 +5,7 @@ use actix_web::{
 use azure_core::StatusCode;
 
 use crate::{
-    games_service::game_container::game_messages::InviteData,
+    games_service::game_container::game_messages::{Invitation, GameHeaders},
     user_service::users::create_http_response,
 };
 
@@ -16,9 +16,9 @@ pub async fn get_lobby(_req: HttpRequest) -> HttpResponse {
         .content_type("application/json")
         .json(Lobby::copy_lobby().await);
 }
-pub async fn post_invite(req: HttpRequest, invite: web::Json<InviteData>) -> HttpResponse {
-    let from_id = req.headers().get("x-user-id").unwrap().to_str().unwrap();
-    let invite: &InviteData = &invite;
+pub async fn post_invite(req: HttpRequest, invite: web::Json<Invitation>) -> HttpResponse {
+    let from_id = req.headers().get(GameHeaders::USER_ID).unwrap().to_str().unwrap();
+    let invite: &Invitation = &invite;
 
     match Lobby::send_invite(&invite).await {
         Ok(_) => HttpResponse::Ok()

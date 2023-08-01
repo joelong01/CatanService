@@ -69,7 +69,7 @@ macro_rules! setup_test {
         let request = test::TestRequest::post()
             .uri("/api/v1/test/setup")
             .append_header((header::CONTENT_TYPE, "application/json"))
-            .append_header(("x-is_test", "true"))
+            .append_header((GameHeaders::IS_TEST, "true"))
             .to_request();
 
         let response = test::call_service($app, request).await;

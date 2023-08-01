@@ -6,6 +6,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
  * a User document in CosmosDb
  */
 use crate::cosmos_db::cosmosdb::UserDb;
+use crate::games_service::game_container::game_messages::GameHeaders;
 use crate::games_service::lobby::lobby::Lobby;
 use crate::middleware::environment_mw::{ServiceEnvironmentContext, CATAN_ENV};
 use crate::shared::models::{
@@ -99,7 +100,7 @@ pub async fn setup(data: Data<ServiceEnvironmentContext>) -> HttpResponse {
 /// * X-Password - The new password for the user
 ///
 /// # Returns
-///
+/// Body contains a ClientUser (an id + profile)
 /// Returns an HTTP response indicating the success or failure of the registration process.
 pub async fn register(
     profile_in: web::Json<UserProfile>,
@@ -107,7 +108,7 @@ pub async fn register(
     req: HttpRequest,
 ) -> HttpResponse {
     // Retrieve the password value from the "X-Password" header
-    let password_value: String = match req.headers().get("X-Password") {
+    let password_value: String = match req.headers().get(GameHeaders::PASSWORD) {
         Some(header_value) => match header_value.to_str() {
             Ok(pwd) => pwd.to_string(),
             Err(e) => {
@@ -149,7 +150,7 @@ pub async fn register(
         Ok(hp) => hp,
         Err(_) => {
             return create_http_response(
-                StatusCode::Conflict,
+                StatusCode::InternalServerError,
                 "Error hashing password".to_owned(),
                 "".to_owned(),
             );
@@ -285,11 +286,11 @@ pub async fn list_users(data: Data<ServiceEnvironmentContext>) -> HttpResponse {
     }
 }
 pub async fn get_profile(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> HttpResponse {
-    let header_id = req.headers().get("x-user-id").unwrap().to_str().unwrap();
+    let header_id = req.headers().get(GameHeaders::USER_ID).unwrap().to_str().unwrap();
     match internal_find_user("id".to_string(), header_id.to_string(), data).await {
         Ok(user) => HttpResponse::Ok()
             .content_type("application/json")
-            .json(user.user_profile),
+            .json(ClientUser::from_persist_user(user)),
         Err(err) => {
             let response = ServiceResponse {
                 message: format!("Failed to find user: {}", err),
@@ -352,7 +353,7 @@ pub async fn delete(
 ) -> HttpResponse {
     //
     // unwrap is ok here because our middleware put it there.
-    let header_id_result = req.headers().get("x-user-id").unwrap().to_str();
+    let header_id_result = req.headers().get(GameHeaders::USER_ID).unwrap().to_str();
 
     let header_id = match header_id_result {
         Ok(val) => val,
@@ -386,14 +387,11 @@ pub async fn delete(
                 .content_type("application/json")
                 .json(response)
         }
-        Err(err) => {
-            
-            create_http_response(
-                StatusCode::BadRequest,
-                format!("Failed to delete user: {}", err),
-                "".to_owned(),
-            )
-        }
+        Err(err) => create_http_response(
+            StatusCode::BadRequest,
+            format!("Failed to delete user: {}", err),
+            "".to_owned(),
+        ),
     }
 }
 

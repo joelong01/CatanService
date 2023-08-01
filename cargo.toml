@@ -4,7 +4,8 @@ version = "0.1.0"
 edition = "2018"
 [dev-dependencies]
 cargo-make = "0.36.11"
-
+serial_test = "2.0.0"
+actix-web-test = "0.0.1"
 
 [dependencies]
 azure_data_cosmos = "0.13.0"
@@ -37,4 +38,3 @@ strum = "0.25.0"
 strum_macros = "0.25.1"
 serde_with = "3.0.0"
 parking_lot = "0.12.1"
-actix-web-test = "0.0.1"

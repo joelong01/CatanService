@@ -256,7 +256,7 @@ pub async fn init_env_logger() {
 mod tests {
     use crate::{
         create_test_service, init_env_logger, setup_test,
-        shared::models::{ClientUser, ServiceResponse, UserProfile},
+        shared::models::{ClientUser, ServiceResponse, UserProfile}, games_service::game_container::game_messages::GameHeaders,
     };
     use actix_web::{http::header, test};
 
@@ -302,8 +302,8 @@ mod tests {
         let req = test::TestRequest::post()
             .uri("/api/v1/users/register")
             .append_header((header::CONTENT_TYPE, "application/json"))
-            .append_header(("x-is_test", "true"))
-            .append_header(("X-Password".to_owned(), USER_1_PASSWORD))
+            .append_header((GameHeaders::IS_TEST, "true"))
+            .append_header((GameHeaders::PASSWORD, USER_1_PASSWORD))
             .set_json(&user1_profile)
             .to_request();
 
@@ -341,7 +341,7 @@ mod tests {
         });
         let req = test::TestRequest::post()
             .uri("/api/v1/users/login")
-            .append_header(("x-is_test", "true"))
+            .append_header((GameHeaders::IS_TEST, "true"))
             .set_json(&login_payload)
             .to_request();
 
@@ -360,7 +360,7 @@ mod tests {
         let req = test::TestRequest::get()
             .uri("/auth/api/v1/profile")
             .append_header((header::CONTENT_TYPE, "application/json"))
-            .append_header(("x-is_test", "true"))
+            .append_header((GameHeaders::IS_TEST, "true"))
             .append_header(("Authorization", auth_token))
             .to_request();
 

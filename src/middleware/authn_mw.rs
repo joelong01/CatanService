@@ -10,7 +10,7 @@ use futures::{
 };
 use jsonwebtoken::{decode, Algorithm, DecodingKey, TokenData, Validation};
 use reqwest::header::{HeaderName, HeaderValue};
-use crate::shared::models::Claims;
+use crate::{shared::models::Claims, games_service::game_container::game_messages::GameHeaders};
 
 use super::environment_mw::CATAN_ENV;
 // AuthenticationMiddlewareFactory serves as a factory to create instances of AuthenticationMiddleware
@@ -81,11 +81,11 @@ where
 
                     // Insert the id and sub into the headers
                     req.headers_mut().insert(
-                        HeaderName::from_static("x-user-id"),
+                        HeaderName::from_static(GameHeaders::USER_ID),
                         HeaderValue::from_str(id).unwrap(),
                     );
                     req.headers_mut().insert(
-                        HeaderName::from_static("email"),
+                        HeaderName::from_static(GameHeaders::EMAIL),
                         HeaderValue::from_str(sub).unwrap(),
                     );
                 } else {
