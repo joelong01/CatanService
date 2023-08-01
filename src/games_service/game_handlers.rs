@@ -1,13 +1,14 @@
 use crate::{
     middleware::environment_mw::ServiceEnvironmentContext,
     shared::models::{ClientUser, ServiceResponse},
-    user_service::users::{create_http_response, internal_find_user},
+    user_service::users::{create_http_response, internal_find_user}, full_info,
 };
 use actix_web::{
     web::{self, Data, Path},
     HttpRequest, HttpResponse, Responder,
 };
 use azure_core::StatusCode;
+
 
 use crate::games_service::shared::game_enums::{CatanGames, SupportedGames};
 
@@ -86,18 +87,21 @@ pub async fn new_game(
     let mut game = RegularGame::new(&ClientUser::from_persist_user(user));
     game.shuffle();
 
-    //
-    //  leave the lobby
-    Lobby::leave_lobby(user_id).await;
-
+    full_info!("new_game: insert_container");
     //
     //  store GameId --> Game for later lookup
     GameContainer::insert_container(user_id.to_owned(), game.id.to_owned(), &mut game).await;
 
     //
     //  pull the user from the lobby
+    full_info!("new_game: game_created");
     let _ = Lobby::game_created(&game.id, user_id).await;
+
+    full_info!("new_game: start leave_lobby");
     Lobby::leave_lobby(user_id).await;
+    full_info!("new_game left lobby");
+
+    full_info!("new_game return");
     HttpResponse::Ok()
         .content_type("application/json")
         .json(game)

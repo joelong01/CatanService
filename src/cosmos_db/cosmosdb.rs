@@ -3,7 +3,7 @@ use std::{collections::HashMap, fmt};
 /**
  *  this is the class that calls directly to CosmosDb --
  */
-use crate::log_return_err;
+use crate::{log_return_err};
 use crate::middleware::environment_mw::RequestEnvironmentContext;
 use crate::shared::models::PersistUser;
 use azure_core::error::{ErrorKind, Result as AzureResult};
@@ -13,6 +13,7 @@ use azure_data_cosmos::prelude::{
 
 use futures::StreamExt;
 use log::info;
+
 /**
  *  we have 3 cosmos container that we are currently using:  User, Profile, and (eventually) Game.
  *  this just makes sure we consistently use them throughout the code.

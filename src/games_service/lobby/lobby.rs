@@ -1,10 +1,14 @@
 #![allow(dead_code)]
 
+
+use scopeguard::defer;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{broadcast, oneshot, RwLock};
 
-use crate::games_service::game_container::game_messages::{CatanMessage, ErrorData, GameCreatedData, Invitation};
+use crate::{games_service::game_container::game_messages::{
+    CatanMessage, ErrorData, GameCreatedData, Invitation,
+}, full_info};
 
 lazy_static::lazy_static! {
     // Initialize singleton lobby instance
@@ -50,6 +54,8 @@ impl Lobby {
 
     /// Removes a LobbyVisitor from the lobby, if present.
     pub async fn leave_lobby(user_id: &str) {
+        full_info!("leave_lobby enter");
+        defer! {full_info!("leave_lobby exit");}
         let mut lobby = LOBBY.write().await;
         lobby.visitors.remove(user_id);
     }
@@ -73,7 +79,6 @@ impl Lobby {
                 tx.send(CatanMessage::GameCreated(msg)).unwrap_or_else(|_| {
                     println!("Failed to send the GameCreated message");
                 });
-                Lobby::leave_lobby(user_id).await;
                 Ok(())
             } else {
                 Err("No notification channel found for the user".into())
@@ -84,12 +89,15 @@ impl Lobby {
     }
     /// Awaits for an invitation message.
     pub async fn wait_for_invite(user_id: &str) -> CatanMessage {
-        let lobby = LOBBY.read().await;
-        if let Some(visitor) = lobby.visitors.get(user_id) {
+        full_info!("long poll wait_for_invite");
+        defer! {full_info!("leaving wait_for_invite");}
+        let ro_lobby = LOBBY.read().await;
+        if let Some(visitor) = ro_lobby.visitors.get(user_id) {
             let (tx, rx) = oneshot::channel();
-            let mut notify = visitor.notify.write().await;
-            *notify = Some(tx);
-            drop(notify);
+            let mut rw_notify = visitor.notify.write().await;
+            *rw_notify = Some(tx);
+            drop(rw_notify);
+            drop(ro_lobby);
             match rx.await {
                 Ok(msg) => msg,
                 Err(_) => CatanMessage::Error(ErrorData {
@@ -127,15 +135,14 @@ impl Lobby {
 #[cfg(test)]
 mod tests {
     use super::Lobby; // Assuming the test is in the same module as the Lobby implementation
-    use crate::games_service::game_container::game_messages::{CatanMessage, Invitation};
-    use log::info;
+    use crate::{games_service::game_container::game_messages::{CatanMessage, Invitation}, full_info};
     use std::sync::Arc;
     use tokio::sync::Barrier;
 
     #[tokio::test]
     async fn test_lobby_invite_flow() {
         env_logger::try_init().ok();
-        info!("starting test_lobby_invite_flow");
+        full_info!("starting test_lobby_invite_flow");
         // 1. Create a lobby, add 2 users to it
         Lobby::join_lobby("user1".to_string()).await;
         Lobby::join_lobby("user2".to_string()).await;
@@ -147,7 +154,7 @@ mod tests {
         // Signal to synchronize tasks
         let barrier_clone = barrier.clone();
         let user1_wait = tokio::spawn(async move {
-            info!("first thread started.  calling barrier_clone().wait().await");
+            full_info!("first thread started.  calling barrier_clone().wait().await");
             barrier_clone.wait().await; // barrier at 3
             loop {
                 match Lobby::wait_for_invite("user1").await {
@@ -163,7 +170,7 @@ mod tests {
 
         let barrier_clone = barrier.clone();
         let user2_wait = tokio::spawn(async move {
-            info!("second thread started.  calling barrier_clone().wait().await");
+            full_info!("second thread started.  calling barrier_clone().wait().await");
             barrier_clone.wait().await; // barrier at 2
             loop {
                 match Lobby::wait_for_invite("user2").await {
@@ -177,9 +184,9 @@ mod tests {
             }
         });
 
-        info!("first wait on main thread");
+        full_info!("first wait on main thread");
         barrier.wait().await; // Wait for the main task
-        info!("through the barrier");
+        full_info!("through the barrier");
 
         let invitation_to_user1 = Invitation {
             from_id: "user3".to_string(),
@@ -221,7 +228,7 @@ mod tests {
 
         Lobby::leave_lobby("user1").await;
         Lobby::leave_lobby("user2").await;
-        info!(
+        full_info!(
             "{}",
             serde_json::to_string(&Lobby::copy_lobby().await).unwrap()
         );
@@ -229,7 +236,7 @@ mod tests {
     #[tokio::test]
     async fn test_lobby_join_leave_flow() {
         env_logger::try_init().ok();
-        info!("starting test_lobby_join_leave_flow");
+        full_info!("starting test_lobby_join_leave_flow");
 
         // Define user ID specific to this test
         let user_id = "test_lobby_join_leave_flow:user1".to_string();

@@ -121,3 +121,14 @@ macro_rules! create_test_service {
         app
     }};
 }
+
+#[macro_export]
+macro_rules! full_info {
+    ($($arg:tt)*) => {
+        log::info!(target: &format!("{}:{}:", file!(), line!()), $($arg)*)
+    };
+}
+
+
+
+

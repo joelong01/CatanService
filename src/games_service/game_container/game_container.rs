@@ -2,16 +2,15 @@
 
 use super::game_messages::{CatanMessage, ErrorData, GameHeaders};
 use actix_web::{HttpRequest, HttpResponse};
+use scopeguard::defer;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 
-use tracing::info;
-
 use crate::{
     error_message, game_update_message,
     games_service::{catan_games::games::regular::regular_game::RegularGame, lobby::lobby::Lobby},
-    shared::models::GameError,
+    shared::models::GameError, full_info,
 };
 
 lazy_static::lazy_static! {
@@ -60,14 +59,16 @@ impl GameContainer {
     }
 
     pub async fn wait_for_change(game_id: String) -> CatanMessage {
+        full_info!("long poll wait_for_change");
+        defer! {full_info!("leaving wait_for_change");}
         let game_container = match Self::get_locked_container(&game_id).await {
             Ok(container) => container,
             Err(_) => return error_message!(400, "Bad Game ID".to_string()),
         };
-
-        let mut rx = game_container.read().await.notify.subscribe();
-
-        info!("Starting to wait for game changes");
+        let ro_container = game_container.read().await;
+        let mut rx = ro_container.notify.subscribe();
+        drop(ro_container);
+        full_info!("game_container read lock aquired");
 
         let message = match rx.recv().await {
             Ok(msg) => msg,
@@ -140,17 +141,33 @@ impl GameContainer {
 }
 /**
  *  a GET that is a long polling get.  the call waits here until the game changes and then the service will signal
- *  and the call will complete, returning a CatanMessage.  TODO:  this should
+ *  and the call will complete, returning a CatanMessage.  the if GAME_HEADER is missing or "", then we longpoll
+ *  for the LOBBY, otherwise send them for game updates.
  */
 pub async fn long_poll_handler(req: HttpRequest) -> HttpResponse {
+
     let message = match req.headers().get(GameHeaders::GAME_ID) {
         Some(header) => {
             let game_id = header.to_str().unwrap().to_string();
-            GameContainer::wait_for_change(game_id.to_owned()).await
+            if game_id == "" {
+                let user_id = req
+                    .headers()
+                    .get(GameHeaders::USER_ID)
+                    .unwrap()
+                    .to_str()
+                    .unwrap();
+                Lobby::wait_for_invite(user_id).await
+            } else {
+                GameContainer::wait_for_change(game_id.to_owned()).await
+            }
         }
-        None => 
-        {
-            let user_id = req.headers().get(GameHeaders::USER_ID).unwrap().to_str().unwrap();
+        None => {
+            let user_id = req
+                .headers()
+                .get(GameHeaders::USER_ID)
+                .unwrap()
+                .to_str()
+                .unwrap();
             Lobby::wait_for_invite(user_id).await
         }
     };

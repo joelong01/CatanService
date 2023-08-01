@@ -11,6 +11,7 @@ use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use crate::full_info;
 use crate::middleware::authn_mw::is_token_valid;
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -151,7 +152,7 @@ pub fn dump_headers(headers: &HeaderMap) {
         let value_str = value.to_str().unwrap_or("Invalid UTF-8");
 
         // Log the name and values of the header
-        log::info!("Header Name: {:?}, Value: {:?}", name, value_str);
+        full_info!("Header Name: {:?}, Value: {:?}", name, value_str);
     }
 }
 

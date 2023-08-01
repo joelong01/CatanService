@@ -16,7 +16,7 @@ use actix_web::{web, HttpResponse, HttpServer, Scope};
 use crate::games_service::{game_container::game_container, lobby::lobby_handlers};
 use games_service::game_handlers;
 use lazy_static::lazy_static;
-use log::info;
+use log::error;
 use middleware::authn_mw::AuthenticationMiddlewareFactory;
 use middleware::environment_mw::{
     EnvironmentMiddleWareFactory, ServiceEnvironmentContext, CATAN_ENV,
@@ -232,22 +232,26 @@ lazy_static! {
 
 pub async fn init_env_logger() {
     if LOGGER_INIT.load(Ordering::Relaxed) {
-        info!("env logger already created");
+        full_info!("env logger already created");
         return;
     }
     let _lock_guard = LOGGER_INIT_LOCK.lock().await;
     if LOGGER_INIT.load(Ordering::Relaxed) {
-        info!("env logger already created");
+        full_info!("env logger already created");
         return;
     }
-
+    
     match env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .filter(
+            Some("catan_service::cosmos_db::cosmosdb"),
+            log::LevelFilter::Off,
+        )
         .try_init()
     {
         Ok(()) => {
-            info!("logger initialized");
+            full_info!("logger initialized - NOTE: catan_service::cosmos_db::cosmosdb is always OFF!");
         }
-        Err(e) => info!("logger failt to init -- already inited?: {:#?}", e),
+        Err(e) => error!("logger failt to init -- already inited?: {:#?}", e),
     }
     LOGGER_INIT.store(true, Ordering::Relaxed);
 }
@@ -255,8 +259,10 @@ pub async fn init_env_logger() {
 #[cfg(test)]
 mod tests {
     use crate::{
-        create_test_service, init_env_logger, setup_test,
-        shared::models::{ClientUser, ServiceResponse, UserProfile}, games_service::game_container::game_messages::GameHeaders,
+        create_test_service,
+        games_service::game_container::game_messages::GameHeaders,
+        init_env_logger, setup_test,
+        shared::models::{ClientUser, ServiceResponse, UserProfile},
     };
     use actix_web::{http::header, test};
 
