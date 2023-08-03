@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use crate::games_service::buildings::{building::Building, building_enums::BuildingPosition};
-use crate::games_service::shared::game_enums::Direction;
 use crate::games_service::roads::road::Road;
+use crate::games_service::shared::game_enums::Direction;
 
 use super::tile_enums::TileResource;
 use super::tile_key::TileKey;
@@ -16,7 +16,7 @@ pub struct Tile {
     pub current_resource: TileResource, // the resource (including a temp resource) that the tile currently holds
     pub original_resource: TileResource, // the orginal resource the tile started with
     pub roll: u32,                      // the Catan Number that the tile should display
-    pub tile_key: TileKey,                   // the position of the tile on the board
+    pub tile_key: TileKey,              // the position of the tile on the board
 
     #[serde_as(as = "Vec<(_, _)>")]
     pub roads: HashMap<Direction, Road>, // all the roads around the tile

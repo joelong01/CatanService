@@ -1,6 +1,11 @@
 #![allow(unused_imports)]
 
-use crate::{games_service::{player::player::Player, catan_games::games::regular::regular_game::RegularGame}, shared::models::{GameError, ClientUser}};
+use crate::{
+    games_service::{
+        catan_games::games::regular::regular_game::RegularGame, player::player::Player,
+    },
+    shared::models::{ClientUser, GameError},
+};
 
 use std::{
     borrow::{Borrow, BorrowMut},
@@ -10,9 +15,9 @@ use std::{
 
 use crate::games_service::{
     buildings::{building::Building, building_key::BuildingKey},
-    shared::game_enums::Direction,
     harbors::{harbor::Harbor, harbor_key::HarborKey},
     roads::{road::Road, road_key::RoadKey},
+    shared::game_enums::Direction,
     tiles::{tile::Tile, tile_key::TileKey},
 };
 use crate::shared::models::PersistUser;

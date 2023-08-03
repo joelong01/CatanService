@@ -13,10 +13,7 @@ use crate::{
 pub trait StateMachineTrait {
     fn current_state(&self) -> StateData;
     fn set_current_state(&mut self, game_state: GameState);
-    fn next_state(
-        &mut self,
-        action_data: Option<&dyn Any>,
-    ) -> Result<GameState, GameError>;
+    fn next_state(&mut self, action_data: Option<&dyn Any>) -> Result<GameState, GameError>;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -67,8 +64,8 @@ impl StateData {
             ],
             GameState::Supplemental => {
                 vec![GameAction::Done, GameAction::Buy, GameAction::Build]
-            },
-            GameState::GameOver => todo!()
+            }
+            GameState::GameOver => todo!(),
         }
     }
 }

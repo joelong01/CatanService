@@ -11,7 +11,7 @@ mod tests {
             shared::game_enums::{Direction, GameAction, GamePhase, GameState},
             tiles::{tile_enums::TileResource, tile_key::TileKey},
         },
-        shared::models::{PersistUser, UserProfile, ClientUser},
+        shared::models::{ClientUser, PersistUser, UserProfile},
     };
     use std::io::Write;
     use std::{collections::HashMap, fs::File};
@@ -238,7 +238,7 @@ mod tests {
 
         let user2 = ClientUser {
             id: "3".to_owned(),
-            
+
             user_profile: UserProfile {
                 email: "test@example.com".to_string(),
                 first_name: "Sally".to_string(),

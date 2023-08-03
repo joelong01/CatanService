@@ -54,7 +54,7 @@ pub struct RegularGame {
     pub creator_id: String,
     pub baron_tile: TileKey,
     pub can_undo: bool,
-    pub shuffle_count: i32
+    pub shuffle_count: i32,
 }
 
 impl RegularGame {
@@ -83,7 +83,6 @@ impl RegularGame {
                 good_rolls: 0,
                 bad_rolls: 0,
                 state: CalculatedState::default(),
-                
             }
         };
         let game_info = &*REGULAR_GAME_INFO;
@@ -114,7 +113,7 @@ impl RegularGame {
             creator_id: user_id.clone(),
             baron_tile: TileKey::new(0, 0, 0),
             can_undo: true,
-            shuffle_count: 1
+            shuffle_count: 1,
         }
     }
 
@@ -287,10 +286,7 @@ impl RegularGame {
             .iter()
             .map(|tile| tile.current_resource.clone())
             .collect();
-        let mut rolls: Vec<u32> = tiles
-            .iter()
-            .map(|tile| tile.roll)
-            .collect();
+        let mut rolls: Vec<u32> = tiles.iter().map(|tile| tile.roll).collect();
 
         shuffle_vector(&mut resources);
         shuffle_vector(&mut rolls);

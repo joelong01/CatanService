@@ -240,7 +240,7 @@ pub async fn init_env_logger() {
         full_info!("env logger already created");
         return;
     }
-    
+
     match env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
         .filter(
             Some("catan_service::cosmos_db::cosmosdb"),
@@ -249,7 +249,9 @@ pub async fn init_env_logger() {
         .try_init()
     {
         Ok(()) => {
-            full_info!("logger initialized - NOTE: catan_service::cosmos_db::cosmosdb is always OFF!");
+            full_info!(
+                "logger initialized - NOTE: catan_service::cosmos_db::cosmosdb is always OFF!"
+            );
         }
         Err(e) => error!("logger failt to init -- already inited?: {:#?}", e),
     }

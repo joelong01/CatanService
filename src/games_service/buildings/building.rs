@@ -1,6 +1,6 @@
 // Allow dead code in this module
 #![allow(dead_code)]
-use super::{building_key::BuildingKey, building_enums::BuildingState};
+use super::{building_enums::BuildingState, building_key::BuildingKey};
 use crate::games_service::tiles::tile_key::TileKey;
 use serde::{Deserialize, Serialize};
 
@@ -12,10 +12,10 @@ pub struct Building {
     pub aliases: Vec<BuildingKey>,
     pub pip_count: u32,
     pub owner_id: Option<String>,
-    pub state: BuildingState
+    pub state: BuildingState,
 }
 
-impl Building{ 
+impl Building {
     pub fn new(
         tiles: Vec<TileKey>,
         building_ids: Vec<BuildingKey>,
@@ -28,7 +28,7 @@ impl Building{
             aliases: building_ids,
             pip_count,
             owner_id,
-            state: BuildingState::Empty
+            state: BuildingState::Empty,
         }
     }
     pub fn default(key: BuildingKey) -> Self {
@@ -38,7 +38,7 @@ impl Building{
             aliases: Vec::new(),
             pip_count: 0,
             owner_id: None,
-            state: BuildingState::Empty
+            state: BuildingState::Empty,
         }
     }
 }

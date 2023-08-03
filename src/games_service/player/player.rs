@@ -28,6 +28,4 @@ pub struct Player {
     pub state: CalculatedState,
 }
 
-impl Player {
-    
-}
+impl Player {}

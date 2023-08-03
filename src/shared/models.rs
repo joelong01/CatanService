@@ -1,4 +1,3 @@
-
 #![allow(dead_code)]
 use azure_core::StatusCode;
 /**
@@ -19,7 +18,7 @@ pub enum GameError {
     MissingPlayerId,
     IdNotFoundInOrder,
     BadActionData,
-    InvalidGameId
+    InvalidGameId,
 }
 
 /**
@@ -115,21 +114,20 @@ impl Default for UserProfile {
             games_won: None,
         }
     }
-
 }
 
 impl UserProfile {
     pub fn is_equal_byval(&self, other: &UserProfile) -> bool {
-        self.email == other.email &&
-        self.first_name == other.first_name &&
-        self.last_name == other.last_name &&
-        self.display_name == other.display_name &&
-        self.picture_url == other.picture_url &&
-        self.foreground_color == other.foreground_color &&
-        self.background_color == other.background_color &&
-        self.text_color == other.text_color &&
-        self.games_played.unwrap_or(0) == other.games_played.unwrap_or(0) &&
-        self.games_won.unwrap_or(0) == other.games_won.unwrap_or(0)
+        self.email == other.email
+            && self.first_name == other.first_name
+            && self.last_name == other.last_name
+            && self.display_name == other.display_name
+            && self.picture_url == other.picture_url
+            && self.foreground_color == other.foreground_color
+            && self.background_color == other.background_color
+            && self.text_color == other.text_color
+            && self.games_played.unwrap_or(0) == other.games_played.unwrap_or(0)
+            && self.games_won.unwrap_or(0) == other.games_won.unwrap_or(0)
     }
 }
 ///
@@ -158,12 +156,6 @@ impl ClientUser {
             user_profile: persist_user.user_profile.clone(),
         }
     }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Credentials {
-    pub username: String,
-    pub password: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

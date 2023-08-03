@@ -63,7 +63,6 @@ pub enum GameAction {
     Redo,
 }
 
-
 //
 //  answers the question "what are we doing now?"
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Copy)]
@@ -78,7 +77,7 @@ pub enum GameState {
     MustMoveBaron,
     BuyingAndTrading,
     Supplemental,
-    GameOver
+    GameOver,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

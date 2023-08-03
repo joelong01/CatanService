@@ -1,14 +1,16 @@
 #![allow(dead_code)]
 
-
 use scopeguard::defer;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{broadcast, oneshot, RwLock};
 
-use crate::{games_service::game_container::game_messages::{
-    CatanMessage, ErrorData, GameCreatedData, Invitation,
-}, full_info};
+use crate::{
+    full_info,
+    games_service::game_container::game_messages::{
+        CatanMessage, ErrorData, GameCreatedData, Invitation,
+    },
+};
 
 lazy_static::lazy_static! {
     // Initialize singleton lobby instance
@@ -135,7 +137,10 @@ impl Lobby {
 #[cfg(test)]
 mod tests {
     use super::Lobby; // Assuming the test is in the same module as the Lobby implementation
-    use crate::{games_service::game_container::game_messages::{CatanMessage, Invitation}, full_info};
+    use crate::{
+        full_info,
+        games_service::game_container::game_messages::{CatanMessage, Invitation},
+    };
     use std::sync::Arc;
     use tokio::sync::Barrier;
 

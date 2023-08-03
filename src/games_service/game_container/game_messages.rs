@@ -12,7 +12,7 @@ pub struct Invitation {
     pub from_name: String,
     pub message: String,
     pub picture_url: String,
-    pub game_id: String
+    pub game_id: String,
 }
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -21,7 +21,7 @@ pub struct GameHeaders {
     user_id: String,
     password: String,
     is_test: String,
-    email: String
+    email: String,
 }
 impl GameHeaders {
     pub const GAME_ID: &'static str = "x-game-id";
@@ -31,20 +31,18 @@ impl GameHeaders {
     pub const EMAIL: &'static str = "x-email";
 }
 
-
-
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct InviteAccepted {
     pub user_id: String,
-    pub game_id: String
+    pub game_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct GameCreatedData {
     pub user_id: String,
-    pub game_id: String
+    pub game_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -61,7 +59,7 @@ pub enum CatanMessage {
     Invite(Invitation),
     Error(ErrorData),
     InviteAccepted(InviteAccepted),
-    GameCreated(GameCreatedData)
+    GameCreated(GameCreatedData),
 }
 
 #[macro_export]

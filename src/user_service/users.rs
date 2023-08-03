@@ -9,9 +9,7 @@ use crate::cosmos_db::cosmosdb::UserDb;
 use crate::games_service::game_container::game_messages::GameHeaders;
 use crate::games_service::lobby::lobby::Lobby;
 use crate::middleware::environment_mw::{ServiceEnvironmentContext, CATAN_ENV};
-use crate::shared::models::{
-    Claims, ClientUser, Credentials, PersistUser, ServiceResponse, UserProfile,
-};
+use crate::shared::models::{Claims, ClientUser, PersistUser, ServiceResponse, UserProfile};
 use actix_web::web::Data;
 use actix_web::{web, HttpRequest, HttpResponse};
 use azure_core::error::Result as AzureResult;
@@ -129,8 +127,7 @@ pub async fn register(
     };
 
     // Check if the user already exists
-    let user_result =
-        internal_find_user("email".to_string(), profile_in.email.clone(), data.clone()).await;
+    let user_result = internal_find_user("email", &profile_in.email, &data).await;
 
     match user_result {
         Ok(_) => {
@@ -189,18 +186,63 @@ pub async fn register(
  * hash the password and make sure it matches the hash in the db
  * if it does, return a signed JWT token
  */
-pub async fn login(
-    creds: web::Json<Credentials>,
-    data: Data<ServiceEnvironmentContext>,
-) -> HttpResponse {
-    let user_result = internal_find_user("email".to_string(), creds.username.clone(), data).await;
+pub async fn login(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> HttpResponse {
+    let password_value: String = match req.headers().get(GameHeaders::PASSWORD) {
+        Some(header_value) => match header_value.to_str() {
+            Ok(pwd) => pwd.to_string(),
+            Err(e) => {
+                return create_http_response(
+                    StatusCode::BadRequest,
+                    format!(
+                        "{} header is set, but the value is not. Err: {}",
+                        GameHeaders::PASSWORD,
+                        e
+                    ),
+                    "".to_owned(),
+                )
+            }
+        },
+        None => {
+            return create_http_response(
+                StatusCode::BadRequest,
+                format!("{} header not set", GameHeaders::PASSWORD),
+                "".to_owned(),
+            )
+        }
+    };
+
+    let username = match req.headers().get(GameHeaders::EMAIL) {
+        Some(header_value) => match header_value.to_str() {
+            Ok(name) => name,
+            Err(e) => {
+                return create_http_response(
+                    StatusCode::BadRequest,
+                    format!(
+                        "{} header is set, but the value is not. Err: {}",
+                        GameHeaders::EMAIL,
+                        e
+                    ),
+                    "".to_owned(),
+                )
+            }
+        },
+        None => {
+            return create_http_response(
+                StatusCode::BadRequest,
+                format!("{} header not set", GameHeaders::EMAIL),
+                "".to_owned(),
+            )
+        }
+    };
+
+    let user_result = internal_find_user("email", username, &data).await;
 
     let user = match user_result {
         Ok(u) => u,
         Err(_) => {
             return create_http_response(
                 StatusCode::NotFound,
-                format!("invalid user id: {}", creds.username),
+                format!("invalid user id: {}", username),
                 "".to_owned(),
             );
         }
@@ -215,7 +257,7 @@ pub async fn login(
             );
         }
     };
-    let is_password_match = verify(&creds.password, &password_hash).unwrap();
+    let is_password_match = verify(password_value, &password_hash).unwrap();
 
     if is_password_match {
         let expire_duration = ((SystemTime::now() + Duration::from_secs(24 * 60 * 60))
@@ -224,7 +266,7 @@ pub async fn login(
             .as_secs()) as usize;
         let claims = Claims {
             id: user.id.clone(), // has to be there as we searched for it above
-            sub: creds.username.clone(),
+            sub: username.to_string(),
             exp: expire_duration,
         };
 
@@ -286,8 +328,13 @@ pub async fn list_users(data: Data<ServiceEnvironmentContext>) -> HttpResponse {
     }
 }
 pub async fn get_profile(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> HttpResponse {
-    let header_id = req.headers().get(GameHeaders::USER_ID).unwrap().to_str().unwrap();
-    match internal_find_user("id".to_string(), header_id.to_string(), data).await {
+    let header_id = req
+        .headers()
+        .get(GameHeaders::USER_ID)
+        .unwrap()
+        .to_str()
+        .unwrap();
+    match internal_find_user("id", header_id, &data).await {
         Ok(user) => HttpResponse::Ok()
             .content_type("application/json")
             .json(ClientUser::from_persist_user(user)),
@@ -312,7 +359,7 @@ pub async fn find_user_by_id(
     id: web::Path<String>,
     data: Data<ServiceEnvironmentContext>,
 ) -> HttpResponse {
-    match internal_find_user("id".to_string(), id.to_string(), data).await {
+    match internal_find_user("id", &id, &data).await {
         Ok(mut user) => {
             user.password_hash = None;
             HttpResponse::Ok()
@@ -333,16 +380,16 @@ pub async fn find_user_by_id(
 }
 
 pub async fn internal_find_user(
-    prop: String,
-    id: String,
-    data: Data<ServiceEnvironmentContext>,
+    prop: &str,
+    id: &str,
+    data: &Data<ServiceEnvironmentContext>,
 ) -> AzureResult<PersistUser> {
     let request_context = data.context.lock().unwrap();
     let userdb = UserDb::new(&request_context).await;
     if prop == "id" {
-        userdb.find_user_by_id(&id).await
+        userdb.find_user_by_id(id).await
     } else {
-        userdb.find_user_by_profile(&prop, &id).await
+        userdb.find_user_by_profile(&prop, id).await
     }
 }
 

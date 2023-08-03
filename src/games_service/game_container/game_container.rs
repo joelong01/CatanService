@@ -5,12 +5,15 @@ use actix_web::{HttpRequest, HttpResponse};
 use scopeguard::defer;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{
+    broadcast::{self, error::SendError},
+    RwLock,
+};
 
 use crate::{
-    error_message, game_update_message,
+    error_message, full_info, game_update_message,
     games_service::{catan_games::games::regular::regular_game::RegularGame, lobby::lobby::Lobby},
-    shared::models::GameError, full_info,
+    shared::models::GameError,
 };
 
 lazy_static::lazy_static! {
@@ -26,14 +29,18 @@ pub struct GameContainer {
 }
 
 impl GameContainer {
-    pub async fn insert_container(user_id: String, game_id: String, game: &mut RegularGame) {
-        {
-            let game_container = GameContainer::new(user_id, game_id.to_owned());
-            let mut game_map = GAME_MAP.write().await; // Acquire write lock
-            game_map.insert(game_id.to_owned(), Arc::new(RwLock::new(game_container)));
-        }
+    pub async fn insert_container(
+        user_id: String,
+        game_id: String,
+        game: &mut RegularGame,
+    ) -> Result<usize, SendError<CatanMessage>> {
+        let game_container = GameContainer::new(user_id, game_id.to_owned());
+        let mut game_map = GAME_MAP.write().await; // Acquire write lock
+        game_map.insert(game_id.to_owned(), Arc::new(RwLock::new(game_container)));
+        drop(game_map);
 
-        GameContainer::push_game(&game_id, game).await;
+        let result = GameContainer::push_game(&game_id, game).await;
+        result
     }
 
     fn new(user_id: String, game_id: String) -> Self {
@@ -124,13 +131,17 @@ impl GameContainer {
         }
     }
 
-    pub async fn push_game(game_id: &String, game: &RegularGame) {
+    pub async fn push_game(
+        game_id: &String,
+        game: &RegularGame,
+    ) -> Result<usize, SendError<CatanMessage>> {
         let game_container = Self::get_locked_container(game_id).await.unwrap();
         let mut rw_game_container = game_container.write().await;
         rw_game_container.undo_stack.push(game.clone());
-        let _ = rw_game_container
-            .notify
-            .send(game_update_message!(game.clone()));
+        let tx = rw_game_container.notify.clone();
+        drop(rw_game_container);
+        let result = tx.send(game_update_message!(game.clone()));
+        result
     }
 
     pub async fn get_players(game_id: &String) -> Box<Vec<String>> {
@@ -145,8 +156,10 @@ impl GameContainer {
  *  for the LOBBY, otherwise send them for game updates.
  */
 pub async fn long_poll_handler(req: HttpRequest) -> HttpResponse {
-
+    full_info!("long_poll_handler called");
+    defer!(full_info!("long_poll handler exited")); 
     let message = match req.headers().get(GameHeaders::GAME_ID) {
+        
         Some(header) => {
             let game_id = header.to_str().unwrap().to_string();
             if game_id == "" {

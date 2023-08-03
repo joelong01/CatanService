@@ -7,7 +7,8 @@ use super::{
         traits::game_trait::CatanGame,
     },
     player::player::Player,
-    tiles::{tile::Tile, tile_key::TileKey}, shared::game_enums::CatanGames,
+    shared::game_enums::CatanGames,
+    tiles::{tile::Tile, tile_key::TileKey},
 };
 use crate::shared::models::ClientUser;
 

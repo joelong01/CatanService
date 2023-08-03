@@ -3,9 +3,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     games_service::{
-        shared::game_enums::Direction,
         catan_games::traits::game_info_trait::GameInfoTrait,
         harbors::{harbor::Harbor, harbor_enums::HarborType, harbor_key::HarborKey},
+        shared::game_enums::Direction,
         tiles::{tile_enums::TileResource, tile_key::TileKey},
     },
     harbor_data,
@@ -117,8 +117,6 @@ fn create_regular_game_info() -> RegularGameInfo {
 }
 
 pub static REGULAR_GAME_INFO: Lazy<RegularGameInfo> = Lazy::new(|| create_regular_game_info());
-
-
 
 impl GameInfoTrait for RegularGame {
     fn name(&self) -> &str {

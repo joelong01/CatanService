@@ -3,7 +3,7 @@ use std::{collections::HashMap, fmt};
 /**
  *  this is the class that calls directly to CosmosDb --
  */
-use crate::{log_return_err};
+use crate::log_return_err;
 use crate::middleware::environment_mw::RequestEnvironmentContext;
 use crate::shared::models::PersistUser;
 use azure_core::error::{ErrorKind, Result as AzureResult};
@@ -267,7 +267,10 @@ impl UserDb {
 #[cfg(test)]
 mod tests {
 
-    use crate::{shared::{models::UserProfile, utility::get_id},init_env_logger};
+    use crate::{
+        init_env_logger,
+        shared::{models::UserProfile, utility::get_id},
+    };
 
     use super::*;
     use bcrypt::{hash, DEFAULT_COST};
@@ -275,7 +278,7 @@ mod tests {
     #[tokio::test]
     async fn test_e2e() {
         let context = RequestEnvironmentContext::create(true);
-     
+
         init_env_logger().await;
 
         // create the database -- note this will DELETE the database as well

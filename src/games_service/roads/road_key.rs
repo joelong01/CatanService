@@ -30,8 +30,8 @@ impl fmt::Display for RoadKey {
             serde_json::to_string(&self.tile_key).map_err(|_| fmt::Error)?
         )
     }
-}#
-[cfg(test)]
+}
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::games_service::tiles::tile_key::TileKey;

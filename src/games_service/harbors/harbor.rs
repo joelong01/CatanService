@@ -26,13 +26,16 @@ impl Harbor {
     ///
     /// A new Harbor instance.
     pub fn new(key: HarborKey, harbor_type: HarborType) -> Self {
-        Self { harbor_key: key, harbor_type }
+        Self {
+            harbor_key: key,
+            harbor_type,
+        }
     }
 }
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::games_service::{tiles::tile_key::TileKey, shared::game_enums::Direction};
+    use crate::games_service::{shared::game_enums::Direction, tiles::tile_key::TileKey};
 
     #[test]
     fn test_harbor_key_serialization() {

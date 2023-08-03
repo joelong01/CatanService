@@ -1,14 +1,15 @@
 use crate::{
+    full_info,
     middleware::environment_mw::ServiceEnvironmentContext,
     shared::models::{ClientUser, ServiceResponse},
-    user_service::users::{create_http_response, internal_find_user}, full_info,
+    user_service::users::{create_http_response, internal_find_user},
 };
 use actix_web::{
     web::{self, Data, Path},
     HttpRequest, HttpResponse, Responder,
 };
 use azure_core::StatusCode;
-
+use scopeguard::defer;
 
 use crate::games_service::shared::game_enums::{CatanGames, SupportedGames};
 
@@ -30,10 +31,17 @@ pub async fn shuffle_game(game_id_path: web::Path<String>, _req: HttpRequest) ->
             let mut new_game = game.clone();
             new_game.shuffle_count = new_game.shuffle_count + 1;
             new_game.shuffle();
-            GameContainer::push_game(&game_id.to_owned(), &new_game).await;
-            HttpResponse::Ok()
-                .content_type("application/json")
-                .json(game)
+            let result = GameContainer::push_game(&game_id.to_owned(), &new_game).await;
+            match result {
+                Ok(_) => HttpResponse::Ok()
+                    .content_type("application/json")
+                    .json(game),
+                Err(e) => create_http_response(
+                    StatusCode::InternalServerError,
+                    format!("GameContainer::push_game error: {:#?}", e),
+                    "".to_owned(),
+                ),
+            }
         }
         Err(_e) => {
             let response = ServiceResponse {
@@ -60,8 +68,15 @@ pub async fn new_game(
     data: Data<ServiceEnvironmentContext>,
     req: HttpRequest,
 ) -> impl Responder {
+    full_info!("start new_game");
+    defer!(full_info!("left new_game"));
     let game_type = game_type.into_inner();
-    let user_id = req.headers().get(GameHeaders::USER_ID).unwrap().to_str().unwrap();
+    let user_id = req
+        .headers()
+        .get(GameHeaders::USER_ID)
+        .unwrap()
+        .to_str()
+        .unwrap();
 
     if game_type != CatanGames::Regular {
         return create_http_response(
@@ -71,7 +86,7 @@ pub async fn new_game(
         );
     }
 
-    let user_result = internal_find_user("id".to_owned(), user_id.to_owned(), data).await;
+    let user_result = internal_find_user("id", user_id, &data).await;
 
     let user = match user_result {
         Ok(u) => u,
@@ -90,7 +105,11 @@ pub async fn new_game(
     full_info!("new_game: insert_container");
     //
     //  store GameId --> Game for later lookup
-    GameContainer::insert_container(user_id.to_owned(), game.id.to_owned(), &mut game).await;
+    if let Err(_) =
+        GameContainer::insert_container(user_id.to_owned(), game.id.to_owned(), &mut game).await
+    {
+        full_info!("insert_container returned an error.  no listenrs!");
+    }
 
     //
     //  pull the user from the lobby
@@ -99,9 +118,7 @@ pub async fn new_game(
 
     full_info!("new_game: start leave_lobby");
     Lobby::leave_lobby(user_id).await;
-    full_info!("new_game left lobby");
 
-    full_info!("new_game return");
     HttpResponse::Ok()
         .content_type("application/json")
         .json(game)

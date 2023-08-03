@@ -4,13 +4,13 @@ use actix::fut::err;
 use actix_service::{Service, Transform};
 use actix_web::{dev::ServiceRequest, dev::ServiceResponse, error::ErrorUnauthorized, Error};
 
+use crate::{games_service::game_container::game_messages::GameHeaders, shared::models::Claims};
 use futures::{
     future::{ok, Ready},
     Future,
 };
 use jsonwebtoken::{decode, Algorithm, DecodingKey, TokenData, Validation};
 use reqwest::header::{HeaderName, HeaderValue};
-use crate::{shared::models::Claims, games_service::game_container::game_messages::GameHeaders};
 
 use super::environment_mw::CATAN_ENV;
 // AuthenticationMiddlewareFactory serves as a factory to create instances of AuthenticationMiddleware
@@ -69,7 +69,6 @@ where
     fn call(&self, mut req: ServiceRequest) -> Self::Future {
         // fetch the authorization header
         let auth_header = req.headers().get("Authorization");
-        
 
         match auth_header {
             Some(header_value) => {
@@ -100,7 +99,7 @@ where
                 return Box::pin(fut);
             }
         }
-      
+
         let fut = self.service.call(req);
         Box::pin(fut)
     }

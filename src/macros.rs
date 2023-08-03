@@ -80,12 +80,11 @@ macro_rules! setup_test {
 #[macro_export]
 macro_rules! create_app {
     () => {{
+        use crate::create_unauthenticated_service;
         use crate::AuthenticationMiddlewareFactory;
         use crate::EnvironmentMiddleWareFactory;
         use actix_cors::Cors;
         use actix_web::{middleware::Logger, web, App};
-        use crate::create_unauthenticated_service;
-
 
         use crate::ServiceEnvironmentContext;
         use crate::{game_service, lobby_service, longpoll_service, profile_service, user_service};
@@ -112,8 +111,8 @@ macro_rules! create_app {
 macro_rules! create_test_service {
     () => {{
         use crate::create_app;
-        use actix_web::test;
         use crate::init_env_logger;
+        use actix_web::test;
 
         init_env_logger().await;
 
@@ -129,6 +128,9 @@ macro_rules! full_info {
     };
 }
 
-
-
-
+#[macro_export]
+macro_rules! thread_info {
+    ($name:expr, $($arg:tt)*) => {
+        log::info!(target: &format!("{}:{}:[{}] :", file!(), line!(), $name), $($arg)*)
+    };
+}

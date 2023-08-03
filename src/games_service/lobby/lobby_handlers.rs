@@ -1,11 +1,9 @@
 #![allow(unused_variables)]
-use actix_web::{
-    HttpRequest, HttpResponse, web,
-};
+use actix_web::{web, HttpRequest, HttpResponse};
 use azure_core::StatusCode;
 
 use crate::{
-    games_service::game_container::game_messages::{Invitation, GameHeaders},
+    games_service::game_container::game_messages::{GameHeaders, Invitation},
     user_service::users::create_http_response,
 };
 
@@ -17,7 +15,12 @@ pub async fn get_lobby(_req: HttpRequest) -> HttpResponse {
         .json(Lobby::copy_lobby().await);
 }
 pub async fn post_invite(req: HttpRequest, invite: web::Json<Invitation>) -> HttpResponse {
-    let from_id = req.headers().get(GameHeaders::USER_ID).unwrap().to_str().unwrap();
+    let from_id = req
+        .headers()
+        .get(GameHeaders::USER_ID)
+        .unwrap()
+        .to_str()
+        .unwrap();
     let invite: &Invitation = &invite;
 
     match Lobby::send_invite(&invite).await {
@@ -30,8 +33,6 @@ pub async fn post_invite(req: HttpRequest, invite: web::Json<Invitation>) -> Htt
             "".to_owned(),
         ),
     }
-
-
 }
 
 pub async fn join_game(_req: HttpRequest) -> HttpResponse {

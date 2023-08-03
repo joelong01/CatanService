@@ -1,9 +1,11 @@
 #![allow(dead_code)]
+use crate::full_info;
+use crate::middleware::authn_mw::is_token_valid;
 use actix::prelude::*;
 use actix::{Actor, StreamHandler};
-use actix_web::error::{ErrorUnauthorized, ErrorInternalServerError};
+use actix_web::error::{ErrorInternalServerError, ErrorUnauthorized};
 use actix_web::http::header::HeaderMap;
-use actix_web::web::{Query, Payload};
+use actix_web::web::{Payload, Query};
 use actix_web::{Error, HttpRequest, HttpResponse};
 use actix_web_actors::ws;
 use lazy_static::lazy_static;
@@ -11,8 +13,6 @@ use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use crate::full_info;
-use crate::middleware::authn_mw::is_token_valid;
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -21,14 +21,12 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 pub struct UserContext {
     user_id: String,
     client_address: Recipient<WebSocketMessage>,
-
 }
 
 impl UserContext {
     // Add any other methods and fields as needed
 
     // Method to send a message to the user's WebSocket
-    
 }
 
 // Define a custom message type for sending messages to the WebSocket actor
@@ -50,7 +48,7 @@ lazy_static! {
 pub struct CatanWebSocket {
     pub user_id: String,
     pub hb: Instant,
-    pub client_address: Option<Recipient<WebSocketMessage>>
+    pub client_address: Option<Recipient<WebSocketMessage>>,
 }
 
 impl Actor for CatanWebSocket {
@@ -77,16 +75,20 @@ impl Actor for CatanWebSocket {
 }
 
 impl CatanWebSocket {
-    pub fn new (user_id: String) -> Self {
+    pub fn new(user_id: String) -> Self {
         Self {
             user_id,
             hb: Instant::now(),
-            client_address: None
+            client_address: None,
         }
     }
 
     fn send_message(&self, message: &str) -> Result<(), ()> {
-        let _ = self.client_address.as_ref().unwrap().send(WebSocketMessage(message.to_owned()));
+        let _ = self
+            .client_address
+            .as_ref()
+            .unwrap()
+            .send(WebSocketMessage(message.to_owned()));
         Ok(())
     }
 
@@ -186,10 +188,9 @@ pub async fn ws_bootstrap(
                 .content_type("application/json")
                 .json(response_body))
         }
-        Err(err) => {
-            Err(ErrorInternalServerError(format!(
-                "WebSocket connection failed: {:?}", err
-            )))
-        }
+        Err(err) => Err(ErrorInternalServerError(format!(
+            "WebSocket connection failed: {:?}",
+            err
+        ))),
     }
 }
