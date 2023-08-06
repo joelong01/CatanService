@@ -1,16 +1,18 @@
 refresh_rate: 30 seconds
 
 appenders:
-  stdout:
+  my_stdout:
     kind: console
-  file:
-    kind: file
-    path: "log/output.log"
     encoder:
-      pattern: "{d},{l},{m}{n}"
+      pattern: "{d} {l}: {m}{n}"
+  my_file:
+    kind: file
+    path: "log/log.csv"
+    encoder:
+      pattern: "{d},{l},{m}{n}" 
 
 root:
-  level: log
+  level: info
   appenders:
-    - stdout
-    - file
+    - my_stdout
+    - my_file

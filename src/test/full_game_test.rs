@@ -11,7 +11,7 @@ pub mod test {
             client1::Handler1,
             client2::Handler2,
             polling_thread::{self, polling_thread},
-            test_structs::{ClientData, ClientThreadHandler, HOST_URL},
+            test_structs::{ClientData, ClientThreadHandler, HOST_URL, init_test_logger},
         }, wait_for_message,
     };
     use std::{
@@ -133,7 +133,7 @@ pub mod test {
         };
     }
     async fn start_server() -> io::Result<()> {
-        init_env_logger().await;
+        init_test_logger().await;
         let url = Url::parse(HOST_URL).expect("Global test URL should always parse");
         let host = url.host_str().expect("URL better have a host...");
         let port = url.port().expect("port needs to be set");

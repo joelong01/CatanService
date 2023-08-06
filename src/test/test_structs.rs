@@ -1,12 +1,15 @@
 #![allow(dead_code)]
+use std::env;
 use std::pin::Pin;
-
+use std::sync::atomic::Ordering;
 use futures::Future;
+use log4rs::encode::pattern::PatternEncoder;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Receiver;
 
+use crate::full_info;
 use crate::{
-    games_service::game_container::game_messages::CatanMessage, shared::models::UserProfile
+    games_service::game_container::game_messages::CatanMessage, shared::models::UserProfile, LOGGER_INIT, LOGGER_INIT_LOCK
 };
 
 pub const HOST_URL: &str = "http://localhost:8082";
@@ -54,4 +57,43 @@ macro_rules! wait_for_message {
         message
     }};
 }
+
+pub async fn init_test_logger() {
+    if LOGGER_INIT.load(Ordering::Relaxed) {
+        return;
+    }
+    let _lock_guard = LOGGER_INIT_LOCK.lock().await;
+    if LOGGER_INIT.load(Ordering::Relaxed) {
+        return;
+    }
+    let mut path = env::current_exe().expect("Failed to get current executable path");
+    path.pop(); // Remove the binary name
+    path.pop(); // Remove the 'debug' directory
+    path.pop(); // Remove the 'target' directory
+    path.pop(); 
+    path.push("log4rs.yaml");
+    
+    log4rs::init_file(path, Default::default()).unwrap();
+    
+    let current_dir = env::current_dir().unwrap();
+    full_info!("CWD: {:#?}", current_dir.display());
+
+    LOGGER_INIT.store(true, Ordering::Relaxed);
+}
+#[derive(Debug)]
+struct OneLineEncoder {
+    encoder: PatternEncoder,
+}
+
+impl OneLineEncoder {
+    pub fn new(pattern: &str) -> Self {
+        OneLineEncoder {
+            encoder: PatternEncoder::new(pattern),
+        }
+    }
+}
+
+
+
+
 

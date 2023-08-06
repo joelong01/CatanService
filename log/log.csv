@@ -1,0 +1,265 @@
+2023-08-06T11:39:00.127689-07:00,INFO,CWD: "/Users/joelong/GitHub/CatanService"
+2023-08-06T11:39:00.132337-07:00,INFO,starting 20 workers
+2023-08-06T11:39:00.132603-07:00,INFO,src/test/full_game_test.rs:60,test_thread,created server
+2023-08-06T11:39:00.134568-07:00,INFO,Actix runtime found; starting in Actix runtime
+2023-08-06T11:39:00.213483-07:00,INFO,127.0.0.1 "GET /api/v1/version HTTP/1.1" 200 11 "-" "-" 0.000510
+2023-08-06T11:39:00.213808-07:00,INFO,count 1
+2023-08-06T11:39:00.213840-07:00,INFO,src/test/full_game_test.rs:65,test_thread,starting test_lobby_invite_flow
+2023-08-06T11:39:00.213856-07:00,INFO,src/test/full_game_test.rs:69,test_thread,setting up service
+2023-08-06T11:39:00.215110-07:00,INFO,127.0.0.1 "POST /api/v1/test/setup HTTP/1.1" 201 88 "-" "-" 0.000311
+2023-08-06T11:39:00.215254-07:00,INFO,src/test/full_game_test.rs:77,test_thread,creating users
+2023-08-06T11:39:00.215297-07:00,INFO,src/test/full_game_test.rs:192,TestThread,creating: Joe
+2023-08-06T11:39:01.146521-07:00,INFO,127.0.0.1 "POST /api/v1/users/register HTTP/1.1" 200 292 "-" "-" 0.930587
+2023-08-06T11:39:01.146965-07:00,INFO,src/test/full_game_test.rs:192,TestThread,creating: James
+2023-08-06T11:39:02.078859-07:00,INFO,127.0.0.1 "POST /api/v1/users/register HTTP/1.1" 200 296 "-" "-" 0.930867
+2023-08-06T11:39:02.079330-07:00,INFO,src/test/full_game_test.rs:192,TestThread,creating: Doug
+2023-08-06T11:39:03.022696-07:00,INFO,127.0.0.1 "POST /api/v1/users/register HTTP/1.1" 200 299 "-" "-" 0.941939
+2023-08-06T11:39:03.023192-07:00,INFO,src/test/full_game_test.rs:92,test_thread,creating clients: 0
+2023-08-06T11:39:03.023264-07:00,INFO,src/test/full_game_test.rs:96,test_thread,starting polling thread for joe@longshotdev.com
+2023-08-06T11:39:03.023308-07:00,INFO,src/test/full_game_test.rs:92,test_thread,creating clients: 1
+2023-08-06T11:39:03.023326-07:00,INFO,src/test/full_game_test.rs:96,test_thread,starting polling thread for james@longshotdev.com
+2023-08-06T11:39:03.023343-07:00,INFO,src/test/full_game_test.rs:92,test_thread,creating clients: 2
+2023-08-06T11:39:03.023356-07:00,INFO,src/test/full_game_test.rs:96,test_thread,starting polling thread for doug@longshotdev.com
+2023-08-06T11:39:03.023396-07:00,INFO,src/test/full_game_test.rs:108,test_thread,test_thread: waiting for client_threads
+2023-08-06T11:39:03.957519-07:00,INFO,127.0.0.1 "POST /api/v1/users/login HTTP/1.1" 200 265 "-" "-" 0.932023
+2023-08-06T11:39:03.959953-07:00,INFO,127.0.0.1 "GET /auth/api/v1/profile HTTP/1.1" 200 296 "-" "-" 0.000485
+2023-08-06T11:39:03.960188-07:00,INFO,src/test/client1.rs:50,James,Waiting for 500ms
+2023-08-06T11:39:03.961686-07:00,INFO,127.0.0.1 "POST /api/v1/users/login HTTP/1.1" 200 264 "-" "-" 0.935924
+2023-08-06T11:39:03.962822-07:00,INFO,127.0.0.1 "POST /api/v1/users/login HTTP/1.1" 200 264 "-" "-" 0.938145
+2023-08-06T11:39:03.963132-07:00,INFO,127.0.0.1 "POST /api/v1/users/login HTTP/1.1" 200 265 "-" "-" 0.938096
+2023-08-06T11:39:03.963237-07:00,INFO,127.0.0.1 "GET /auth/api/v1/profile HTTP/1.1" 200 299 "-" "-" 0.000291
+2023-08-06T11:39:03.963858-07:00,INFO,src/test/client2.rs:56,Doug,Waiting for 500ms
+2023-08-06T11:39:03.964532-07:00,INFO,127.0.0.1 "GET /auth/api/v1/profile HTTP/1.1" 200 292 "-" "-" 0.000319
+2023-08-06T11:39:03.964717-07:00,INFO,127.0.0.1 "GET /auth/api/v1/profile HTTP/1.1" 200 296 "-" "-" 0.000467
+2023-08-06T11:39:03.964764-07:00,INFO,src/test/polling_thread.rs:25,Joe:(0),polling thread started, sending start message
+2023-08-06T11:39:03.964848-07:00,INFO,src/test/polling_thread.rs:29,Joe:(0),returning from send start message
+2023-08-06T11:39:03.964873-07:00,INFO,src/test/polling_thread.rs:34,Joe:(0),Begin poll. GameId: 
+2023-08-06T11:39:03.965049-07:00,INFO,src/test/polling_thread.rs:25,James:(1),polling thread started, sending start message
+2023-08-06T11:39:03.965067-07:00,INFO,src/test/polling_thread.rs:29,James:(1),returning from send start message
+2023-08-06T11:39:03.965081-07:00,INFO,src/test/polling_thread.rs:34,James:(1),Begin poll. GameId: 
+2023-08-06T11:39:03.966225-07:00,INFO,long_poll_handler called
+2023-08-06T11:39:03.966301-07:00,INFO,long_poll_handler called
+2023-08-06T11:39:03.966331-07:00,INFO,wait_in_lobby id-15877389295736911181
+2023-08-06T11:39:03.966361-07:00,INFO,wait_in_lobby id-1868472522938902615
+2023-08-06T11:39:03.967015-07:00,INFO,ERROR: in rx.await: RecvError(
+    (),
+)
+2023-08-06T11:39:03.967137-07:00,INFO,127.0.0.1 "POST /api/v1/users/login HTTP/1.1" 200 264 "-" "-" 0.942106
+2023-08-06T11:39:03.967168-07:00,INFO,leaving wait_in_lobby id-15877389295736911181
+2023-08-06T11:39:03.967242-07:00,INFO,long_poll handler exited
+2023-08-06T11:39:03.967295-07:00,INFO,127.0.0.1 "GET /auth/api/v1/longpoll HTTP/1.1" 200 80 "-" "-" 0.001363
+2023-08-06T11:39:03.967475-07:00,INFO,src/test/polling_thread.rs:42,Joe:(0),poll returned. GameId: 
+2023-08-06T11:39:03.967546-07:00,INFO,src/test/polling_thread.rs:44,Joe:(0),long_poll returned: Error: ErrorData { status_code: 500, message: "err in rx.await: RecvError(\n    (),\n)" }
+2023-08-06T11:39:03.967563-07:00,INFO,src/test/polling_thread.rs:48,Joe:(0),sending message: Error: ErrorData { status_code: 500, message: "err in rx.await: RecvError(\n    (),\n)" }
+2023-08-06T11:39:03.967580-07:00,INFO,src/test/polling_thread.rs:34,Joe:(0),Begin poll. GameId: 
+2023-08-06T11:39:03.968617-07:00,INFO,127.0.0.1 "GET /auth/api/v1/profile HTTP/1.1" 200 292 "-" "-" 0.000260
+2023-08-06T11:39:03.968690-07:00,INFO,long_poll_handler called
+2023-08-06T11:39:03.968714-07:00,INFO,wait_in_lobby id-15877389295736911181
+2023-08-06T11:39:03.968858-07:00,INFO,src/test/client0.rs:50,Main(Joe),Waiting for 500ms
+2023-08-06T11:39:03.969900-07:00,INFO,127.0.0.1 "POST /api/v1/users/login HTTP/1.1" 200 264 "-" "-" 0.944883
+2023-08-06T11:39:03.971315-07:00,INFO,127.0.0.1 "GET /auth/api/v1/profile HTTP/1.1" 200 299 "-" "-" 0.000393
+2023-08-06T11:39:03.971575-07:00,INFO,src/test/polling_thread.rs:25,Doug:(2),polling thread started, sending start message
+2023-08-06T11:39:03.971602-07:00,INFO,src/test/polling_thread.rs:29,Doug:(2),returning from send start message
+2023-08-06T11:39:03.971615-07:00,INFO,src/test/polling_thread.rs:34,Doug:(2),Begin poll. GameId: 
+2023-08-06T11:39:03.972810-07:00,INFO,long_poll_handler called
+2023-08-06T11:39:03.972894-07:00,INFO,wait_in_lobby id-3845226067425626985
+2023-08-06T11:39:04.461758-07:00,INFO,src/test/client1.rs:52,James,Client thread. Waiting on Start Message from poll thread
+2023-08-06T11:39:04.461819-07:00,INFO,src/test/client1.rs:56,James,Begin wait for message
+2023-08-06T11:39:04.461862-07:00,INFO,src/test/client1.rs:56,James,received message: Started: James:(1)  started
+2023-08-06T11:39:04.461966-07:00,INFO,src/test/client1.rs:64,James,Sleeping for 1 second...
+2023-08-06T11:39:04.465510-07:00,INFO,src/test/client2.rs:58,Doug,Client thread. Waiting on Start Message from poll thread
+2023-08-06T11:39:04.465553-07:00,INFO,src/test/client2.rs:62,Doug,Begin wait for message
+2023-08-06T11:39:04.465574-07:00,INFO,src/test/client2.rs:62,Doug,received message: Started: Doug:(2)  started
+2023-08-06T11:39:04.465587-07:00,INFO,src/test/client2.rs:70,Doug,Sleeping for 1 second...
+2023-08-06T11:39:04.470175-07:00,INFO,src/test/client0.rs:52,Main(Joe),Begin wait for message
+2023-08-06T11:39:04.470216-07:00,INFO,src/test/client0.rs:52,Main(Joe),received message: Started: Joe:(0)  started
+2023-08-06T11:39:04.470231-07:00,INFO,src/test/client0.rs:60,Main(Joe),Sleeping for 1 second...
+2023-08-06T11:39:05.464189-07:00,INFO,src/test/client1.rs:66,James,Game Thread Woke up!
+2023-08-06T11:39:05.464233-07:00,INFO,src/test/client1.rs:68,James,Begin wait for message
+2023-08-06T11:39:05.467686-07:00,INFO,src/test/client2.rs:72,Doug,Game Thread Woke up!
+2023-08-06T11:39:05.467715-07:00,INFO,src/test/client2.rs:74,Doug,Begin wait for message
+2023-08-06T11:39:05.471198-07:00,INFO,src/test/client0.rs:62,Main(Joe),Game Thread Woke up!
+2023-08-06T11:39:05.471252-07:00,INFO,creating new game with token eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpZCI6ImlkLTE1ODc3Mzg5Mjk1NzM2OTExMTgxIiwic3ViIjoiam9lQGxvbmdzaG90ZGV2LmNvbSIsImV4cCI6MTY5MTQzMzU0M30.A776J5KN0KRCj6nGK7CMIeYAzRXHNDIymsgG0yG46MkI2HjPOD-56E251zamMn2QzPFtzexptpR-h1gGfGDOxg
+2023-08-06T11:39:05.472745-07:00,INFO,start new_game
+2023-08-06T11:39:05.473956-07:00,INFO,new_game: insert_container
+2023-08-06T11:39:05.474208-07:00,INFO,insert_container returned an error.  no listenrs!
+2023-08-06T11:39:05.474261-07:00,INFO,Lobby::send_message: GameCreated: GameCreatedData { user_id: "id-15877389295736911181", game_id: "id-16229613317414038232" }
+2023-08-06T11:39:05.474298-07:00,INFO,leave_lobby enter
+2023-08-06T11:39:05.474316-07:00,INFO,leave_lobby exit
+2023-08-06T11:39:05.474464-07:00,INFO,leaving wait_in_lobby id-15877389295736911181
+2023-08-06T11:39:05.474538-07:00,INFO,long_poll handler exited
+2023-08-06T11:39:05.474621-07:00,INFO,127.0.0.1 "GET /auth/api/v1/longpoll HTTP/1.1" 200 87 "-" "-" 1.506229
+2023-08-06T11:39:05.474914-07:00,INFO,src/test/polling_thread.rs:42,Joe:(0),poll returned. GameId: 
+2023-08-06T11:39:05.474987-07:00,INFO,src/test/polling_thread.rs:44,Joe:(0),long_poll returned: GameCreated: GameCreatedData { user_id: "id-15877389295736911181", game_id: "id-16229613317414038232" }
+2023-08-06T11:39:05.475002-07:00,INFO,src/test/polling_thread.rs:48,Joe:(0),sending message: GameCreated: GameCreatedData { user_id: "id-15877389295736911181", game_id: "id-16229613317414038232" }
+2023-08-06T11:39:05.475020-07:00,INFO,src/test/polling_thread.rs:34,Joe:(0),Begin poll. GameId: id-16229613317414038232
+2023-08-06T11:39:05.476258-07:00,INFO,long_poll_handler called
+2023-08-06T11:39:05.476364-07:00,INFO,long poll wait_for_change
+2023-08-06T11:39:05.476396-07:00,INFO,game_container read lock aquired
+2023-08-06T11:39:05.476461-07:00,INFO,left new_game
+2023-08-06T11:39:05.476572-07:00,INFO,127.0.0.1 "POST /auth/api/v1/games/Regular HTTP/1.1" 200 74844 "-" "-" 0.004051
+2023-08-06T11:39:05.476686-07:00,INFO,src/test/client0.rs:75,Main(Joe),Begin wait for message
+2023-08-06T11:39:05.476705-07:00,INFO,src/test/client0.rs:75,Main(Joe),received message: Error: ErrorData { status_code: 500, message: "err in rx.await: RecvError(\n    (),\n)" }
+2023-08-06T11:39:05.546409-07:00,INFO,src/test/full_game_test.rs:116,test_thread,client exited withe erro: JoinError::Panic(Id(120), ...)
+2023-08-06T11:45:27.166206-07:00,INFO,CWD: "/Users/joelong/GitHub/CatanService"
+2023-08-06T11:45:27.169209-07:00,INFO,starting 20 workers
+2023-08-06T11:45:27.169281-07:00,INFO,src/test/full_game_test.rs:60,test_thread,created server
+2023-08-06T11:45:27.169759-07:00,INFO,Actix runtime found; starting in Actix runtime
+2023-08-06T11:45:27.247588-07:00,INFO,127.0.0.1 "GET /api/v1/version HTTP/1.1" 200 11 "-" "-" 0.000315
+2023-08-06T11:45:27.247845-07:00,INFO,count 1
+2023-08-06T11:45:27.247873-07:00,INFO,src/test/full_game_test.rs:65,test_thread,starting test_lobby_invite_flow
+2023-08-06T11:45:27.247887-07:00,INFO,src/test/full_game_test.rs:69,test_thread,setting up service
+2023-08-06T11:45:27.249227-07:00,INFO,127.0.0.1 "POST /api/v1/test/setup HTTP/1.1" 201 88 "-" "-" 0.000484
+2023-08-06T11:45:27.249399-07:00,INFO,src/test/full_game_test.rs:77,test_thread,creating users
+2023-08-06T11:45:27.249446-07:00,INFO,src/test/full_game_test.rs:192,TestThread,creating: Joe
+2023-08-06T11:45:28.193430-07:00,INFO,127.0.0.1 "POST /api/v1/users/register HTTP/1.1" 200 291 "-" "-" 0.943247
+2023-08-06T11:45:28.193832-07:00,INFO,src/test/full_game_test.rs:192,TestThread,creating: James
+2023-08-06T11:45:29.133489-07:00,INFO,127.0.0.1 "POST /api/v1/users/register HTTP/1.1" 200 296 "-" "-" 0.938646
+2023-08-06T11:45:29.133962-07:00,INFO,src/test/full_game_test.rs:192,TestThread,creating: Doug
+2023-08-06T11:45:30.075349-07:00,INFO,127.0.0.1 "POST /api/v1/users/register HTTP/1.1" 200 299 "-" "-" 0.939763
+2023-08-06T11:45:30.075701-07:00,INFO,src/test/full_game_test.rs:92,test_thread,creating clients: 0
+2023-08-06T11:45:30.075732-07:00,INFO,src/test/full_game_test.rs:96,test_thread,starting polling thread for joe@longshotdev.com
+2023-08-06T11:45:30.075760-07:00,INFO,src/test/full_game_test.rs:92,test_thread,creating clients: 1
+2023-08-06T11:45:30.075777-07:00,INFO,src/test/full_game_test.rs:96,test_thread,starting polling thread for james@longshotdev.com
+2023-08-06T11:45:30.075801-07:00,INFO,src/test/full_game_test.rs:92,test_thread,creating clients: 2
+2023-08-06T11:45:30.075816-07:00,INFO,src/test/full_game_test.rs:96,test_thread,starting polling thread for doug@longshotdev.com
+2023-08-06T11:45:30.075842-07:00,INFO,src/test/full_game_test.rs:108,test_thread,test_thread: waiting for client_threads
+2023-08-06T11:45:31.015383-07:00,INFO,127.0.0.1 "POST /api/v1/users/login HTTP/1.1" 200 265 "-" "-" 0.936911
+2023-08-06T11:45:31.015930-07:00,INFO,127.0.0.1 "POST /api/v1/users/login HTTP/1.1" 200 265 "-" "-" 0.938166
+2023-08-06T11:45:31.017408-07:00,INFO,127.0.0.1 "GET /auth/api/v1/profile HTTP/1.1" 200 296 "-" "-" 0.000378
+2023-08-06T11:45:31.017607-07:00,INFO,127.0.0.1 "GET /auth/api/v1/profile HTTP/1.1" 200 296 "-" "-" 0.000578
+2023-08-06T11:45:31.017643-07:00,INFO,src/test/client1.rs:50,James,Waiting for 500ms
+2023-08-06T11:45:31.017712-07:00,INFO,127.0.0.1 "POST /api/v1/users/login HTTP/1.1" 200 264 "-" "-" 0.940005
+2023-08-06T11:45:31.017849-07:00,INFO,src/test/polling_thread.rs:25,James:(1),polling thread started, sending start message
+2023-08-06T11:45:31.017873-07:00,INFO,src/test/polling_thread.rs:29,James:(1),returning from send start message
+2023-08-06T11:45:31.017886-07:00,INFO,src/test/polling_thread.rs:34,James:(1),Begin poll. GameId: 
+2023-08-06T11:45:31.019334-07:00,INFO,long_poll_handler called
+2023-08-06T11:45:31.019481-07:00,INFO,127.0.0.1 "GET /auth/api/v1/profile HTTP/1.1" 200 299 "-" "-" 0.000325
+2023-08-06T11:45:31.019512-07:00,INFO,wait_in_lobby id-7881710152633175120
+2023-08-06T11:45:31.019661-07:00,INFO,src/test/polling_thread.rs:25,Doug:(2),polling thread started, sending start message
+2023-08-06T11:45:31.019686-07:00,INFO,src/test/polling_thread.rs:29,Doug:(2),returning from send start message
+2023-08-06T11:45:31.019700-07:00,INFO,src/test/polling_thread.rs:34,Doug:(2),Begin poll. GameId: 
+2023-08-06T11:45:31.020920-07:00,INFO,long_poll_handler called
+2023-08-06T11:45:31.020952-07:00,INFO,wait_in_lobby id-6318715423945216695
+2023-08-06T11:45:31.021081-07:00,INFO,ERROR: in rx.await: RecvError(
+    (),
+)
+2023-08-06T11:45:31.021208-07:00,INFO,127.0.0.1 "POST /api/v1/users/login HTTP/1.1" 200 264 "-" "-" 0.942928
+2023-08-06T11:45:31.021234-07:00,INFO,leaving wait_in_lobby id-6318715423945216695
+2023-08-06T11:45:31.021286-07:00,INFO,long_poll handler exited
+2023-08-06T11:45:31.021343-07:00,INFO,127.0.0.1 "GET /auth/api/v1/longpoll HTTP/1.1" 200 80 "-" "-" 0.000667
+2023-08-06T11:45:31.021510-07:00,INFO,src/test/polling_thread.rs:42,Doug:(2),poll returned. GameId: 
+2023-08-06T11:45:31.021559-07:00,INFO,src/test/polling_thread.rs:44,Doug:(2),long_poll returned: Error: ErrorData { status_code: 500, message: "err in rx.await: RecvError(\n    (),\n)" }
+2023-08-06T11:45:31.021576-07:00,INFO,src/test/polling_thread.rs:48,Doug:(2),sending message: Error: ErrorData { status_code: 500, message: "err in rx.await: RecvError(\n    (),\n)" }
+2023-08-06T11:45:31.021592-07:00,INFO,src/test/polling_thread.rs:34,Doug:(2),Begin poll. GameId: 
+2023-08-06T11:45:31.022736-07:00,INFO,long_poll_handler called
+2023-08-06T11:45:31.022761-07:00,INFO,wait_in_lobby id-6318715423945216695
+2023-08-06T11:45:31.022924-07:00,INFO,127.0.0.1 "GET /auth/api/v1/profile HTTP/1.1" 200 299 "-" "-" 0.000295
+2023-08-06T11:45:31.023262-07:00,INFO,src/test/client2.rs:56,Doug,Waiting for 500ms
+2023-08-06T11:45:31.023480-07:00,INFO,127.0.0.1 "POST /api/v1/users/login HTTP/1.1" 200 263 "-" "-" 0.945074
+2023-08-06T11:45:31.024919-07:00,INFO,127.0.0.1 "GET /auth/api/v1/profile HTTP/1.1" 200 291 "-" "-" 0.000496
+2023-08-06T11:45:31.025112-07:00,INFO,src/test/client0.rs:50,Main(Joe),Waiting for 500ms
+2023-08-06T11:45:31.027984-07:00,INFO,127.0.0.1 "POST /api/v1/users/login HTTP/1.1" 200 263 "-" "-" 0.949577
+2023-08-06T11:45:31.029492-07:00,INFO,127.0.0.1 "GET /auth/api/v1/profile HTTP/1.1" 200 291 "-" "-" 0.000303
+2023-08-06T11:45:31.029773-07:00,INFO,src/test/polling_thread.rs:25,Joe:(0),polling thread started, sending start message
+2023-08-06T11:45:31.029815-07:00,INFO,src/test/polling_thread.rs:29,Joe:(0),returning from send start message
+2023-08-06T11:45:31.029843-07:00,INFO,src/test/polling_thread.rs:34,Joe:(0),Begin poll. GameId: 
+2023-08-06T11:45:31.030866-07:00,INFO,long_poll_handler called
+2023-08-06T11:45:31.030901-07:00,INFO,wait_in_lobby id-3258499932868359803
+2023-08-06T11:45:31.518595-07:00,INFO,src/test/client1.rs:52,James,Client thread. Waiting on Start Message from poll thread
+2023-08-06T11:45:31.518664-07:00,INFO,src/test/client1.rs:56,James,Begin wait for message
+2023-08-06T11:45:31.518733-07:00,INFO,src/test/client1.rs:56,James,received message: Started: James:(1)  started
+2023-08-06T11:45:31.518787-07:00,INFO,src/test/client1.rs:64,James,Sleeping for 1 second...
+2023-08-06T11:45:31.524549-07:00,INFO,src/test/client2.rs:58,Doug,Client thread. Waiting on Start Message from poll thread
+2023-08-06T11:45:31.524638-07:00,INFO,src/test/client2.rs:62,Doug,Begin wait for message
+2023-08-06T11:45:31.524678-07:00,INFO,src/test/client2.rs:62,Doug,received message: Started: Doug:(2)  started
+2023-08-06T11:45:31.524692-07:00,INFO,src/test/client2.rs:70,Doug,Sleeping for 1 second...
+2023-08-06T11:45:31.525960-07:00,INFO,src/test/client0.rs:52,Main(Joe),Begin wait for message
+2023-08-06T11:45:31.525992-07:00,INFO,src/test/client0.rs:52,Main(Joe),received message: Started: Joe:(0)  started
+2023-08-06T11:45:31.526007-07:00,INFO,src/test/client0.rs:60,Main(Joe),Sleeping for 1 second...
+2023-08-06T11:45:32.521431-07:00,INFO,src/test/client1.rs:66,James,Game Thread Woke up!
+2023-08-06T11:45:32.521588-07:00,INFO,src/test/client1.rs:68,James,Begin wait for message
+2023-08-06T11:45:32.527398-07:00,INFO,src/test/client2.rs:72,Doug,Game Thread Woke up!
+2023-08-06T11:45:32.527425-07:00,INFO,src/test/client2.rs:74,Doug,Begin wait for message
+2023-08-06T11:45:32.527448-07:00,INFO,src/test/client2.rs:74,Doug,received message: Error: ErrorData { status_code: 500, message: "err in rx.await: RecvError(\n    (),\n)" }
+2023-08-06T11:45:32.567929-07:00,INFO,src/test/client0.rs:62,Main(Joe),Game Thread Woke up!
+2023-08-06T11:45:32.567980-07:00,INFO,creating new game with token eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpZCI6ImlkLTMyNTg0OTk5MzI4NjgzNTk4MDMiLCJzdWIiOiJqb2VAbG9uZ3Nob3RkZXYuY29tIiwiZXhwIjoxNjkxNDMzOTMxfQ.MmwYi9yl-5KoMOjyQDZ1yYAo73D7DqfCwEqH1BSYHz4pwIe-O2ARscc_lhfilCReKdSdyGtxEFYiriDh330yJQ
+2023-08-06T11:45:32.568380-07:00,INFO,src/test/full_game_test.rs:116,test_thread,client exited withe erro: JoinError::Panic(Id(124), ...)
+2023-08-06T11:45:32.569697-07:00,INFO,start new_game
+2023-08-06T11:45:32.571296-07:00,INFO,new_game: insert_container
+2023-08-06T11:45:32.571564-07:00,INFO,insert_container returned an error.  no listenrs!
+2023-08-06T11:45:32.571682-07:00,INFO,Lobby::send_message: GameCreated: GameCreatedData { user_id: "id-3258499932868359803", game_id: "id-9604961768968354297" }
+2023-08-06T11:45:32.571726-07:00,INFO,leave_lobby enter
+2023-08-06T11:45:32.571745-07:00,INFO,leave_lobby exit
+2023-08-06T11:45:32.571823-07:00,INFO,leaving wait_in_lobby id-3258499932868359803
+2023-08-06T11:45:32.571853-07:00,INFO,long_poll handler exited
+2023-08-06T11:45:32.571914-07:00,INFO,127.0.0.1 "GET /auth/api/v1/longpoll HTTP/1.1" 200 85 "-" "-" 1.541222
+2023-08-06T11:45:32.572145-07:00,INFO,src/test/polling_thread.rs:42,Joe:(0),poll returned. GameId: 
+2023-08-06T11:45:32.572209-07:00,INFO,src/test/polling_thread.rs:44,Joe:(0),long_poll returned: GameCreated: GameCreatedData { user_id: "id-3258499932868359803", game_id: "id-9604961768968354297" }
+2023-08-06T11:45:32.572230-07:00,INFO,src/test/polling_thread.rs:48,Joe:(0),sending message: GameCreated: GameCreatedData { user_id: "id-3258499932868359803", game_id: "id-9604961768968354297" }
+2023-08-06T11:45:32.572251-07:00,INFO,src/test/polling_thread.rs:34,Joe:(0),Begin poll. GameId: id-9604961768968354297
+2023-08-06T11:45:32.573168-07:00,INFO,long_poll_handler called
+2023-08-06T11:45:32.573202-07:00,INFO,long poll wait_for_change
+2023-08-06T11:45:32.573225-07:00,INFO,game_container read lock aquired
+2023-08-06T11:45:32.573860-07:00,INFO,left new_game
+2023-08-06T11:45:32.573961-07:00,INFO,127.0.0.1 "POST /auth/api/v1/games/Regular HTTP/1.1" 200 74798 "-" "-" 0.004552
+2023-08-06T11:45:32.574069-07:00,INFO,src/test/client0.rs:75,Main(Joe),Begin wait for message
+2023-08-06T11:45:32.574096-07:00,INFO,src/test/client0.rs:75,Main(Joe),received message: GameCreated: GameCreatedData { user_id: "id-3258499932868359803", game_id: "id-9604961768968354297" }
+2023-08-06T11:45:32.574113-07:00,INFO,src/test/client0.rs:85,Main(Joe),Getting Lobby.
+2023-08-06T11:45:32.575088-07:00,INFO,127.0.0.1 "GET /auth/api/v1/lobby HTTP/1.1" 200 51 "-" "-" 0.000188
+2023-08-06T11:45:32.575281-07:00,INFO,src/test/client0.rs:94,Main(Joe),get_lobby returned: [
+    "id-7881710152633175120",
+    "id-6318715423945216695",
+]
+2023-08-06T11:45:32.575307-07:00,INFO,src/test/client0.rs:110,Main(Joe),Sending GameInvite
+2023-08-06T11:45:32.576416-07:00,INFO,Lobby::send_message: Invite: Invitation { originator_id: "id-3258499932868359803", recipient_id: "id-7881710152633175120", originator_name: "Joe:(0)", message: "Join my game!", picture_url: "https://example.com/photo.jpg", game_id: "id-9604961768968354297" }
+2023-08-06T11:45:32.576498-07:00,INFO,leaving wait_in_lobby id-7881710152633175120
+2023-08-06T11:45:32.576542-07:00,INFO,127.0.0.1 "POST /auth/api/v1/lobby/invite HTTP/1.1" 200 51 "-" "-" 0.000327
+2023-08-06T11:45:32.576580-07:00,INFO,long_poll handler exited
+2023-08-06T11:45:32.576637-07:00,INFO,127.0.0.1 "GET /auth/api/v1/longpoll HTTP/1.1" 200 223 "-" "-" 1.557531
+2023-08-06T11:45:32.576772-07:00,INFO,src/test/client0.rs:110,Main(Joe),Sending GameInvite
+2023-08-06T11:45:32.576961-07:00,INFO,src/test/polling_thread.rs:42,James:(1),poll returned. GameId: 
+2023-08-06T11:45:32.577004-07:00,INFO,src/test/polling_thread.rs:44,James:(1),long_poll returned: Invite: Invitation { originator_id: "id-3258499932868359803", recipient_id: "id-7881710152633175120", originator_name: "Joe:(0)", message: "Join my game!", picture_url: "https://example.com/photo.jpg", game_id: "id-9604961768968354297" }
+2023-08-06T11:45:32.577021-07:00,INFO,src/test/polling_thread.rs:48,James:(1),sending message: Invite: Invitation { originator_id: "id-3258499932868359803", recipient_id: "id-7881710152633175120", originator_name: "Joe:(0)", message: "Join my game!", picture_url: "https://example.com/photo.jpg", game_id: "id-9604961768968354297" }
+2023-08-06T11:45:32.577040-07:00,INFO,src/test/polling_thread.rs:34,James:(1),Begin poll. GameId: 
+2023-08-06T11:45:32.577121-07:00,INFO,src/test/client1.rs:68,James,received message: Invite: Invitation { originator_id: "id-3258499932868359803", recipient_id: "id-7881710152633175120", originator_name: "Joe:(0)", message: "Join my game!", picture_url: "https://example.com/photo.jpg", game_id: "id-9604961768968354297" }
+2023-08-06T11:45:32.578615-07:00,INFO,long_poll_handler called
+2023-08-06T11:45:32.578653-07:00,INFO,wait_in_lobby id-7881710152633175120
+2023-08-06T11:45:32.578747-07:00,INFO,leave_lobby enter
+2023-08-06T11:45:32.578838-07:00,INFO,Lobby::send_message: Invite: Invitation { originator_id: "id-3258499932868359803", recipient_id: "id-6318715423945216695", originator_name: "Joe:(0)", message: "Join my game!", picture_url: "https://example.com/photo.jpg", game_id: "id-9604961768968354297" }
+2023-08-06T11:45:32.578870-07:00,INFO,leave_lobby exit
+2023-08-06T11:45:32.578910-07:00,INFO,ERROR: in rx.await: RecvError(
+    (),
+)
+2023-08-06T11:45:32.578950-07:00,INFO,leaving wait_in_lobby id-6318715423945216695
+2023-08-06T11:45:32.578976-07:00,INFO,Lobby::send_message: InvitationResponse: InvitationResponseData { originator_id: "id-3258499932868359803", recipient_id: "id-7881710152633175120", game_id: "id-9604961768968354297", player_ids: ["id-7881710152633175120", "id-3258499932868359803"], accepted: true }
+2023-08-06T11:45:32.578989-07:00,INFO,long_poll handler exited
+2023-08-06T11:45:32.579045-07:00,INFO,127.0.0.1 "POST /auth/api/v1/lobby/invite HTTP/1.1" 200 26 "-" "-" 0.000612
+2023-08-06T11:45:32.579110-07:00,INFO,leaving wait_for_change
+2023-08-06T11:45:32.579134-07:00,INFO,leaving wait_in_lobby id-7881710152633175120
+2023-08-06T11:45:32.579180-07:00,INFO,127.0.0.1 "GET /auth/api/v1/longpoll HTTP/1.1" 200 223 "-" "-" 1.556616
+2023-08-06T11:45:32.579443-07:00,INFO,127.0.0.1 "POST /auth/api/v1/lobby/acceptinvite HTTP/1.1" 400 103 "-" "-" 0.000998
+2023-08-06T11:45:32.579487-07:00,INFO,long_poll handler exited
+2023-08-06T11:45:32.579514-07:00,INFO,long_poll handler exited
+2023-08-06T11:45:32.579530-07:00,INFO,src/test/client0.rs:118,Main(Joe),Begin wait for message
+2023-08-06T11:45:32.579589-07:00,INFO,127.0.0.1 "GET /auth/api/v1/longpoll HTTP/1.1" 200 80 "-" "-" 0.001124
+2023-08-06T11:45:32.579617-07:00,INFO,127.0.0.1 "GET /auth/api/v1/longpoll HTTP/1.1" 200 67 "-" "-" 0.006591
+2023-08-06T11:45:32.579796-07:00,INFO,src/test/polling_thread.rs:42,Doug:(2),poll returned. GameId: 
+2023-08-06T11:45:32.579846-07:00,INFO,src/test/polling_thread.rs:44,Doug:(2),long_poll returned: Invite: Invitation { originator_id: "id-3258499932868359803", recipient_id: "id-6318715423945216695", originator_name: "Joe:(0)", message: "Join my game!", picture_url: "https://example.com/photo.jpg", game_id: "id-9604961768968354297" }
+2023-08-06T11:45:32.579864-07:00,INFO,src/test/polling_thread.rs:48,Doug:(2),sending message: Invite: Invitation { originator_id: "id-3258499932868359803", recipient_id: "id-6318715423945216695", originator_name: "Joe:(0)", message: "Join my game!", picture_url: "https://example.com/photo.jpg", game_id: "id-9604961768968354297" }
+2023-08-06T11:45:32.579879-07:00,INFO,src/test/polling_thread.rs:50,Doug:(2),Failed to send message: channel closed
+2023-08-06T11:45:32.579894-07:00,INFO,src/test/polling_thread.rs:34,Doug:(2),Begin poll. GameId: 
+2023-08-06T11:45:32.580017-07:00,INFO,src/test/client1.rs:77,James,end of test:
+2023-08-06T11:45:32.580057-07:00,INFO,src/test/polling_thread.rs:42,James:(1),poll returned. GameId: 
+2023-08-06T11:45:32.580091-07:00,INFO,src/test/polling_thread.rs:44,James:(1),long_poll returned: Error: ErrorData { status_code: 500, message: "err in rx.await: RecvError(\n    (),\n)" }
+2023-08-06T11:45:32.580105-07:00,INFO,src/test/polling_thread.rs:48,James:(1),sending message: Error: ErrorData { status_code: 500, message: "err in rx.await: RecvError(\n    (),\n)" }
+2023-08-06T11:45:32.580117-07:00,INFO,src/test/polling_thread.rs:50,James:(1),Failed to send message: channel closed
+2023-08-06T11:45:32.580128-07:00,INFO,src/test/polling_thread.rs:34,James:(1),Begin poll. GameId: 
+2023-08-06T11:45:32.580265-07:00,INFO,src/test/full_game_test.rs:113,test_thread,client exited ok
+2023-08-06T11:45:32.580322-07:00,INFO,src/test/polling_thread.rs:42,Joe:(0),poll returned. GameId: id-9604961768968354297
+2023-08-06T11:45:32.580348-07:00,INFO,src/test/polling_thread.rs:44,Joe:(0),long_poll returned: PlayerAdded: ["id-3258499932868359803", "id-7881710152633175120"]
+2023-08-06T11:45:32.580364-07:00,INFO,src/test/polling_thread.rs:48,Joe:(0),sending message: PlayerAdded: ["id-3258499932868359803", "id-7881710152633175120"]
+2023-08-06T11:45:32.580379-07:00,INFO,src/test/polling_thread.rs:34,Joe:(0),Begin poll. GameId: id-9604961768968354297
+2023-08-06T11:45:32.580454-07:00,INFO,src/test/client0.rs:118,Main(Joe),received message: PlayerAdded: ["id-3258499932868359803", "id-7881710152633175120"]
+2023-08-06T11:45:32.581499-07:00,INFO,src/test/full_game_test.rs:116,test_thread,client exited withe erro: JoinError::Panic(Id(120), ...)
+2023-08-06T11:45:32.581521-07:00,INFO,src/test/full_game_test.rs:122,test_thread,client_threads all finished

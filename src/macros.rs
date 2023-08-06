@@ -130,7 +130,8 @@ macro_rules! full_info {
 
 #[macro_export]
 macro_rules! thread_info {
-    ($name:expr, $($arg:tt)*) => {
-        log::info!(target: &format!("{}:{}:[{}] :", file!(), line!(), $name), $($arg)*)
+    ($from:expr, $($arg:tt)*) => {
+        log::info!("{}:{},{},{}", file!(), line!(), $from, format!($($arg)*))
     };
 }
+
