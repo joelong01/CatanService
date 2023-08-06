@@ -184,7 +184,7 @@ fn lobby_service() -> Scope {
     web::scope("/lobby")
         .route("", web::get().to(lobby_handlers::get_lobby))
         .route("/invite", web::post().to(lobby_handlers::post_invite))
-        .route("/joingame", web::post().to(lobby_handlers::join_game))
+        .route("/acceptinvite", web::post().to(lobby_handlers::respond_to_invite))
 }
 
 /**
@@ -215,6 +215,7 @@ fn game_service() -> Scope {
             "/shuffle/{game_id}",
             web::post().to(game_handlers::shuffle_game),
         )
+        .route("/join/{game_id}", web::post().to(game_handlers::join_game))
 }
 
 fn longpoll_service() -> Scope {

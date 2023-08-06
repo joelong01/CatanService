@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use std::{collections::HashMap, fmt};
 
 /**
@@ -19,7 +20,7 @@ use log::info;
  *  this just makes sure we consistently use them throughout the code.
  */
 #[derive(PartialEq, Eq, Hash)]
-enum CosmosCollectionName {
+pub enum CosmosCollectionName {
     User,
     Profile,
     Game,
@@ -268,6 +269,7 @@ impl UserDb {
 mod tests {
 
     use crate::{
+
         init_env_logger,
         shared::{models::UserProfile, utility::get_id},
     };
@@ -276,13 +278,16 @@ mod tests {
     use bcrypt::{hash, DEFAULT_COST};
     use log::trace;
     #[tokio::test]
+
     async fn test_e2e() {
-        let context = RequestEnvironmentContext::create(true);
+         let context = RequestEnvironmentContext::create(true);
+
+         let user_db = UserDb::new(&context).await;
+       
 
         init_env_logger().await;
 
         // create the database -- note this will DELETE the database as well
-        let user_db = UserDb::new(&context).await;
         match user_db.setupdb().await {
             Ok(..) => trace!("created test db and collection"),
             Err(e) => panic!("failed to setup database and collection {}", e),

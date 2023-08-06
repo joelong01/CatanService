@@ -9,9 +9,12 @@ use reqwest::{
 use serde::Serialize;
 use url::Url;
 
-use crate::games_service::{game_container::game_messages::GameHeaders, shared::game_enums::CatanGames};
+use crate::games_service::{
+    game_container::game_messages::{GameHeaders, Invitation, InvitationResponseData},
+    shared::game_enums::CatanGames,
+};
 
-use super::models::UserProfile;
+use super::models::{ClientUser, UserProfile};
 
 pub struct ServiceProxy {
     pub client: Client,
@@ -93,11 +96,11 @@ impl ServiceProxy {
         self.post::<()>(url, headers, None)
     }
 
-    pub fn register<'a>(
+    pub async fn register(
         &self,
-        profile: &'a UserProfile,
-        password: &'a str,
-    ) -> impl Future<Output = Result<Response, reqwest::Error>> + 'a {
+        profile: &UserProfile,
+        password: &str,
+    ) -> ClientUser {
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
         if self.is_test {
             headers.insert(
@@ -111,7 +114,15 @@ impl ServiceProxy {
         );
 
         let url = "/api/v1/users/register";
-        self.post::<&UserProfile>(url, headers, Some(profile))
+        let client_user: ClientUser = self
+            .post::<&UserProfile>(url, headers, Some(profile))
+            .await
+            .expect("test users always have profiles")
+            .json()
+            .await.
+            expect("ClientUsers should deserialize");
+        
+        client_user
     }
 
     pub fn login(
@@ -136,6 +147,28 @@ impl ServiceProxy {
         );
         let url = "/api/v1/users/login";
         self.post::<()>(url, headers, None)
+    }
+
+    pub async fn get_authtoken(
+        &self,
+        username: &str,
+        password: &str,
+    ) -> Result<String, reqwest::Error> {
+        let response = self.login(username, password).await;
+
+        let response = match response {
+            Ok(r) => r,
+            Err(e) => {
+                panic!("error loggin in user: {}, err: {:#?}", username, e)
+            }
+        };
+
+        let body = response.text().await.unwrap();
+        let service_response: super::models::ServiceResponse = serde_json::from_str(&body).unwrap();
+
+        // Extract auth token from response
+        let auth_token = service_response.body;
+        Ok(auth_token)
     }
 
     pub fn get_profile(
@@ -165,7 +198,6 @@ impl ServiceProxy {
     ) -> impl Future<Output = Result<Response, reqwest::Error>> {
         let url = format!("auth/api/v1/games/{:?}", game_type);
 
-        
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
         if self.is_test {
             headers.insert(
@@ -220,9 +252,60 @@ impl ServiceProxy {
         );
         headers.insert(
             HeaderName::from_static(GameHeaders::GAME_ID),
-            HeaderValue::from_str(game_id).expect("Invalid header value")
+            HeaderValue::from_str(game_id).expect("Invalid header value"),
         );
 
         self.get(url, headers)
+    }
+
+    pub fn send_invite<'a>(
+        &self,
+        invite: &'a Invitation,
+        auth_token: &'a str,
+    ) -> impl Future<Output = Result<Response, reqwest::Error>> + 'a {
+        let url = "/auth/api/v1/lobby/invite";
+
+        let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
+        if self.is_test {
+            headers.insert(
+                HeaderName::from_static(GameHeaders::IS_TEST),
+                HeaderValue::from_static("true"),
+            );
+        }
+        headers.insert(
+            reqwest::header::AUTHORIZATION,
+            HeaderValue::from_str(auth_token).expect("Invalid header value"),
+        );
+        headers.insert(
+            reqwest::header::CONTENT_TYPE,
+            HeaderValue::from_str("application/json").expect("that should be non-controversial"),
+        );
+
+        self.post::<&Invitation>(&url, headers, Some(invite))
+    }
+    pub fn invitation_response<'a>(
+        &self,
+        invite: &'a InvitationResponseData,
+        auth_token: &'a str,
+    ) -> impl Future<Output = Result<Response, reqwest::Error>> + 'a {
+        let url = "/auth/api/v1/lobby/acceptinvite";
+
+        let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
+        if self.is_test {
+            headers.insert(
+                HeaderName::from_static(GameHeaders::IS_TEST),
+                HeaderValue::from_static("true"),
+            );
+        }
+        headers.insert(
+            reqwest::header::AUTHORIZATION,
+            HeaderValue::from_str(auth_token).expect("Invalid header value"),
+        );
+        headers.insert(
+            reqwest::header::CONTENT_TYPE,
+            HeaderValue::from_str("application/json").expect("that should be non-controversial"),
+        );
+
+        self.post::<&InvitationResponseData>(&url, headers, Some(invite))
     }
 }

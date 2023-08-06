@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 
 use crate::games_service::catan_games::games::regular::regular_game::RegularGame;
@@ -7,9 +9,9 @@ use crate::games_service::catan_games::games::regular::regular_game::RegularGame
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Invitation {
-    pub from_id: String,
-    pub to_id: String,
-    pub from_name: String,
+    pub originator_id: String,
+    pub recipient_id: String,
+    pub originator_name: String,
     pub message: String,
     pub picture_url: String,
     pub game_id: String,
@@ -33,10 +35,36 @@ impl GameHeaders {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct InviteAccepted {
-    pub user_id: String,
+pub struct InvitationResponseData {
+    pub originator_id: String,
+    pub recipient_id: String,
     pub game_id: String,
+    pub player_ids: Vec<String>,
+    pub accepted: bool
 }
+impl InvitationResponseData {
+    pub fn new(originator: &str, recipient: &str,  accepted: bool, game_id: &str, players: Vec<String>)->Self {
+        Self {
+            accepted,
+            recipient_id: recipient.into(),
+            originator_id: originator.into(),
+            game_id: game_id.into(), // Fixed from `game_id.info()`, which seemed incorrect
+            player_ids: players
+        }
+    }
+    pub fn from_invitation(accepted: bool, invite: &Invitation) -> Self {
+        let players = vec![invite.recipient_id.clone(), invite.originator_id.clone()];
+        Self {
+            originator_id: invite.originator_id.clone(),
+            recipient_id: invite.recipient_id.clone(),
+            game_id: invite.game_id.clone(),
+            player_ids:players,
+            accepted: accepted
+        }
+    }
+}
+
+
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -52,14 +80,31 @@ pub struct ErrorData {
     pub message: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum CatanMessage {
     GameUpdate(RegularGame),
     Invite(Invitation),
-    Error(ErrorData),
-    InviteAccepted(InviteAccepted),
+    InvitationResponse(InvitationResponseData),
     GameCreated(GameCreatedData),
+    PlayerAdded(Vec<String>),
+    Started(String),
+    Ended(String),
+    Error(ErrorData),
+}
+impl fmt::Debug for CatanMessage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CatanMessage::GameUpdate(game) => write!(f, "GameUpdate: {:?}", game),
+            CatanMessage::Invite(invitation) => write!(f, "Invite: {:?}", invitation),
+            CatanMessage::InvitationResponse(response) => write!(f, "InvitationResponse: {:?}", response),
+            CatanMessage::GameCreated(data) => write!(f, "GameCreated: {:?}", data),
+            CatanMessage::PlayerAdded(players) => write!(f, "PlayerAdded: {:?}", players),
+            CatanMessage::Started(started) => write!(f, "Started: {}", started),
+            CatanMessage::Ended(ended) => write!(f, "Ended: {}", ended),
+            CatanMessage::Error(error) => write!(f, "Error: {:?}", error),
+        }
+    }
 }
 
 #[macro_export]

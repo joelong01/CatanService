@@ -1,8 +1,19 @@
 #[cfg(test)]
-mod test {
+pub mod test {
     #![allow(unused_imports)]
     #![allow(dead_code)]
-    use crate::{games_service::shared::game_enums::CatanGames, shared::proxy::ServiceProxy};
+    #![allow(unused_variables)]
+    use crate::{
+        games_service::shared::game_enums::CatanGames,
+        shared::proxy::ServiceProxy,
+        test::{
+            client0::Handler0,
+            client1::Handler1,
+            client2::Handler2,
+            polling_thread::{self, polling_thread},
+            test_structs::{ClientData, ClientThreadHandler, HOST_URL},
+        }, wait_for_message,
+    };
     use std::{
         os::unix::thread,
         sync::Arc,
@@ -31,42 +42,15 @@ mod test {
     use reqwest::{Client, StatusCode};
     use serde::{Deserialize, Serialize};
     use serde_json::json;
-    use serial_test::serial;
     use std::io;
     use tokio::{
         sync::{
-            mpsc::{Receiver, Sender},
+            mpsc::{Receiver, Sender, self},
             Barrier, RwLock,
         },
         time::sleep,
     };
-
-    const HOST_NAME: &str = "http://localhost:8082";
-    const HOST_URL: &str = "localhost:8082";
-
-    #[derive(Clone, Serialize, Deserialize, Eq, PartialEq)]
-    struct UserInfo {
-        auth_token: String,
-        user_profile: UserProfile,
-        client_id: String,
-    }
-
-    #[derive(Clone)]
-    struct ClientData {
-        pub auth_token: String,
-        pub user_profile: UserProfile,
-        pub client_id: String,
-    }
-
-    impl ClientData {
-        fn new(client_id: &str, user_profile: &UserProfile, auth_token: &str) -> Self {
-            Self {
-                auth_token: auth_token.to_string(),
-                user_profile: user_profile.clone(),
-                client_id: client_id.to_string(),
-            }
-        }
-    }
+    use url::Url;
 
     #[actix_rt::test]
     async fn full_game_test() {
@@ -82,38 +66,46 @@ mod test {
 
         //
         //  setup the test database
-
-        let proxy = ServiceProxy::new(true, HOST_NAME);
+        thread_info!("test_thread", "setting up service");
+        let proxy = ServiceProxy::new(true, HOST_URL);
         let response = proxy.setup().await.unwrap();
         assert!(response.status().is_success(), "error: {:#?}", response);
 
         //
         //  create new users to play our game
         const CLIENT_COUNT: &'static usize = &3;
-        let simulated_clients: Vec<ClientData> = create_users(*CLIENT_COUNT).await;
+        thread_info!("test_thread", "creating users");
+        let test_users: Vec<ClientUser> = register_test_users(*CLIENT_COUNT).await;
+        assert_eq!(test_users.len(), *CLIENT_COUNT);
+        //
+        //  these are the handlers for clients0, clients1, and clients2
+        let handlers: Vec<Box<dyn ClientThreadHandler + Send + Sync>> =
+            vec![Box::new(Handler0), Box::new(Handler1), Box::new(Handler2)];
 
-        // some synchronization structs
+        // the handles to the client threads we are creating -- when all the client threads 
+        // return, this main test thread will complete and we'll see if we passed or not
         let mut handles = Vec::new();
-        let init_barrier = Arc::new(Barrier::new(*CLIENT_COUNT + 1));
+
         //
         //  create the client
-        for i in 0..*CLIENT_COUNT {
-            let barrier = Arc::clone(&init_barrier);
-            let (tx, rx) = tokio::sync::mpsc::channel::<CatanMessage>(32); // Buffer size of 32
-            let mut cloned_clients = simulated_clients.clone();
+        for (i, handler) in handlers.into_iter().enumerate() {
+            thread_info!("test_thread", "creating clients: {}", i);
+ 
+            let (tx, rx) = mpsc::channel::<CatanMessage>(32);
+            let username = test_users[i].user_profile.email.clone();
+            thread_info!("test_thread", "starting polling thread for {}", username.clone());
+            let _ = tokio::spawn(async move {
+                polling_thread::polling_thread(&username, tx).await;
+            });
+
             let handle = tokio::spawn(async move {
-                barrier.wait().await;
-                client_thread(i, &mut cloned_clients, tx, rx).await;
+                handler.run(rx).await;
             });
             handles.push(handle);
         }
-        thread_info!("test_thread", "test_thread: waiting for init_barrier");
-        init_barrier.wait().await;
-        thread_info!("test_thread", "test_thread: past init_barrier");
 
-        thread_info!("test_thread", "test_thread: waiting for client_threads");
         let handles: FuturesUnordered<_> = handles.into_iter().collect();
-
+        thread_info!("test_thread", "test_thread: waiting for client_threads");
         handles
             .for_each_concurrent(None, |result| async move {
                 match result {
@@ -142,7 +134,12 @@ mod test {
     }
     async fn start_server() -> io::Result<()> {
         init_env_logger().await;
-        let server = HttpServer::new(move || create_app!()).bind(HOST_URL)?.run();
+        let url = Url::parse(HOST_URL).expect("Global test URL should always parse");
+        let host = url.host_str().expect("URL better have a host...");
+        let port = url.port().expect("port needs to be set");
+        let server = HttpServer::new(move || create_app!())
+            .bind(format!("{}:{}", host, port))?
+            .run();
 
         // Spawn the server's future on a new task
         tokio::spawn(async move {
@@ -181,84 +178,19 @@ mod test {
         }
     }
 
-    async fn polling_thread(
-        name: &str,
-        auth_token: &str,
-        barrier: &Barrier,
-        tx: tokio::sync::mpsc::Sender<CatanMessage>,
-    ) {
-        let proxy = ServiceProxy::new(true, HOST_NAME);
-        // Create the client inside the spawned task
-
-        thread_info!(name, "polling thread started, waiting on barrier");
-        barrier.wait().await;
-        thread_info!(name, "Barrier Clear");
-
-        let mut game_id = "".to_string();
-        loop {
-            thread_info!(name, "Begin poll. GameId: {}", game_id);
-
-            let response = proxy.long_poll(&game_id, auth_token).await.unwrap();
-            assert!(
-                response.status().is_success(),
-                "error coming back from long_poll {:#?}",
-                response
-            );
-
-            thread_info!(name, "poll returned. GameId: {}", game_id);
-            let message: CatanMessage = response.json().await.unwrap();
-
-            let message_clone = message.clone();
-            match message_clone {
-                CatanMessage::GameUpdate(regular_game) => {
-                    let game = regular_game.clone();
-                    full_info!("players: {:#?}", game.players);
-                    if game.state_data.state() == GameState::GameOver {
-                        break;
-                    }
-                }
-                CatanMessage::Invite(invite_data) => {
-                    thread_info!(name, "pulled invitation: {:#?}", invite_data);
-                }
-                CatanMessage::InviteAccepted(accept_message) => {
-                    game_id = accept_message.game_id.to_owned(); // need the game_id to switch to different queue
-                    thread_info!(
-                        name,
-                        "pulled InviteAccepted.  game_id: {:#?}",
-                        game_id.clone()
-                    );
-                }
-                CatanMessage::Error(error_data) => {
-                    thread_info!(name, "pulled an error!: {:#?}", error_data);
-                    assert!(false, "error returned:  {:#?}", error_data);
-                    break;
-                }
-                CatanMessage::GameCreated(msg) => {
-                    thread_info!(name, "pulled an GameCreated: {:#?}", msg);
-                    game_id = msg.game_id.to_owned(); // need the game_id to switch to different queue
-                }
-            }
-
-            thread_info!(name, "sending message: {:#?}", message);
-            if let Err(e) = tx.send(message.clone()).await {
-                thread_info!(name, "Failed to send message: {}", e);
-            }
-        }
-    }
-
-    async fn create_users(count: usize) -> Vec<ClientData> {
-        let mut simulated_clients: Vec<ClientData> = Vec::new();
-        let proxy = ServiceProxy::new(true, HOST_NAME);
+    async fn register_test_users(count: usize) -> Vec<ClientUser> {
+        let mut test_users: Vec<ClientUser> = Vec::new();
+        let proxy = ServiceProxy::new(true, HOST_URL);
         let first_names = vec!["Joe", "James", "Doug"];
         let last_names = vec!["Winner", "Loser", "Longestroad"];
         let email_names = vec![
             "joe@longshotdev.com",
-            "dodgy@longshotdev.com",
+            "james@longshotdev.com",
             "doug@longshotdev.com",
         ];
         for i in 0..count {
             thread_info!("TestThread", "creating: {}", first_names[i].clone());
-            let password = "password";
+
             let user_profile = UserProfile {
                 email: email_names[i].into(),
                 first_name: first_names[i].into(),
@@ -271,94 +203,37 @@ mod test {
                 games_played: Some(0),
                 games_won: Some(0),
             };
-
-            let response = proxy.register(&user_profile, password).await.unwrap();
-            assert!(
-                response.status().is_success(),
-                "error registering user: {}, err: {:#?}",
-                user_profile.display_name,
-                response
-            );
-
-            let response = proxy.login(email_names[i], password).await;
-            let response = match response {
-                Ok(r) => r,
-                Err(e) => {
-                    panic!(
-                        "error loggin in user: {}, err: {:#?}",
-                        user_profile.display_name, e
-                    )
-                }
-            };
-            assert!(
-                response.status().is_success(),
-                "error loggin in user: {}, err: {:#?}",
-                user_profile.display_name,
-                response
-            );
-
-            let body = response.text().await.unwrap();
-            let service_response: ServiceResponse = serde_json::from_str(&body).unwrap();
-
-            // Extract auth token from response
-            let auth_token = service_response.body;
-
-            // get the profile
-            let response = proxy.get_profile(&auth_token).await.unwrap();
-            assert!(
-                response.status().is_success(),
-                "error loggin in user: {}, err: {:#?}",
-                user_profile.display_name,
-                response
-            );
-
-            let client_user: ClientUser = response.json().await.unwrap();
-
-            assert!(
-                client_user.user_profile.is_equal_byval(&user_profile),
-                "profile returned by service different than the one sent in"
-            );
-            let client = ClientData::new(&client_user.id, &client_user.user_profile, &auth_token);
-            simulated_clients.push(client);
+          
+            let client_user = proxy.register(&user_profile, "password").await;
+            test_users.push(client_user);
         }
 
-        simulated_clients
+        test_users
     }
 
     async fn client_thread(
         user_index: usize,
         clients: &mut Vec<ClientData>,
-        tx: Sender<CatanMessage>,
         mut rx: Receiver<CatanMessage>,
     ) {
         let my_info = clients[user_index].clone();
-        let my_info_for_closure = my_info.clone();
         let auth_token = my_info.auth_token.clone();
-        let local_barrier = Arc::new(Barrier::new(2));
-        let local_barrier_clone = local_barrier.clone();
         let name = my_info.user_profile.display_name.clone();
-        let client = reqwest::Client::new();
-        let proxy = ServiceProxy::new(true, HOST_NAME);
-        // spawn the long poller
-        let _ = tokio::spawn(async move {
-            local_barrier_clone.wait().await;
-            polling_thread(
-                &my_info_for_closure.user_profile.display_name.clone(),
-                &my_info_for_closure.auth_token,
-                &local_barrier_clone,
-                tx,
-            )
-            .await;
-        });
-        thread_info!(name, "Client thread. Waiting on Barrier");
+        let proxy = ServiceProxy::new(true, HOST_URL);
 
-        local_barrier.wait().await;
-        thread_info!(name, "Client thread. Cleared on Barrier");
+        thread_info!(name, "Waiting for 500ms");
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        thread_info!(
+            name,
+            "Client thread. Waiting on Start Message from poll thread"
+        );
+        let message = wait_for_message!(name, rx);
+
         let mut game_id = "".to_string();
 
         //
         //  in the browser app, the browser worker is up and running before the UI, so you don't
-        //  need to worry the issue of the main thread running before the polling threads. here 
+        //  need to worry the issue of the main thread running before the polling threads. here
         //  we do -- so we just go to sleep for a bit.
         thread_info!(name, "Sleeping for 1 second...");
         sleep(Duration::from_secs(1)).await;
@@ -378,11 +253,7 @@ mod test {
                 my_info.user_profile.display_name,
                 response
             );
-            thread_info!(name, "New Game created.  Waiting for message.");
-            let message = rx
-                .recv()
-                .await
-                .unwrap_or_else(|| panic!("failed to receive message"));
+            let message = wait_for_message!(name, rx);
 
             game_id = match message {
                 CatanMessage::GameUpdate(_) => {
@@ -391,7 +262,7 @@ mod test {
                 CatanMessage::Invite(_) => {
                     panic!("wrong message received. expected GameUpdate, got Invite");
                 }
-                CatanMessage::InviteAccepted(_) => {
+                CatanMessage::InvitationResponse(_) => {
                     panic!("wrong message received. expected GameUpdate, got InviteAccepted");
                 }
                 CatanMessage::Error(_) => {
@@ -405,6 +276,9 @@ mod test {
                     );
                     msg.game_id
                 }
+                CatanMessage::Started(_) => todo!(),
+                CatanMessage::Ended(_) => todo!(),
+                CatanMessage::PlayerAdded(_) => todo!(),
             };
             assert!(game_id != "");
 
@@ -423,57 +297,46 @@ mod test {
             thread_info!(name, "get_lobby returned: {:#?}", lobby);
             assert!(lobby.len() == 2); // there should be two people waiting in the lobby
 
-            for i in 1..clients.len() - 2 {
+            for user_id in lobby {
                 let my_clone = my_info.clone();
                 let profile = my_clone.user_profile;
 
                 let invite_message = "Join my game!".to_string();
-                let invitation_to_user1 = Invitation {
-                    from_id: my_clone.client_id.clone(),
-                    to_id: clients[i].client_id.clone(),
-                    from_name: profile.display_name.clone(),
+                let invitation = Invitation {
+                    originator_id: my_clone.client_id.clone(),
+                    recipient_id: user_id.clone(),
+                    originator_name: profile.display_name.clone(),
                     message: invite_message.clone(),
                     picture_url: profile.picture_url.clone(),
                     game_id: game_id.to_owned(),
                 };
-
-                let url = "http://127.0.0.1:8082/auth/api/v1/lobby/invite"; // Adjust the URL as needed
                 thread_info!(name, "Sending GameInvite");
-                let response = client
-                    .post(url)
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .header(GameHeaders::IS_TEST, "true")
-                    .header("Authorization", my_clone.auth_token.clone())
-                    .json(&invitation_to_user1)
-                    .send()
-                    .await
-                    .unwrap();
-
-                assert_eq!(response.status(), 200);
+                let response = proxy.send_invite(&invitation, &auth_token).await.unwrap();
+                assert!(
+                    response.status().is_success(),
+                    "error loggin in user: {}, err: {:#?}",
+                    my_info.user_profile.display_name,
+                    response
+                );
             }
         } else {
             // end first user creates game an invites everybody
-            thread_info!(name, "waiting for invite message");
-            let message = rx
-                .recv()
-                .await
-                .unwrap_or_else(|| panic!("failed to receive message"));
-            thread_info!(name, "recieved message");
+            let message = wait_for_message!(name, rx);
             let invitation = match message {
                 CatanMessage::Invite(invitation) => {
-                    assert_eq!(invitation.game_id, game_id);
+                    //    assert_eq!(invitation.game_id, game_id);
                     thread_info!(
                         name,
                         "recieved invitation for game_id: {} from: {}",
                         invitation.game_id,
-                        invitation.from_name.clone()
+                        invitation.originator_name.clone()
                     );
                     invitation // return the invitation if the variant is Invite
                 }
                 CatanMessage::GameUpdate(_) => {
                     panic!("wrong message received"); // you can use panic! or assert! as per your requirement
                 }
-                CatanMessage::InviteAccepted(_) => {
+                CatanMessage::InvitationResponse(_) => {
                     panic!("wrong message received. expected GameUpdate, got InviteAccepted");
                 }
                 CatanMessage::Error(_) => {
@@ -482,11 +345,50 @@ mod test {
                 CatanMessage::GameCreated(_) => {
                     panic!("got GameCreated msg");
                 }
+                CatanMessage::Started(_) => todo!(),
+                CatanMessage::Ended(_) => todo!(),
+                CatanMessage::PlayerAdded(_) => todo!(),
             };
 
             assert_eq!(invitation.game_id, game_id);
         }
 
+        let message = wait_for_message!(name, rx);
         // next we start the game
     }
+
+    // async fn game_thread_message_loop(
+    //     name: &str,
+    //     auth_token: &str,
+    //     client_id: &str,
+    //     mut rx: Receiver<CatanMessage>,
+    // ) {
+    //     let proxy = ServiceProxy::new(true, HOST_URL);
+    //     loop {
+    //         let message = wait_for_message!(name, rx);
+    //         match message {
+    //             CatanMessage::GameUpdate(_) => todo!(),
+    //             CatanMessage::Invite(invitation) => {
+    //                 thread_info!(
+    //                     "name",
+    //                     "Invitation received from {}",
+    //                     invitation.originator_name
+    //                 );
+    //                 // respond to invite
+    //                 let response = proxy.invitation_response(&invitation, auth_token).await.unwrap();
+    //                 assert!(response.status().is_success(), "error: {:#?}", response);
+    //             }
+    //             CatanMessage::Error(e) => {
+    //                 panic!("Error message received: {:#?}", e);
+    //             }
+    //             CatanMessage::InvitationResponse(_) => todo!(),
+    //             CatanMessage::GameCreated(_) => todo!(),
+    //             CatanMessage::Started(_) => todo!(),
+    //             CatanMessage::Ended(_) => {
+    //                 break;
+    //             }
+    //             CatanMessage::PlayerAdded(_) => todo!(),
+    //         }
+    //     }
+    // }
 }

@@ -3,13 +3,11 @@
 use scopeguard::defer;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{broadcast, oneshot, RwLock};
+use tokio::sync::{oneshot, RwLock};
 
 use crate::{
     full_info,
-    games_service::game_container::game_messages::{
-        CatanMessage, ErrorData, GameCreatedData, Invitation,
-    },
+    games_service::game_container::game_messages::{CatanMessage, ErrorData, GameCreatedData},
 };
 
 lazy_static::lazy_static! {
@@ -34,13 +32,13 @@ impl LobbyVisitor {
 
 pub struct Lobby {
     visitors: HashMap<String, LobbyVisitor>,
-    notify: broadcast::Sender<CatanMessage>,
+    notify: oneshot::Sender<CatanMessage>,
 }
 
 impl Lobby {
     /// Create a new Lobby
     pub fn new() -> Self {
-        let (tx, _) = broadcast::channel(1000);
+        let (tx, _) = oneshot::channel();
         Self {
             visitors: HashMap::new(),
             notify: tx,
@@ -68,31 +66,22 @@ impl Lobby {
         lobby.visitors.keys().cloned().collect()
     }
     //
-    //  when a game is created, we pull them from the lobby and send a GameCreated message
+    //  send a message to the lobby waiter that a game has been created.  the client should get this and use
+    //  the game_id to wait in the GameContainer
     pub async fn game_created(game_id: &str, user_id: &str) -> Result<(), String> {
         let msg = GameCreatedData {
             user_id: user_id.to_owned(),
             game_id: game_id.to_owned(),
         };
-        let lobby = LOBBY.read().await;
-        if let Some(visitor) = lobby.visitors.get(user_id) {
-            let mut notify = visitor.notify.write().await;
-            if let Some(tx) = notify.take() {
-                tx.send(CatanMessage::GameCreated(msg)).unwrap_or_else(|_| {
-                    println!("Failed to send the GameCreated message");
-                });
-                Ok(())
-            } else {
-                Err("No notification channel found for the user".into())
-            }
-        } else {
-            Err("User not found in the lobby".into())
+        match Lobby::send_message(user_id, &CatanMessage::GameCreated(msg)).await {
+            Ok(_) => Ok(()),
+            Err(e) => Err(format!("failed to send message in game_created {:?}", e)),
         }
     }
     /// Awaits for an invitation message.
-    pub async fn wait_for_invite(user_id: &str) -> CatanMessage {
-        full_info!("long poll wait_for_invite");
-        defer! {full_info!("leaving wait_for_invite");}
+    pub async fn wait_in_lobby(user_id: &str) -> CatanMessage {
+        full_info!("wait_in_lobby {}", user_id);
+        defer! {full_info!("leaving wait_in_lobby {}", user_id);}
         let ro_lobby = LOBBY.read().await;
         if let Some(visitor) = ro_lobby.visitors.get(user_id) {
             let (tx, rx) = oneshot::channel();
@@ -100,12 +89,16 @@ impl Lobby {
             *rw_notify = Some(tx);
             drop(rw_notify);
             drop(ro_lobby);
-            match rx.await {
+            let res = rx.await;
+            match res {
                 Ok(msg) => msg,
-                Err(_) => CatanMessage::Error(ErrorData {
-                    status_code: 500,
-                    message: "Oneshot channel was dropped".to_string(),
-                }),
+                Err(e) => {
+                    full_info!("ERROR: in rx.await: {:#?}", e);
+                    CatanMessage::Error(ErrorData {
+                        status_code: 500,
+                        message: format!("err in rx.await: {:#?}", e),
+                    })
+                }
             }
         } else {
             CatanMessage::Error(ErrorData {
@@ -115,17 +108,19 @@ impl Lobby {
         }
     }
 
-    /// Sends an invitation and notifies the recipient via the one-shot channel.
-    pub async fn send_invite(invitation: &Invitation) -> Result<(), String> {
+    pub async fn send_message(to_id: &str, message: &CatanMessage) -> Result<(), String> {
+        full_info!("Lobby::send_message: {:?}", message);
         let lobby = LOBBY.read().await;
-        if let Some(visitor) = lobby.visitors.get(&invitation.to_id) {
+        if let Some(visitor) = lobby.visitors.get(to_id) {
             let mut notify = visitor.notify.write().await;
             if let Some(tx) = notify.take() {
-                tx.send(CatanMessage::Invite(invitation.clone()))
-                    .unwrap_or_else(|_| {
-                        println!("Failed to send the invite");
-                    });
-                Ok(())
+                match tx.send(message.clone()) {
+                    Ok(_) => Ok(()), // Returns Ok(()) in case of successful message sending
+                    Err(e) => {
+                        full_info!("Failed to send the message: {:#?}", e);
+                        Err("Failed to send the message".into()) // Returns Err(...) in case of failure
+                    }
+                }
             } else {
                 Err("No notification channel found for the user".into())
             }
@@ -162,9 +157,9 @@ mod tests {
             full_info!("first thread started.  calling barrier_clone().wait().await");
             barrier_clone.wait().await; // barrier at 3
             loop {
-                match Lobby::wait_for_invite("user1").await {
+                match Lobby::wait_in_lobby("user1").await {
                     CatanMessage::Invite(invite_data) => {
-                        if invite_data.from_id == "user3" {
+                        if invite_data.originator_id == "user3" {
                             break CatanMessage::Invite(invite_data);
                         }
                     }
@@ -178,9 +173,9 @@ mod tests {
             full_info!("second thread started.  calling barrier_clone().wait().await");
             barrier_clone.wait().await; // barrier at 2
             loop {
-                match Lobby::wait_for_invite("user2").await {
+                match Lobby::wait_in_lobby("user2").await {
                     CatanMessage::Invite(invite_data) => {
-                        if invite_data.from_id == "user3" {
+                        if invite_data.originator_id == "user3" {
                             break CatanMessage::Invite(invite_data);
                         }
                     }
@@ -192,38 +187,48 @@ mod tests {
         full_info!("first wait on main thread");
         barrier.wait().await; // Wait for the main task
         full_info!("through the barrier");
-
+        const USER1_ID: &str = "user1";
+        const USER2_ID: &str = "user2";
+        const USER3_ID: &str = "user3";
         let invitation_to_user1 = Invitation {
-            from_id: "user3".to_string(),
-            to_id: "user1".to_string(),
-            from_name: "User3".to_string(),
+            originator_id: USER3_ID.to_string(),
+            recipient_id: USER1_ID.to_string(),
+            originator_name: "User3".to_string(),
             message: message.clone(),
             picture_url: picture_url.clone(),
             game_id: "TODO!".to_owned(),
         };
         let invitation_to_user2 = Invitation {
-            from_id: "user3".to_string(),
-            to_id: "user2".to_string(),
-            from_name: "User3".to_string(),
+            originator_id: USER3_ID.to_string(),
+            recipient_id: USER2_ID.to_string(),
+            originator_name: "User3".to_string(),
             message: message.clone(),
             picture_url: picture_url.clone(),
             game_id: "TODO!".to_owned(),
         };
 
-        Lobby::send_invite(&invitation_to_user1).await.unwrap();
-        Lobby::send_invite(&invitation_to_user2).await.unwrap(); // Simulate success
+        Lobby::send_message(USER1_ID, &CatanMessage::Invite(invitation_to_user1.clone()))
+            .await
+            .unwrap();
+        Lobby::send_message(USER2_ID, &CatanMessage::Invite(invitation_to_user2.clone()))
+            .await
+            .unwrap(); // Simulate success
 
         let negative_test_invite = Invitation {
-            from_id: "user30".to_string(),
-            to_id: "user20".to_string(),
-            from_name: "User3".to_string(),
+            originator_id: "user30".to_string(),
+            recipient_id: "user20".to_string(),
+            originator_name: "User3".to_string(),
             message: message.clone(),
             picture_url: picture_url.clone(),
             game_id: "TODO!".to_owned(),
         };
 
         // send an invite to a non-existing user
-        assert!(!Lobby::send_invite(&negative_test_invite).await.is_ok()); //
+        assert!(
+            !Lobby::send_message("user30", &CatanMessage::Invite(negative_test_invite))
+                .await
+                .is_ok()
+        ); //
 
         let user1_result = user1_wait.await.unwrap();
         assert_eq!(user1_result, CatanMessage::Invite(invitation_to_user1));

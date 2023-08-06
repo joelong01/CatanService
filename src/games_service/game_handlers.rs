@@ -38,8 +38,8 @@ pub async fn shuffle_game(game_id_path: web::Path<String>, _req: HttpRequest) ->
                     .json(game),
                 Err(e) => create_http_response(
                     StatusCode::InternalServerError,
-                    format!("GameContainer::push_game error: {:#?}", e),
-                    "".to_owned(),
+                    &format!("GameContainer::push_game error: {:#?}", e),
+                    "",
                 ),
             }
         }
@@ -81,20 +81,21 @@ pub async fn new_game(
     if game_type != CatanGames::Regular {
         return create_http_response(
             StatusCode::BadRequest,
-            format!("Game not supported: {:#?}", game_type),
-            "".to_owned(),
+            &format!("Game not supported: {:#?}", game_type),
+            "",
         );
     }
 
-    let user_result = internal_find_user("id", user_id, &data).await;
+    let is_test = req.headers().contains_key(GameHeaders::IS_TEST);
+    let user_result = internal_find_user("id", user_id, is_test, &data).await;
 
     let user = match user_result {
         Ok(u) => u,
         Err(_) => {
             return create_http_response(
                 StatusCode::NotFound,
-                format!("invalid user id: {}", user_id),
-                "".to_owned(),
+                &format!("invalid user id: {}", user_id),
+                "",
             );
         }
     };
@@ -111,12 +112,10 @@ pub async fn new_game(
         full_info!("insert_container returned an error.  no listenrs!");
     }
 
+
+    let _ = Lobby::game_created(&game.id, user_id).await;
     //
     //  pull the user from the lobby
-    full_info!("new_game: game_created");
-    let _ = Lobby::game_created(&game.id, user_id).await;
-
-    full_info!("new_game: start leave_lobby");
     Lobby::leave_lobby(user_id).await;
 
     HttpResponse::Ok()
@@ -131,4 +130,21 @@ pub async fn supported_games() -> impl Responder {
     HttpResponse::Ok()
         .content_type("application/json")
         .json(games)
+}
+/**
+ *  called by a client when they know a game_id they want to join to.
+ *  if you don't know a game_id, call new_game and then add players to it.
+ *  players get game_id's by getting and accepting invitations
+ */
+pub async fn join_game(game_id_path: web::Path<String>, req: HttpRequest) -> impl Responder {
+    let game_id: &str = &game_id_path;
+    let user_id = req
+        .headers()
+        .get(GameHeaders::USER_ID)
+        .unwrap()
+        .to_str()
+        .unwrap();
+    Lobby::leave_lobby(user_id).await;
+    GameContainer::add_player(game_id.into(), user_id.into()).await;
+    create_http_response(StatusCode::Ok, "", "")
 }

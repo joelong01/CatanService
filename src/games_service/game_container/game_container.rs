@@ -87,18 +87,25 @@ impl GameContainer {
         message
     }
 
-    pub async fn add_player(game_id: &String, user_id: String) {
-        let game_container = Self::get_locked_container(game_id).await.unwrap();
+    
+/**
+ *  add a player to a game.  takes a write lock and writes a PlayerAdded message to the long poller.  while we have a
+ *  game we could return (which has the players), at this point, I thin the UI would be a "Create Game" UI where invites
+ *  have been sent out and the UI reflects updates based on Accept/Reject
+ */
+    pub async fn add_player(game_id: &str, user_id: &str) {
+        let game_id = game_id.to_owned();
+        let game_container = Self::get_locked_container(&game_id).await.unwrap();
         let mut rw_game_container = game_container.write().await;
-        rw_game_container.user_ids.push(user_id);
-        let _ = rw_game_container
-            .notify
-            .send(game_update_message!(rw_game_container
-                .undo_stack
-                .last()
-                .unwrap()
-                .clone()));
+        rw_game_container.user_ids.push(user_id.to_owned());
+        let player_ids = rw_game_container.user_ids.clone(); // Clone the underlying Vec<String>
+         let tx = rw_game_container.notify.clone();
+        drop(rw_game_container);
+        drop(game_container);
+        let _ = tx.send(CatanMessage::PlayerAdded(*player_ids)).unwrap();
+               
     }
+    
 
     pub async fn undo(game_id: &String) {
         let game_container = Self::get_locked_container(game_id).await.unwrap();
@@ -169,7 +176,7 @@ pub async fn long_poll_handler(req: HttpRequest) -> HttpResponse {
                     .unwrap()
                     .to_str()
                     .unwrap();
-                Lobby::wait_for_invite(user_id).await
+                Lobby::wait_in_lobby(user_id).await
             } else {
                 GameContainer::wait_for_change(game_id.to_owned()).await
             }
@@ -181,7 +188,7 @@ pub async fn long_poll_handler(req: HttpRequest) -> HttpResponse {
                 .unwrap()
                 .to_str()
                 .unwrap();
-            Lobby::wait_for_invite(user_id).await
+            Lobby::wait_in_lobby(user_id).await
         }
     };
 

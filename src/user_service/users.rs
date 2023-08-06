@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+#![allow(unused_variables)]
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -6,6 +8,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
  * a User document in CosmosDb
  */
 use crate::cosmos_db::cosmosdb::UserDb;
+use crate::cosmos_db::mocked_db::TestDb;
 use crate::games_service::game_container::game_messages::GameHeaders;
 use crate::games_service::lobby::lobby::Lobby;
 use crate::middleware::environment_mw::{ServiceEnvironmentContext, CATAN_ENV};
@@ -37,18 +40,18 @@ pub async fn setup(data: Data<ServiceEnvironmentContext>) -> HttpResponse {
     if !request_context.is_test {
         return create_http_response(
             StatusCode::Unauthorized,
-            format!("setup is only available when the test header is set."),
-            "".to_owned(),
+            &format!("setup is only available when the test header is set."),
+            "",
         );
     }
     if DB_SETUP.load(Ordering::Relaxed) {
         return create_http_response(
             StatusCode::Accepted,
-            format!(
+            &format!(
                 "database: {} container: {} already exists",
                 request_context.database_name, request_context.env.container_name
             ),
-            "".to_owned(),
+            "",
         );
     }
 
@@ -57,31 +60,30 @@ pub async fn setup(data: Data<ServiceEnvironmentContext>) -> HttpResponse {
     if DB_SETUP.load(Ordering::Relaxed) {
         return create_http_response(
             StatusCode::Accepted,
-            format!(
+            &format!(
                 "database: {} container: {} already exists",
                 request_context.database_name, request_context.env.container_name
             ),
-            "".to_owned(),
+            "",
         );
     }
 
-    let userdb = UserDb::new(&request_context).await;
-    match userdb.setupdb().await {
+    match TestDb::setupdb().await {
         Ok(..) => {
             DB_SETUP.store(true, Ordering::Relaxed);
             create_http_response(
                 StatusCode::Created,
-                format!(
+                &format!(
                     "database: {} container: {} created",
                     request_context.database_name, request_context.env.container_name
                 ),
-                "".to_owned(),
+                "",
             )
         }
         Err(err) => create_http_response(
             StatusCode::BadRequest,
-            format!("Failed to create database/collection: {}", err),
-            "".to_owned(),
+            &format!("Failed to create database/collection: {}", err),
+            "",
         ),
     }
 }
@@ -105,6 +107,7 @@ pub async fn register(
     data: Data<ServiceEnvironmentContext>,
     req: HttpRequest,
 ) -> HttpResponse {
+    let is_test = req.headers().contains_key(GameHeaders::IS_TEST);
     // Retrieve the password value from the "X-Password" header
     let password_value: String = match req.headers().get(GameHeaders::PASSWORD) {
         Some(header_value) => match header_value.to_str() {
@@ -112,29 +115,27 @@ pub async fn register(
             Err(e) => {
                 return create_http_response(
                     StatusCode::BadRequest,
-                    format!("X-Password header is set, but the value is not. Err: {}", e),
-                    "".to_owned(),
+                    &format!("X-Password header is set, but the value is not. Err: {}", e),
+                    "",
                 )
             }
         },
         None => {
             return create_http_response(
                 StatusCode::BadRequest,
-                format!("X-Password header not set"),
-                "".to_owned(),
+                &format!("X-Password header not set"),
+                "",
             )
         }
     };
-
-    // Check if the user already exists
-    let user_result = internal_find_user("email", &profile_in.email, &data).await;
+    let user_result = internal_find_user("email", &profile_in.email, is_test, &data).await;
 
     match user_result {
         Ok(_) => {
             return create_http_response(
                 StatusCode::Conflict,
-                format!("User already registered: {}", profile_in.email),
-                "".to_owned(),
+                &format!("User already registered: {}", profile_in.email),
+                "",
             );
         }
         Err(_) => {
@@ -148,8 +149,8 @@ pub async fn register(
         Err(_) => {
             return create_http_response(
                 StatusCode::InternalServerError,
-                "Error hashing password".to_owned(),
-                "".to_owned(),
+                "Error hashing password",
+                "",
             );
         }
     };
@@ -160,22 +161,29 @@ pub async fn register(
     persist_user.user_profile.games_played = Some(0);
     persist_user.user_profile.games_won = Some(0);
     // Create the database connection
-    let request_context = data.context.lock().unwrap();
-    let userdb = UserDb::new(&request_context).await;
+    if !is_test {
+        let request_context = data.context.lock().unwrap();
+        let userdb = UserDb::new(&request_context).await;
 
-    // Save the user record to the database
-    match userdb.create_user(persist_user.clone()).await {
-        Ok(..) => {
-            persist_user.password_hash = None;
-            HttpResponse::Ok()
-                .content_type("application/json")
-                .json(ClientUser::from_persist_user(persist_user))
+        // Save the user record to the database
+        match userdb.create_user(persist_user.clone()).await {
+            Ok(..) => {
+                persist_user.password_hash = None;
+                HttpResponse::Ok()
+                    .content_type("application/json")
+                    .json(ClientUser::from_persist_user(persist_user))
+            }
+            Err(err) => create_http_response(
+                StatusCode::BadRequest,
+                &format!("Failed to add user to collection: {}", err),
+                "",
+            ),
         }
-        Err(err) => create_http_response(
-            StatusCode::BadRequest,
-            format!("Failed to add user to collection: {}", err),
-            "".to_owned(),
-        ),
+    } else {
+        TestDb::create_user(persist_user.clone()).await.unwrap();
+        HttpResponse::Ok()
+            .content_type("application/json")
+            .json(ClientUser::from_persist_user(persist_user))
     }
 }
 
@@ -193,20 +201,20 @@ pub async fn login(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> H
             Err(e) => {
                 return create_http_response(
                     StatusCode::BadRequest,
-                    format!(
+                    &format!(
                         "{} header is set, but the value is not. Err: {}",
                         GameHeaders::PASSWORD,
                         e
                     ),
-                    "".to_owned(),
+                    "",
                 )
             }
         },
         None => {
             return create_http_response(
                 StatusCode::BadRequest,
-                format!("{} header not set", GameHeaders::PASSWORD),
-                "".to_owned(),
+                &format!("{} header not set", GameHeaders::PASSWORD),
+                "",
             )
         }
     };
@@ -217,33 +225,33 @@ pub async fn login(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> H
             Err(e) => {
                 return create_http_response(
                     StatusCode::BadRequest,
-                    format!(
+                    &format!(
                         "{} header is set, but the value is not. Err: {}",
                         GameHeaders::EMAIL,
                         e
                     ),
-                    "".to_owned(),
+                    "",
                 )
             }
         },
         None => {
             return create_http_response(
                 StatusCode::BadRequest,
-                format!("{} header not set", GameHeaders::EMAIL),
-                "".to_owned(),
+                &format!("{} header not set", GameHeaders::EMAIL),
+                "",
             )
         }
     };
-
-    let user_result = internal_find_user("email", username, &data).await;
+    let is_test = req.headers().contains_key(GameHeaders::IS_TEST);
+    let user_result = internal_find_user("email", username, is_test, &data).await;
 
     let user = match user_result {
         Ok(u) => u,
         Err(_) => {
             return create_http_response(
                 StatusCode::NotFound,
-                format!("invalid user id: {}", username),
-                "".to_owned(),
+                &format!("invalid user id: {}", username),
+                "",
             );
         }
     };
@@ -252,8 +260,8 @@ pub async fn login(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> H
         None => {
             return create_http_response(
                 StatusCode::InternalServerError,
-                "user document does not contain a password hash".to_owned(),
-                "".to_owned(),
+                "user document does not contain a password hash",
+                "",
             );
         }
     };
@@ -279,75 +287,71 @@ pub async fn login(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> H
         match token_result {
             Ok(token) => {
                 Lobby::join_lobby(user.id).await;
-                create_http_response(StatusCode::Ok, "".to_owned(), token)
+                create_http_response(StatusCode::Ok, "", &token)
             }
-            Err(_) => create_http_response(
-                StatusCode::InternalServerError,
-                "error hashing token".to_owned(),
-                "".to_owned(),
-            ),
+            Err(_) => {
+                create_http_response(StatusCode::InternalServerError, "error hashing token", "")
+            }
         }
     } else {
-        create_http_response(
-            StatusCode::Unauthorized,
-            "incorrect password".to_owned(),
-            "".to_owned(),
-        )
+        create_http_response(StatusCode::Unauthorized, "incorrect password", "")
     }
 }
 /**
  *  this will get a list of all documents.  Note this does *not* do pagination. This would be a reasonable next step to
  *  show in the sample
  */
-pub async fn list_users(data: Data<ServiceEnvironmentContext>) -> HttpResponse {
+pub async fn list_users(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> HttpResponse {
     let request_context = data.context.lock().unwrap();
-    let userdb = UserDb::new(&request_context).await;
+    let use_cosmos_db = !req.headers().contains_key(GameHeaders::IS_TEST);
+    if use_cosmos_db {
+        let userdb = UserDb::new(&request_context).await;
 
-    // Get list of users
-    match userdb.list().await {
-        Ok(users) => {
-            let mut client_users = Vec::new();
-            for user in users.iter() {
-                client_users.push(ClientUser::from_persist_user(user.clone()));
+        // Get list of users
+        match userdb.list().await {
+            Ok(users) => {
+                let mut client_users = Vec::new();
+                for user in users.iter() {
+                    client_users.push(ClientUser::from_persist_user(user.clone()));
+                }
+
+                HttpResponse::Ok()
+                    .content_type("application/json")
+                    .json(client_users)
             }
-
-            HttpResponse::Ok()
-                .content_type("application/json")
-                .json(client_users)
+            Err(err) => {
+                return create_http_response(
+                    StatusCode::NotFound,
+                    &format!("Failed to retrieve user list: {}", err),
+                    "",
+                );
+            }
         }
-        Err(err) => {
-            let response = ServiceResponse {
-                message: format!("Failed to retrieve user list: {}", err),
-                status: StatusCode::NotFound,
-                body: "".to_owned(),
-            };
-            HttpResponse::NotFound()
-                .content_type("application/json")
-                .json(response)
-        }
+    } else {
+        HttpResponse::Ok()
+            .content_type("application/json")
+            .json(TestDb::list().await.unwrap())
     }
 }
 pub async fn get_profile(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> HttpResponse {
-    let header_id = req
+    let user_id = req
         .headers()
         .get(GameHeaders::USER_ID)
         .unwrap()
         .to_str()
         .unwrap();
-    match internal_find_user("id", header_id, &data).await {
+
+    let is_test = req.headers().contains_key(GameHeaders::IS_TEST);
+    let result = internal_find_user("id", user_id, is_test, &data).await;
+    match result {
         Ok(user) => HttpResponse::Ok()
             .content_type("application/json")
             .json(ClientUser::from_persist_user(user)),
-        Err(err) => {
-            let response = ServiceResponse {
-                message: format!("Failed to find user: {}", err),
-                status: StatusCode::NotFound,
-                body: "".to_owned(),
-            };
-            HttpResponse::NotFound()
-                .content_type("application/json")
-                .json(response)
-        }
+        Err(err) => create_http_response(
+            StatusCode::NotFound,
+            &format!("Failed to find user: {}", err),
+            "",
+        ),
     }
 }
 
@@ -358,8 +362,12 @@ pub async fn get_profile(data: Data<ServiceEnvironmentContext>, req: HttpRequest
 pub async fn find_user_by_id(
     id: web::Path<String>,
     data: Data<ServiceEnvironmentContext>,
+    req: HttpRequest,
 ) -> HttpResponse {
-    match internal_find_user("id", &id, &data).await {
+    let is_test = req.headers().contains_key(GameHeaders::IS_TEST);
+    let result = internal_find_user("id", &id, is_test, &data).await;
+
+    match result {
         Ok(mut user) => {
             user.password_hash = None;
             HttpResponse::Ok()
@@ -367,14 +375,11 @@ pub async fn find_user_by_id(
                 .json(user)
         }
         Err(err) => {
-            let response = ServiceResponse {
-                message: format!("Failed to find user: {}", err),
-                status: StatusCode::NotFound,
-                body: "".to_owned(),
-            };
-            HttpResponse::NotFound()
-                .content_type("application/json")
-                .json(response)
+            create_http_response(
+                StatusCode::NotFound,
+                &format!("Failed to find user: {}", err),
+                "",
+            )
         }
     }
 }
@@ -382,8 +387,16 @@ pub async fn find_user_by_id(
 pub async fn internal_find_user(
     prop: &str,
     id: &str,
+    is_test: bool,
     data: &Data<ServiceEnvironmentContext>,
 ) -> AzureResult<PersistUser> {
+    if is_test {
+        if prop == "id" {
+            return TestDb::find_user_by_id(id).await;
+        } else {
+            return TestDb::find_user_by_profile(&prop, id).await;
+        }
+    }
     let request_context = data.context.lock().unwrap();
     let userdb = UserDb::new(&request_context).await;
     if prop == "id" {
@@ -405,52 +418,43 @@ pub async fn delete(
     let header_id = match header_id_result {
         Ok(val) => val,
         Err(_) => {
-            return create_http_response(
-                StatusCode::BadRequest,
-                "Invalid id header value".to_owned(),
-                "".to_owned(),
-            )
+            return create_http_response(StatusCode::BadRequest, "Invalid id header value", "")
         }
     };
 
     if header_id != *id {
-        return create_http_response(
-            StatusCode::Unauthorized,
-            "you can only delete yourself".to_owned(),
-            "".to_owned(),
-        );
+        return create_http_response(StatusCode::Unauthorized, "you can only delete yourself", "");
     }
-
-    let request_context = data.context.lock().unwrap();
-    let userdb = UserDb::new(&request_context).await;
-    match userdb.delete_user(&id).await {
+    let use_cosmos_db = !req.headers().contains_key(GameHeaders::IS_TEST);
+    let result;
+    if use_cosmos_db {
+        let request_context = data.context.lock().unwrap();
+        let userdb = UserDb::new(&request_context).await;
+        result = userdb.delete_user(&id).await
+    } else {
+        result = TestDb::delete_user(&id).await;
+    }
+    match result {
         Ok(..) => {
-            let response = ServiceResponse {
-                message: format!("deleted user with id: {}", id),
-                status: StatusCode::Ok,
-                body: "".to_owned(),
-            };
-            HttpResponse::Ok()
-                .content_type("application/json")
-                .json(response)
+            create_http_response(
+                StatusCode::Ok,
+                &format!("deleted user with id: {}", id),
+                "",
+            )
         }
         Err(err) => create_http_response(
             StatusCode::BadRequest,
-            format!("Failed to delete user: {}", err),
-            "".to_owned(),
+            &format!("Failed to delete user: {}", err),
+            "",
         ),
     }
 }
 
-pub fn create_http_response(
-    status_code: StatusCode,
-    message: String,
-    body: String,
-) -> HttpResponse {
+pub fn create_http_response(status_code: StatusCode, message: &str, body: &str) -> HttpResponse {
     let response = ServiceResponse {
-        message: message,
+        message: message.to_string(),
         status: status_code,
-        body: body,
+        body: body.to_string(),
     };
     match status_code {
         StatusCode::Ok => HttpResponse::Ok().json(response),
