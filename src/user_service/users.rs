@@ -9,7 +9,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
  */
 use crate::cosmos_db::cosmosdb::UserDb;
 use crate::cosmos_db::mocked_db::TestDb;
-use crate::games_service::game_container::game_messages::GameHeaders;
+use crate::games_service::game_container::game_messages::GameHeader;
 use crate::games_service::lobby::lobby::Lobby;
 use crate::middleware::environment_mw::{ServiceEnvironmentContext, CATAN_ENV};
 use crate::shared::models::{Claims, ClientUser, PersistUser, ServiceResponse, UserProfile};
@@ -107,9 +107,9 @@ pub async fn register(
     data: Data<ServiceEnvironmentContext>,
     req: HttpRequest,
 ) -> HttpResponse {
-    let is_test = req.headers().contains_key(GameHeaders::IS_TEST);
+    let is_test = req.headers().contains_key(GameHeader::IS_TEST);
     // Retrieve the password value from the "X-Password" header
-    let password_value: String = match req.headers().get(GameHeaders::PASSWORD) {
+    let password_value: String = match req.headers().get(GameHeader::PASSWORD) {
         Some(header_value) => match header_value.to_str() {
             Ok(pwd) => pwd.to_string(),
             Err(e) => {
@@ -195,7 +195,7 @@ pub async fn register(
  * if it does, return a signed JWT token
  */
 pub async fn login(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> HttpResponse {
-    let password_value: String = match req.headers().get(GameHeaders::PASSWORD) {
+    let password_value: String = match req.headers().get(GameHeader::PASSWORD) {
         Some(header_value) => match header_value.to_str() {
             Ok(pwd) => pwd.to_string(),
             Err(e) => {
@@ -203,7 +203,7 @@ pub async fn login(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> H
                     StatusCode::BadRequest,
                     &format!(
                         "{} header is set, but the value is not. Err: {}",
-                        GameHeaders::PASSWORD,
+                        GameHeader::PASSWORD,
                         e
                     ),
                     "",
@@ -213,13 +213,13 @@ pub async fn login(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> H
         None => {
             return create_http_response(
                 StatusCode::BadRequest,
-                &format!("{} header not set", GameHeaders::PASSWORD),
+                &format!("{} header not set", GameHeader::PASSWORD),
                 "",
             )
         }
     };
 
-    let username = match req.headers().get(GameHeaders::EMAIL) {
+    let username = match req.headers().get(GameHeader::EMAIL) {
         Some(header_value) => match header_value.to_str() {
             Ok(name) => name,
             Err(e) => {
@@ -227,7 +227,7 @@ pub async fn login(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> H
                     StatusCode::BadRequest,
                     &format!(
                         "{} header is set, but the value is not. Err: {}",
-                        GameHeaders::EMAIL,
+                        GameHeader::EMAIL,
                         e
                     ),
                     "",
@@ -237,12 +237,12 @@ pub async fn login(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> H
         None => {
             return create_http_response(
                 StatusCode::BadRequest,
-                &format!("{} header not set", GameHeaders::EMAIL),
+                &format!("{} header not set", GameHeader::EMAIL),
                 "",
             )
         }
     };
-    let is_test = req.headers().contains_key(GameHeaders::IS_TEST);
+    let is_test = req.headers().contains_key(GameHeader::IS_TEST);
     let user_result = internal_find_user("email", username, is_test, &data).await;
 
     let user = match user_result {
@@ -286,7 +286,7 @@ pub async fn login(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> H
 
         match token_result {
             Ok(token) => {
-                Lobby::join_lobby(user.id).await;
+                Lobby::join_lobby(&user.id, &user.user_profile.display_name ).await;
                 create_http_response(StatusCode::Ok, "", &token)
             }
             Err(_) => {
@@ -303,7 +303,7 @@ pub async fn login(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> H
  */
 pub async fn list_users(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> HttpResponse {
     let request_context = data.context.lock().unwrap();
-    let use_cosmos_db = !req.headers().contains_key(GameHeaders::IS_TEST);
+    let use_cosmos_db = !req.headers().contains_key(GameHeader::IS_TEST);
     if use_cosmos_db {
         let userdb = UserDb::new(&request_context).await;
 
@@ -336,12 +336,12 @@ pub async fn list_users(data: Data<ServiceEnvironmentContext>, req: HttpRequest)
 pub async fn get_profile(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> HttpResponse {
     let user_id = req
         .headers()
-        .get(GameHeaders::USER_ID)
+        .get(GameHeader::USER_ID)
         .unwrap()
         .to_str()
         .unwrap();
 
-    let is_test = req.headers().contains_key(GameHeaders::IS_TEST);
+    let is_test = req.headers().contains_key(GameHeader::IS_TEST);
     let result = internal_find_user("id", user_id, is_test, &data).await;
     match result {
         Ok(user) => HttpResponse::Ok()
@@ -364,7 +364,7 @@ pub async fn find_user_by_id(
     data: Data<ServiceEnvironmentContext>,
     req: HttpRequest,
 ) -> HttpResponse {
-    let is_test = req.headers().contains_key(GameHeaders::IS_TEST);
+    let is_test = req.headers().contains_key(GameHeader::IS_TEST);
     let result = internal_find_user("id", &id, is_test, &data).await;
 
     match result {
@@ -413,7 +413,7 @@ pub async fn delete(
 ) -> HttpResponse {
     //
     // unwrap is ok here because our middleware put it there.
-    let header_id_result = req.headers().get(GameHeaders::USER_ID).unwrap().to_str();
+    let header_id_result = req.headers().get(GameHeader::USER_ID).unwrap().to_str();
 
     let header_id = match header_id_result {
         Ok(val) => val,
@@ -425,7 +425,7 @@ pub async fn delete(
     if header_id != *id {
         return create_http_response(StatusCode::Unauthorized, "you can only delete yourself", "");
     }
-    let use_cosmos_db = !req.headers().contains_key(GameHeaders::IS_TEST);
+    let use_cosmos_db = !req.headers().contains_key(GameHeader::IS_TEST);
     let result;
     if use_cosmos_db {
         let request_context = data.context.lock().unwrap();

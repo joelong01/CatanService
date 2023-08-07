@@ -5,20 +5,41 @@ use azure_core::StatusCode;
  */
 use azure_data_cosmos::CosmosEntity;
 use serde::{Deserialize, Serialize};
-use std::env;
-use strum_macros::Display;
+use tokio::sync::{mpsc, RwLock};
+use std::{env, sync::Arc, fmt};
+
 
 use anyhow::{Context, Result};
 
+use crate::games_service::game_container::game_messages::CatanMessage;
+
 use super::utility::get_id;
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, Display)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum GameError {
-    PlayerMismatch,
-    MissingPlayerId,
-    IdNotFoundInOrder,
-    BadActionData,
-    InvalidGameId,
+
+    MissingData(String),
+    BadActionData(String),
+    BadId(String),
+    ChannelError(String),
+    AlreadyExists(String),
+    ActionError(String),
+
+}
+
+impl fmt::Display for GameError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+   
+            GameError::ChannelError(desc) => write!(f, "Error reading tokio channel (ChannelError): {}", desc),
+            GameError::AlreadyExists(desc) => write!(f, "Resource Already Exists (AlreadyExists): {}", desc),
+            GameError::ActionError(desc) => write!(f, "Action Error: {}", desc),
+            GameError::MissingData(desc) => write!(f, "Missing Data {}", desc),
+            GameError::BadActionData(desc) => write!(f, "Bad Data {}", desc),
+            GameError::BadId(desc) => write!(f, "Bad Id {}", desc),
+
+        }
+    }
 }
 
 /**
@@ -244,6 +265,29 @@ impl Default for ConfigEnvironmentVariables {
             database_name: "Users-Database".to_owned(),
             container_name: "User-Container".to_owned(),
             rust_log: "actix_web=trace,actix_server=trace,rust=trace".to_owned(),
+        }
+    }
+}
+
+/**
+ * hold the data that both the Lobby and the GameContainer use to keep track of the waiting clients
+ */
+#[derive(Debug)]
+pub struct LongPollUser {
+    pub user_id: String,
+    pub name: String,
+    pub tx: mpsc::Sender<CatanMessage>,
+    pub rx: Arc<RwLock<mpsc::Receiver<CatanMessage>>>
+}
+
+impl LongPollUser {
+    pub fn new(user_id: &str, name: &str) -> Self {
+        let (tx, rx) = mpsc::channel(0x64);
+        Self {
+            user_id: user_id.into(),
+            name: name.into(),
+            rx: Arc::new(RwLock::new(rx)),
+            tx,
         }
     }
 }

@@ -1,4 +1,3 @@
-
 #![allow(dead_code)]
 #![allow(unused_variables)]
 #![allow(unused_assignments)]
@@ -10,14 +9,10 @@ use crate::games_service::game_container::game_messages::InvitationResponseData;
 
 use crate::wait_for_message;
 use crate::{
-    games_service::game_container::game_messages::CatanMessage,
-    shared::models::ClientUser,
+    games_service::game_container::game_messages::CatanMessage, shared::models::ClientUser,
     thread_info,
 };
-use crate::{shared::proxy::ServiceProxy,
-    test::test_structs::HOST_URL,
-};
-
+use crate::{shared::proxy::ServiceProxy, test::test_structs::HOST_URL};
 
 use tokio::{sync::mpsc::Receiver, time::sleep};
 
@@ -27,25 +22,23 @@ pub(crate) struct Handler2;
 impl ClientThreadHandler for Handler2 {
     fn run(
         &self,
-       
+
         rx: Receiver<CatanMessage>,
     ) -> std::pin::Pin<Box<dyn futures::Future<Output = ()> + Send>> {
         Box::pin(client2_thread(rx))
     }
 }
 
-pub(crate) async fn client2_thread(
-    mut rx: Receiver<CatanMessage>,
-) {
+pub(crate) async fn client2_thread(mut rx: Receiver<CatanMessage>) {
     let proxy = ServiceProxy::new(true, HOST_URL);
     let auth_token = proxy
         .get_authtoken("doug@longshotdev.com", "password")
         .await
         .expect("login should work");
-    
+
     let name = "Doug";
 
-    let my_info:ClientUser = proxy
+    let my_info: ClientUser = proxy
         .get_profile(&auth_token)
         .await
         .expect("Unable to get profile")
@@ -72,12 +65,14 @@ pub(crate) async fn client2_thread(
     thread_info!(name, "Game Thread Woke up!");
 
     let message = wait_for_message!(name, rx);
-    if let CatanMessage::Invite(invite) = message.clone(){
+    if let CatanMessage::Invite(invite) = message.clone() {
         let response = InvitationResponseData::from_invitation(true, &invite);
-        proxy.invitation_response(&response, &auth_token).await.expect("accept invite should succeed)");
+        proxy
+            .invitation_response(&response, &auth_token)
+            .await
+            .expect("accept invite should succeed)");
         game_id = invite.game_id.clone();
     } else {
-        panic!("Wrong message received: {:?}", message);
- 
+        thread_info!(name, "Wrong message received: {:?}", message);
     }
 }

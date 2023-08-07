@@ -69,7 +69,7 @@ macro_rules! setup_test {
         let request = test::TestRequest::post()
             .uri("/api/v1/test/setup")
             .append_header((header::CONTENT_TYPE, "application/json"))
-            .append_header((GameHeaders::IS_TEST, "true"))
+            .append_header((GameHeader::IS_TEST, "true"))
             .to_request();
 
         let response = test::call_service($app, request).await;
@@ -134,4 +134,14 @@ macro_rules! thread_info {
         log::info!("{}:{},{},{}", file!(), line!(), $from, format!($($arg)*))
     };
 }
+#[macro_export]
+macro_rules! trace_function {
+    ($function:expr, $($arg:tt)*) => {{
 
+    use scopeguard::defer;
+    use crate::thread_info;
+    
+        thread_info!(format!("enter {}", $function), $($arg)*);
+        defer! {thread_info!(format!("leave {}", $function), $($arg)*);}
+    }}
+}

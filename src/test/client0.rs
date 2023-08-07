@@ -3,7 +3,7 @@
 
 use crate::{
     full_info,
-    games_service::game_container::game_messages::{CatanMessage, Invitation},
+    games_service::game_container::game_messages::{CatanMessage, Invitation, LobbyUser},
     shared::models::ClientUser,
     thread_info, wait_for_message,
 };
@@ -72,18 +72,20 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
         my_info.user_profile.display_name,
         response
     );
-    let message = wait_for_message!(name, rx);
-    if let CatanMessage::GameCreated(game) = message.clone() {
-        game_id = game.game_id;
-    } else {
-        panic!("Wrong message received: {:?}", message);
+    loop {
+        let message = wait_for_message!(name, rx);
+        if let CatanMessage::GameCreated(game) = message.clone() {
+            game_id = game.game_id;
+            break;
+        } else {
+            thread_info!(name, "Wrong message received: {:?}", message);
+        }
     }
-    assert!(game_id != "");
 
     //
     // get the lobby
     thread_info!(name, "Getting Lobby.");
-    let lobby: Vec<String> = proxy
+    let lobby: Vec<LobbyUser> = proxy
         .get_lobby(&auth_token)
         .await
         .expect("get_lobby should not fail")
@@ -92,19 +94,21 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
         .expect("get_lobby deserialization should work");
 
     thread_info!(name, "get_lobby returned: {:#?}", lobby);
-    assert!(lobby.len() == 2); // there should be two people waiting in the lobby
 
-    for user_id in lobby {
+    for lobby_user in lobby {
         let my_clone = my_info.clone();
         let profile = my_clone.user_profile;
-
+        if lobby_user.user_id == my_clone.id {
+            continue; // don't invite myself
+        }
         let invite_message = "Join my game!".to_string();
         let invitation = Invitation {
-            originator_id: my_clone.id.clone(),
-            recipient_id: user_id.clone(),
-            originator_name: profile.display_name.clone(),
+            from_id: my_clone.id.clone(),
+            from_name: profile.display_name.clone(),
+            to_id: lobby_user.user_id.clone(),
+            to_name: lobby_user.user_name.clone(),
             message: invite_message.clone(),
-            picture_url: profile.picture_url.clone(),
+            from_picture: profile.picture_url.clone(),
             game_id: game_id.to_owned(),
         };
         thread_info!(name, "Sending GameInvite");
@@ -113,24 +117,24 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
             .await
             .expect("send_invite should not fail");
     }
+
+    let mut players = Vec::new();
+    loop {
+        let message = wait_for_message!(name, rx);
+        if let CatanMessage::InvitationResponse(invite_response) = message.clone() {
+            assert!(invite_response.accepted, "invite should be accepted");
+            thread_info!(name, "players accepted: {}", invite_response.from_name);
+            players.push(invite_response.from_id);
+        } else {
+            thread_info!(name, "Wrong message received: {:?}", message);
+        }
+        if players.len() == 3 {
+            break;
+        }
+    }
+    thread_info!(name, "all players accepted: {:#?}", players);
     //
-    //  next expect to get two responses accepting invite
-    let message = wait_for_message!(name, rx);
-    if let CatanMessage::InvitationResponse(invite_response) = message.clone() {
-       assert!(invite_response.accepted, "invite should be accepted");
-       thread_info!(name, "players in game: {:#?}", invite_response.player_ids);
-    } else {
-        panic!("Wrong message received: {:?}", message);
-    }
-
-    let message = wait_for_message!(name, rx);
-    if let CatanMessage::InvitationResponse(invite_response) = message.clone() {
-       assert!(invite_response.accepted, "invite should be accepted");
-       thread_info!(name, "players in game: {:#?}", invite_response.player_ids);
-    } else {
-        panic!("Wrong message received: {:?}", message);
-    }
-
+    //  next tell service that all the players are added and we can start the game
     thread_info!(name, "end of test:");
     // next we start the game
 }

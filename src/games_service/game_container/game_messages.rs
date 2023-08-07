@@ -9,23 +9,24 @@ use crate::games_service::catan_games::games::regular::regular_game::RegularGame
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Invitation {
-    pub originator_id: String,
-    pub recipient_id: String,
-    pub originator_name: String,
+    pub from_id: String,
+    pub to_id: String,
+    pub from_name: String,
+    pub to_name: String,
     pub message: String,
-    pub picture_url: String,
+    pub from_picture: String,
     pub game_id: String,
 }
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct GameHeaders {
+pub struct GameHeader {
     game_id: String,
     user_id: String,
     password: String,
     is_test: String,
     email: String,
 }
-impl GameHeaders {
+impl GameHeader {
     pub const GAME_ID: &'static str = "x-game-id";
     pub const USER_ID: &'static str = "x-user-id";
     pub const PASSWORD: &'static str = "x-password";
@@ -36,35 +37,42 @@ impl GameHeaders {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct InvitationResponseData {
-    pub originator_id: String,
-    pub recipient_id: String,
+    pub from_id: String,
+    pub to_id: String,
+    pub from_name: String,
+    pub to_name: String,
     pub game_id: String,
-    pub player_ids: Vec<String>,
-    pub accepted: bool
+    pub accepted: bool,
 }
 impl InvitationResponseData {
-    pub fn new(originator: &str, recipient: &str,  accepted: bool, game_id: &str, players: Vec<String>)->Self {
+    pub fn new(
+        from: &str,
+        to: &str,
+        from_name: &str,
+        to_name: &str,
+        accepted: bool,
+        game_id: &str,
+    ) -> Self {
         Self {
             accepted,
-            recipient_id: recipient.into(),
-            originator_id: originator.into(),
-            game_id: game_id.into(), // Fixed from `game_id.info()`, which seemed incorrect
-            player_ids: players
+            to_id: to.into(),
+            from_id: from.into(),
+            game_id: game_id.into(),
+            from_name: from_name.into(),
+            to_name: to_name.into(),
         }
     }
     pub fn from_invitation(accepted: bool, invite: &Invitation) -> Self {
-        let players = vec![invite.recipient_id.clone(), invite.originator_id.clone()];
         Self {
-            originator_id: invite.originator_id.clone(),
-            recipient_id: invite.recipient_id.clone(),
+            from_id: invite.to_id.clone(),
+            to_id: invite.from_id.clone(),
             game_id: invite.game_id.clone(),
-            player_ids:players,
-            accepted: accepted
+            accepted: accepted,
+            from_name: invite.to_name.clone(),
+            to_name: invite.from_name.clone(),
         }
     }
 }
-
-
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -95,9 +103,17 @@ pub enum CatanMessage {
 impl fmt::Debug for CatanMessage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            CatanMessage::GameUpdate(game) => write!(f, "GameUpdate: {:?}", game),
+            CatanMessage::GameUpdate(game) => write!(
+                f,
+                "GameUpdate: [id={}] [player_count={}] [index={}]",
+                game.id,
+                game.players.len(),
+                game.game_index
+            ),
             CatanMessage::Invite(invitation) => write!(f, "Invite: {:?}", invitation),
-            CatanMessage::InvitationResponse(response) => write!(f, "InvitationResponse: {:?}", response),
+            CatanMessage::InvitationResponse(response) => {
+                write!(f, "InvitationResponse: {:?}", response)
+            }
             CatanMessage::GameCreated(data) => write!(f, "GameCreated: {:?}", data),
             CatanMessage::PlayerAdded(players) => write!(f, "PlayerAdded: {:?}", players),
             CatanMessage::Started(started) => write!(f, "Started: {}", started),
@@ -135,4 +151,11 @@ macro_rules! error_message {
             message: $msg.to_string(),
         })
     };
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LobbyUser {
+    pub user_id: String,
+    pub user_name: String,
 }

@@ -4,7 +4,7 @@ use actix::fut::err;
 use actix_service::{Service, Transform};
 use actix_web::{dev::ServiceRequest, dev::ServiceResponse, error::ErrorUnauthorized, Error};
 
-use crate::{games_service::game_container::game_messages::GameHeaders, shared::models::Claims};
+use crate::{games_service::game_container::game_messages::GameHeader, shared::models::Claims};
 use futures::{
     future::{ok, Ready},
     Future,
@@ -80,11 +80,11 @@ where
 
                     // Insert the id and sub into the headers
                     req.headers_mut().insert(
-                        HeaderName::from_static(GameHeaders::USER_ID),
+                        HeaderName::from_static(GameHeader::USER_ID),
                         HeaderValue::from_str(id).unwrap(),
                     );
                     req.headers_mut().insert(
-                        HeaderName::from_static(GameHeaders::EMAIL),
+                        HeaderName::from_static(GameHeader::EMAIL),
                         HeaderValue::from_str(sub).unwrap(),
                     );
                 } else {

@@ -15,3 +15,4 @@ Cargo.lock
 .DS_Store
 tmp.txt
 output.json
+log/log.csv

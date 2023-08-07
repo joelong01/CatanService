@@ -215,11 +215,10 @@ fn game_service() -> Scope {
             "/shuffle/{game_id}",
             web::post().to(game_handlers::shuffle_game),
         )
-        .route("/join/{game_id}", web::post().to(game_handlers::join_game))
 }
 
 fn longpoll_service() -> Scope {
-    web::scope("/longpoll").route("", web::get().to(game_container::long_poll_handler))
+    web::scope("/longpoll/{index}").route("", web::get().to(game_container::long_poll_handler))
 }
 
 fn profile_service() -> Scope {
@@ -263,7 +262,7 @@ pub async fn init_env_logger() {
 mod tests {
     use crate::{
         create_test_service,
-        games_service::game_container::game_messages::GameHeaders,
+        games_service::game_container::game_messages::GameHeader,
         init_env_logger, setup_test,
         shared::models::{ClientUser, ServiceResponse, UserProfile},
     };
@@ -311,8 +310,8 @@ mod tests {
         let req = test::TestRequest::post()
             .uri("/api/v1/users/register")
             .append_header((header::CONTENT_TYPE, "application/json"))
-            .append_header((GameHeaders::IS_TEST, "true"))
-            .append_header((GameHeaders::PASSWORD, USER_1_PASSWORD))
+            .append_header((GameHeader::IS_TEST, "true"))
+            .append_header((GameHeader::PASSWORD, USER_1_PASSWORD))
             .set_json(&user1_profile)
             .to_request();
 
@@ -350,7 +349,7 @@ mod tests {
         });
         let req = test::TestRequest::post()
             .uri("/api/v1/users/login")
-            .append_header((GameHeaders::IS_TEST, "true"))
+            .append_header((GameHeader::IS_TEST, "true"))
             .set_json(&login_payload)
             .to_request();
 
@@ -369,7 +368,7 @@ mod tests {
         let req = test::TestRequest::get()
             .uri("/auth/api/v1/profile")
             .append_header((header::CONTENT_TYPE, "application/json"))
-            .append_header((GameHeaders::IS_TEST, "true"))
+            .append_header((GameHeader::IS_TEST, "true"))
             .append_header(("Authorization", auth_token))
             .to_request();
 

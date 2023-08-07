@@ -1,12 +1,11 @@
-
+#![allow(dead_code)]
 use crate::{
     games_service::game_container::game_messages::CatanMessage,
     shared::{models::ClientUser, proxy::ServiceProxy},
     test::test_structs::HOST_URL,
     thread_info,
 };
-
-pub async fn polling_thread(username: &str, tx: tokio::sync::mpsc::Sender<CatanMessage>) {
+pub async fn game_poller(username: &str, tx: tokio::sync::mpsc::Sender<CatanMessage>) {
     let proxy = ServiceProxy::new(true, HOST_URL);
     let auth_token = &proxy
         .get_authtoken(username, "password")
@@ -29,25 +28,32 @@ pub async fn polling_thread(username: &str, tx: tokio::sync::mpsc::Sender<CatanM
     thread_info!(name, "returning from send start message");
 
     let mut game_id = "".to_string();
-
+    let mut index = 0;
     loop {
         thread_info!(name, "Begin poll. GameId: {}", game_id);
 
-        let response = proxy.long_poll(&game_id, auth_token).await.unwrap();
+        let response = proxy.long_poll(&game_id, auth_token, index).await.unwrap();
         assert!(
             response.status().is_success(),
             "error coming back from long_poll {:#?}",
             response
         );
-        thread_info!(name, "poll returned. GameId: {}", game_id);
+
         let message: CatanMessage = response.json().await.unwrap();
         thread_info!(name, "long_poll returned: {:?}", message);
         if let CatanMessage::GameCreated(data) = message.clone() {
             game_id = data.game_id.clone()
         }
+
+        if let CatanMessage::GameUpdate(data) = message.clone() {
+            game_id = data.id.clone();
+            index = data.game_index;
+        }
+
         thread_info!(name, "sending message: {:#?}", message);
         if let Err(e) = tx.send(message.clone()).await {
             thread_info!(name, "Failed to send message: {}", e);
         }
     }
 }
+

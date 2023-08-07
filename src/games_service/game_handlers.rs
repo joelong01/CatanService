@@ -2,6 +2,7 @@ use crate::{
     full_info,
     middleware::environment_mw::ServiceEnvironmentContext,
     shared::models::{ClientUser, ServiceResponse},
+    thread_info, trace_function,
     user_service::users::{create_http_response, internal_find_user},
 };
 use actix_web::{
@@ -15,7 +16,7 @@ use crate::games_service::shared::game_enums::{CatanGames, SupportedGames};
 
 use super::{
     catan_games::{games::regular::regular_game::RegularGame, traits::game_trait::CatanGame},
-    game_container::{game_container::GameContainer, game_messages::GameHeaders},
+    game_container::{game_container::GameContainer, game_messages::GameHeader},
     lobby::lobby::Lobby,
 };
 
@@ -68,12 +69,11 @@ pub async fn new_game(
     data: Data<ServiceEnvironmentContext>,
     req: HttpRequest,
 ) -> impl Responder {
-    full_info!("start new_game");
-    defer!(full_info!("left new_game"));
+    trace_function!("new_game", "");
     let game_type = game_type.into_inner();
     let user_id = req
         .headers()
-        .get(GameHeaders::USER_ID)
+        .get(GameHeader::USER_ID)
         .unwrap()
         .to_str()
         .unwrap();
@@ -86,7 +86,7 @@ pub async fn new_game(
         );
     }
 
-    let is_test = req.headers().contains_key(GameHeaders::IS_TEST);
+    let is_test = req.headers().contains_key(GameHeader::IS_TEST);
     let user_result = internal_find_user("id", user_id, is_test, &data).await;
 
     let user = match user_result {
@@ -105,18 +105,26 @@ pub async fn new_game(
 
     full_info!("new_game: insert_container");
     //
-    //  store GameId --> Game for later lookup
-    if let Err(_) =
-        GameContainer::insert_container(user_id.to_owned(), game.id.to_owned(), &mut game).await
-    {
-        full_info!("insert_container returned an error.  no listenrs!");
+    //  the sequence is
+    //  1. create_and_add_container
+    //  2. push_game
+    //  3. add_player
+    match GameContainer::create_and_add_container(&game.id,  &game).await {
+        Err(e) => {
+            full_info!("insert_container returned an error.  {:#?}!", e);
+            return create_http_response(StatusCode::NotFound, &format!("{:?}", e), "")
+        }
+        Ok(_) => {
+            
+        },
     }
 
-
+    thread_info!("new_game", "Lobby::game_created");
     let _ = Lobby::game_created(&game.id, user_id).await;
     //
     //  pull the user from the lobby
-    Lobby::leave_lobby(user_id).await;
+    //  thread_info!("new_game", "Lobby::leave_lobby");
+    //  Lobby::leave_lobby(user_id).await;
 
     HttpResponse::Ok()
         .content_type("application/json")
@@ -130,21 +138,4 @@ pub async fn supported_games() -> impl Responder {
     HttpResponse::Ok()
         .content_type("application/json")
         .json(games)
-}
-/**
- *  called by a client when they know a game_id they want to join to.
- *  if you don't know a game_id, call new_game and then add players to it.
- *  players get game_id's by getting and accepting invitations
- */
-pub async fn join_game(game_id_path: web::Path<String>, req: HttpRequest) -> impl Responder {
-    let game_id: &str = &game_id_path;
-    let user_id = req
-        .headers()
-        .get(GameHeaders::USER_ID)
-        .unwrap()
-        .to_str()
-        .unwrap();
-    Lobby::leave_lobby(user_id).await;
-    GameContainer::add_player(game_id.into(), user_id.into()).await;
-    create_http_response(StatusCode::Ok, "", "")
 }

@@ -36,7 +36,7 @@ impl StateMachineTrait for RegularGame {
                     // Handle the case when action_data is None
                     GameState::AllocateResourceForward
                 } else {
-                    return Err(GameError::BadActionData);
+                    return Err(GameError::BadActionData("no data".to_string()));
                 }
             }
             GameState::AllocateResourceReverse => {
@@ -52,7 +52,7 @@ impl StateMachineTrait for RegularGame {
                     // Handle the case when action_data is None
                     GameState::AllocateResourceReverse
                 } else {
-                    return Err(GameError::BadActionData);
+                    return Err(GameError::BadActionData("no data".to_string()));
                 }
             }
             GameState::WaitingForRoll => todo!(),

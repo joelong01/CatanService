@@ -10,7 +10,7 @@ use serde::Serialize;
 use url::Url;
 
 use crate::games_service::{
-    game_container::game_messages::{GameHeaders, Invitation, InvitationResponseData},
+    game_container::game_messages::{GameHeader, Invitation, InvitationResponseData},
     shared::game_enums::CatanGames,
 };
 
@@ -89,7 +89,7 @@ impl ServiceProxy {
     pub fn setup(&self) -> impl Future<Output = Result<Response, reqwest::Error>> {
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
         headers.insert(
-            HeaderName::from_static(GameHeaders::IS_TEST),
+            HeaderName::from_static(GameHeader::IS_TEST),
             HeaderValue::from_static("true"),
         );
         let url = "/api/v1/test/setup";
@@ -104,12 +104,12 @@ impl ServiceProxy {
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
         if self.is_test {
             headers.insert(
-                HeaderName::from_static(GameHeaders::IS_TEST),
+                HeaderName::from_static(GameHeader::IS_TEST),
                 HeaderValue::from_static("true"),
             );
         }
         headers.insert(
-            HeaderName::from_static(GameHeaders::PASSWORD),
+            HeaderName::from_static(GameHeader::PASSWORD),
             HeaderValue::from_str(password).expect("Invalid header value"),
         );
 
@@ -133,16 +133,16 @@ impl ServiceProxy {
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
         if self.is_test {
             headers.insert(
-                HeaderName::from_static(GameHeaders::IS_TEST),
+                HeaderName::from_static(GameHeader::IS_TEST),
                 HeaderValue::from_static("true"),
             );
         }
         headers.insert(
-            HeaderName::from_static(GameHeaders::PASSWORD),
+            HeaderName::from_static(GameHeader::PASSWORD),
             HeaderValue::from_str(password).expect("Invalid header value"),
         );
         headers.insert(
-            HeaderName::from_static(GameHeaders::EMAIL),
+            HeaderName::from_static(GameHeader::EMAIL),
             HeaderValue::from_str(username).expect("Invalid header value"),
         );
         let url = "/api/v1/users/login";
@@ -179,7 +179,7 @@ impl ServiceProxy {
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
         if self.is_test {
             headers.insert(
-                HeaderName::from_static(GameHeaders::IS_TEST),
+                HeaderName::from_static(GameHeader::IS_TEST),
                 HeaderValue::from_static("true"),
             );
         }
@@ -201,7 +201,7 @@ impl ServiceProxy {
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
         if self.is_test {
             headers.insert(
-                HeaderName::from_static(GameHeaders::IS_TEST),
+                HeaderName::from_static(GameHeader::IS_TEST),
                 HeaderValue::from_static("true"),
             );
         }
@@ -221,7 +221,7 @@ impl ServiceProxy {
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
         if self.is_test {
             headers.insert(
-                HeaderName::from_static(GameHeaders::IS_TEST),
+                HeaderName::from_static(GameHeader::IS_TEST),
                 HeaderValue::from_static("true"),
             );
         }
@@ -237,12 +237,13 @@ impl ServiceProxy {
         &self,
         game_id: &str,
         auth_token: &str,
+        index: u32,
     ) -> impl Future<Output = Result<Response, reqwest::Error>> {
-        let url = "/auth/api/v1/longpoll";
+        let url = format!("/auth/api/v1/longpoll/{}", index);
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
         if self.is_test {
             headers.insert(
-                HeaderName::from_static(GameHeaders::IS_TEST),
+                HeaderName::from_static(GameHeader::IS_TEST),
                 HeaderValue::from_static("true"),
             );
         }
@@ -251,11 +252,11 @@ impl ServiceProxy {
             HeaderValue::from_str(auth_token).expect("Invalid header value"),
         );
         headers.insert(
-            HeaderName::from_static(GameHeaders::GAME_ID),
+            HeaderName::from_static(GameHeader::GAME_ID),
             HeaderValue::from_str(game_id).expect("Invalid header value"),
         );
 
-        self.get(url, headers)
+        self.get(&url, headers)
     }
 
     pub fn send_invite<'a>(
@@ -268,7 +269,7 @@ impl ServiceProxy {
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
         if self.is_test {
             headers.insert(
-                HeaderName::from_static(GameHeaders::IS_TEST),
+                HeaderName::from_static(GameHeader::IS_TEST),
                 HeaderValue::from_static("true"),
             );
         }
@@ -293,7 +294,7 @@ impl ServiceProxy {
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
         if self.is_test {
             headers.insert(
-                HeaderName::from_static(GameHeaders::IS_TEST),
+                HeaderName::from_static(GameHeader::IS_TEST),
                 HeaderValue::from_static("true"),
             );
         }

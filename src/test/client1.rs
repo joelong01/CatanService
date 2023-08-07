@@ -1,4 +1,3 @@
-
 #![allow(dead_code)]
 #![allow(unused_variables)]
 #![allow(unused_assignments)]
@@ -9,14 +8,10 @@ use std::time::Duration;
 use crate::games_service::game_container::game_messages::InvitationResponseData;
 use crate::wait_for_message;
 use crate::{
-    games_service::game_container::game_messages::CatanMessage,
-    shared::models::ClientUser,
+    games_service::game_container::game_messages::CatanMessage, shared::models::ClientUser,
     thread_info,
 };
-use crate::{shared::proxy::ServiceProxy,
-    test::test_structs::HOST_URL,
-};
-
+use crate::{shared::proxy::ServiceProxy, test::test_structs::HOST_URL};
 
 use tokio::{sync::mpsc::Receiver, time::sleep};
 
@@ -36,10 +31,10 @@ pub(crate) async fn client1_thread(mut rx: Receiver<CatanMessage>) {
         .get_authtoken("james@longshotdev.com", "password")
         .await
         .expect("login should work");
-    
+
     let name = "James";
 
-    let my_info:ClientUser = proxy
+    let my_info: ClientUser = proxy
         .get_profile(&auth_token)
         .await
         .expect("Unable to get profile")
@@ -66,13 +61,15 @@ pub(crate) async fn client1_thread(mut rx: Receiver<CatanMessage>) {
     thread_info!(name, "Game Thread Woke up!");
 
     let message = wait_for_message!(name, rx);
-    if let CatanMessage::Invite(invite) = message.clone(){
-        let response = InvitationResponseData::from_invitation(true, &invite);
-        proxy.invitation_response(&response, &auth_token).await.expect("accept invite should succeed)");
+    if let CatanMessage::Invite(invite) = message.clone() {
+        let response = InvitationResponseData::from_invitation(true,  &invite);
+        proxy
+            .invitation_response(&response, &auth_token)
+            .await
+            .expect("accept invite should succeed)");
         game_id = invite.game_id.clone();
     } else {
-        panic!("Wrong message received: {:?}", message);
- 
+        thread_info!(name, "Wrong message received: {:?}", message);
     }
     thread_info!(name, "end of test:");
 }

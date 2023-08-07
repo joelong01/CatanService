@@ -3,11 +3,13 @@
 use scopeguard::defer;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{oneshot, RwLock};
+use tokio::sync::RwLock;
 
 use crate::{
-    full_info,
-    games_service::game_container::game_messages::{CatanMessage, ErrorData, GameCreatedData},
+    games_service::game_container::game_messages::{
+        CatanMessage, GameCreatedData, LobbyUser,
+    },
+    thread_info, trace_function, shared::models::{LongPollUser, GameError},
 };
 
 lazy_static::lazy_static! {
@@ -15,60 +17,55 @@ lazy_static::lazy_static! {
     static ref LOBBY: Arc<RwLock<Lobby>> = Arc::new(RwLock::new(Lobby::new()));
 }
 
-#[derive(Debug)]
-pub struct LobbyVisitor {
-    pub user_id: String,
-    pub notify: RwLock<Option<oneshot::Sender<CatanMessage>>>,
-}
 
-impl LobbyVisitor {
-    pub fn new(user_id: String) -> Self {
-        Self {
-            user_id,
-            notify: RwLock::new(None),
-        }
-    }
-}
 
 pub struct Lobby {
-    visitors: HashMap<String, LobbyVisitor>,
-    notify: oneshot::Sender<CatanMessage>,
+    visitors: HashMap<String, LongPollUser>,
+  
 }
 
 impl Lobby {
     /// Create a new Lobby
     pub fn new() -> Self {
-        let (tx, _) = oneshot::channel();
+
         Self {
             visitors: HashMap::new(),
-            notify: tx,
         }
     }
 
     /// Adds a new LobbyVisitor to the lobby if not already present.
-    pub async fn join_lobby(user_id: String) {
+    pub async fn join_lobby(user_id: &str, name: &str) {
         let mut lobby = LOBBY.write().await;
-        let visitor = LobbyVisitor::new(user_id.clone());
-        lobby.visitors.insert(user_id, visitor);
+        let visitor = LongPollUser::new(user_id, name);
+        lobby.visitors.insert(user_id.into(), visitor);
     }
 
     /// Removes a LobbyVisitor from the lobby, if present.
     pub async fn leave_lobby(user_id: &str) {
-        full_info!("leave_lobby enter");
-        defer! {full_info!("leave_lobby exit");}
+        trace_function!("leave_lobby", "user_id: {}", user_id);
         let mut lobby = LOBBY.write().await;
         lobby.visitors.remove(user_id);
     }
 
     /// Returns a list of user_ids in the current lobby.
-    pub async fn copy_lobby() -> Vec<String> {
+    pub async fn copy_lobby() -> Vec<LobbyUser> {
         let lobby = LOBBY.read().await;
-        lobby.visitors.keys().cloned().collect()
+        let mut users = Vec::new();
+        for v in lobby.visitors.values() {
+            let user = LobbyUser {
+                user_id: v.user_id.clone(),
+                user_name: v.name.clone(),
+            };
+            users.push(user);
+        }
+
+        users
     }
     //
     //  send a message to the lobby waiter that a game has been created.  the client should get this and use
     //  the game_id to wait in the GameContainer
     pub async fn game_created(game_id: &str, user_id: &str) -> Result<(), String> {
+        trace_function!("game_created", "user_id: {}", user_id);
         let msg = GameCreatedData {
             user_id: user_id.to_owned(),
             game_id: game_id.to_owned(),
@@ -78,52 +75,39 @@ impl Lobby {
             Err(e) => Err(format!("failed to send message in game_created {:?}", e)),
         }
     }
-    /// Awaits for an invitation message.
-    pub async fn wait_in_lobby(user_id: &str) -> CatanMessage {
-        full_info!("wait_in_lobby {}", user_id);
-        defer! {full_info!("leaving wait_in_lobby {}", user_id);}
-        let ro_lobby = LOBBY.read().await;
-        if let Some(visitor) = ro_lobby.visitors.get(user_id) {
-            let (tx, rx) = oneshot::channel();
-            let mut rw_notify = visitor.notify.write().await;
-            *rw_notify = Some(tx);
-            drop(rw_notify);
-            drop(ro_lobby);
-            let res = rx.await;
-            match res {
-                Ok(msg) => msg,
-                Err(e) => {
-                    full_info!("ERROR: in rx.await: {:#?}", e);
-                    CatanMessage::Error(ErrorData {
-                        status_code: 500,
-                        message: format!("err in rx.await: {:#?}", e),
-                    })
-                }
+    /// Awaits for an message.
+    pub async fn wait_in_lobby(user_id: &str) -> Result<CatanMessage, GameError> {
+        trace_function!("wait_in_lobby", "user_id: {}", user_id);
+        let rx = {
+            let ro_lobby = LOBBY.read().await;
+            if let Some(visitor) = ro_lobby.visitors.get(user_id) {
+                visitor.rx.clone() // clone the Ar<RwLock>, not the rx
+            } else {
+                return Err(GameError::BadId(format!("{} not found", user_id)));
             }
-        } else {
-            CatanMessage::Error(ErrorData {
-                status_code: 404,
-                message: "User not found in the lobby".to_string(),
-            })
+        };
+    
+        let mut rx_lock = rx.write().await;
+    
+        // Now the read lock and Mutex lock are dropped, and you can await the message
+        match rx_lock.recv().await {
+            Some(msg) => Ok(msg),
+            None => {
+                thread_info!(
+                    "wait_in_loby",
+                    "ERROR: recv() for failed to return data. user_id: {}",
+                    user_id,
+                );
+                return Err(GameError::ChannelError("Error in wait_in_lobby in recv".to_string()));
+            }
         }
     }
-
+    
     pub async fn send_message(to_id: &str, message: &CatanMessage) -> Result<(), String> {
-        full_info!("Lobby::send_message: {:?}", message);
+        trace_function!("send_message", "to: {}, message: {:?}", to_id, message);
         let lobby = LOBBY.read().await;
         if let Some(visitor) = lobby.visitors.get(to_id) {
-            let mut notify = visitor.notify.write().await;
-            if let Some(tx) = notify.take() {
-                match tx.send(message.clone()) {
-                    Ok(_) => Ok(()), // Returns Ok(()) in case of successful message sending
-                    Err(e) => {
-                        full_info!("Failed to send the message: {:#?}", e);
-                        Err("Failed to send the message".into()) // Returns Err(...) in case of failure
-                    }
-                }
-            } else {
-                Err("No notification channel found for the user".into())
-            }
+            visitor.tx.send(message.clone()).await.map_err(|e| e.to_string())
         } else {
             Err("User not found in the lobby".into())
         }
@@ -144,12 +128,12 @@ mod tests {
         env_logger::try_init().ok();
         full_info!("starting test_lobby_invite_flow");
         // 1. Create a lobby, add 2 users to it
-        Lobby::join_lobby("user1".to_string()).await;
-        Lobby::join_lobby("user2".to_string()).await;
+        Lobby::join_lobby("user1", "user1").await;
+        Lobby::join_lobby("user2", "user2").await;
 
         let barrier = Arc::new(Barrier::new(3));
-        let message = "Join my game!".to_string();
-        let picture_url = "https://example.com/pic.jpg".to_string();
+        let message = "Join my game!";
+        let picture_url = "https://example.com/pic.jpg";
 
         // Signal to synchronize tasks
         let barrier_clone = barrier.clone();
@@ -158,8 +142,8 @@ mod tests {
             barrier_clone.wait().await; // barrier at 3
             loop {
                 match Lobby::wait_in_lobby("user1").await {
-                    CatanMessage::Invite(invite_data) => {
-                        if invite_data.originator_id == "user3" {
+                    Ok(CatanMessage::Invite(invite_data)) => {
+                        if invite_data.from_id == "user3" {
                             break CatanMessage::Invite(invite_data);
                         }
                     }
@@ -173,9 +157,9 @@ mod tests {
             full_info!("second thread started.  calling barrier_clone().wait().await");
             barrier_clone.wait().await; // barrier at 2
             loop {
-                match Lobby::wait_in_lobby("user2").await {
+                match Lobby::wait_in_lobby("user2").await.expect("no errors!") {
                     CatanMessage::Invite(invite_data) => {
-                        if invite_data.originator_id == "user3" {
+                        if invite_data.from_id == "user3" {
                             break CatanMessage::Invite(invite_data);
                         }
                     }
@@ -191,19 +175,21 @@ mod tests {
         const USER2_ID: &str = "user2";
         const USER3_ID: &str = "user3";
         let invitation_to_user1 = Invitation {
-            originator_id: USER3_ID.to_string(),
-            recipient_id: USER1_ID.to_string(),
-            originator_name: "User3".to_string(),
-            message: message.clone(),
-            picture_url: picture_url.clone(),
+            from_id: USER3_ID.into(),
+            to_id: USER1_ID.into(),
+            from_name: "User3".into(),
+            to_name: "User1".into(),
+            message: message.clone().into(),
+            from_picture: picture_url.into(),
             game_id: "TODO!".to_owned(),
         };
         let invitation_to_user2 = Invitation {
-            originator_id: USER3_ID.to_string(),
-            recipient_id: USER2_ID.to_string(),
-            originator_name: "User3".to_string(),
-            message: message.clone(),
-            picture_url: picture_url.clone(),
+            from_id: USER3_ID.into(),
+            to_id: USER2_ID.into(),
+            from_name: "User3".into(),
+            to_name: "User2".into(),
+            message: message.into(),
+            from_picture: picture_url.into(),
             game_id: "TODO!".to_owned(),
         };
 
@@ -215,11 +201,12 @@ mod tests {
             .unwrap(); // Simulate success
 
         let negative_test_invite = Invitation {
-            originator_id: "user30".to_string(),
-            recipient_id: "user20".to_string(),
-            originator_name: "User3".to_string(),
-            message: message.clone(),
-            picture_url: picture_url.clone(),
+            from_id: "user30".into(),
+            to_id: "user20".into(),
+            from_name: "user30".into(),
+            to_name: "user20".into(),
+            message: message.into(),
+            from_picture: picture_url.into(),
             game_id: "TODO!".to_owned(),
         };
 
@@ -249,27 +236,32 @@ mod tests {
         full_info!("starting test_lobby_join_leave_flow");
 
         // Define user ID specific to this test
-        let user_id = "test_lobby_join_leave_flow:user1".to_string();
+        let user_id = "test_lobby_join_leave_flow:user1";
 
         // Attempt to join the lobby
-        Lobby::join_lobby(user_id.clone()).await;
+        Lobby::join_lobby(user_id, user_id).await;
         let lobby_after_join = Lobby::copy_lobby().await;
         assert!(
-            lobby_after_join.contains(&user_id),
+            lobby_after_join
+                .iter()
+                .any(|user| user.user_id == user_id.to_string()),
             "Lobby should contain user after joining"
         );
 
         // Attempt to join the lobby again (double join)
-        Lobby::join_lobby(user_id.clone()).await;
+        Lobby::join_lobby(user_id, user_id).await;
         let lobby_after_double_join = Lobby::copy_lobby().await;
         assert!(
-            lobby_after_double_join.contains(&user_id),
-            "Lobby should still contain user after double joining"
+            lobby_after_join
+                .iter()
+                .any(|user| user.user_id == user_id.to_string()),
+            "Lobby should contain user after joining"
         );
+
         assert_eq!(
             lobby_after_double_join
                 .iter()
-                .filter(|&id| *id == user_id)
+                .filter(|user| user.user_id == user_id.to_string())
                 .count(),
             1,
             "Lobby should contain exactly one instance of the user ID after double joining"
@@ -279,7 +271,9 @@ mod tests {
         Lobby::leave_lobby(&user_id).await;
         let lobby_after_leave = Lobby::copy_lobby().await;
         assert!(
-            !lobby_after_leave.contains(&user_id),
+            !lobby_after_leave
+                .iter()
+                .any(|user| user.user_id == user_id.to_string()),
             "Lobby should not contain user after leaving"
         );
 
@@ -287,7 +281,9 @@ mod tests {
         Lobby::leave_lobby(&user_id).await;
         let lobby_after_double_leave = Lobby::copy_lobby().await;
         assert!(
-            !lobby_after_double_leave.contains(&user_id),
+            !lobby_after_double_leave
+                .iter()
+                .any(|user| user.user_id == user_id.to_string()),
             "Lobby should still not contain user after double leaving"
         );
     }

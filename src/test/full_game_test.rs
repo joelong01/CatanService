@@ -4,16 +4,15 @@ pub mod test {
     #![allow(dead_code)]
     #![allow(unused_variables)]
     use crate::{
-        games_service::shared::game_enums::CatanGames,
         shared::proxy::ServiceProxy,
         test::{
             client0::Handler0,
             client1::Handler1,
             client2::Handler2,
-            polling_thread::{self, polling_thread},
-            test_structs::{ClientData, ClientThreadHandler, HOST_URL, init_test_logger},
-        }, wait_for_message,
+            test_structs::{ClientThreadHandler, HOST_URL, init_test_logger},
+        },
     };
+ 
     use std::{
         os::unix::thread,
         sync::Arc,
@@ -25,7 +24,7 @@ pub mod test {
         games_service::{
             game_container::{
                 self,
-                game_messages::{CatanMessage, GameHeaders, Invitation},
+                game_messages::{CatanMessage, GameHeader, Invitation},
             },
             shared::game_enums::GameState,
         },
@@ -95,7 +94,7 @@ pub mod test {
             let username = test_users[i].user_profile.email.clone();
             thread_info!("test_thread", "starting polling thread for {}", username.clone());
             let _ = tokio::spawn(async move {
-                polling_thread::polling_thread(&username, tx).await;
+                crate::test::polling_thread::game_poller(&username, tx).await;
             });
 
             let handle = tokio::spawn(async move {
@@ -211,184 +210,4 @@ pub mod test {
         test_users
     }
 
-    async fn client_thread(
-        user_index: usize,
-        clients: &mut Vec<ClientData>,
-        mut rx: Receiver<CatanMessage>,
-    ) {
-        let my_info = clients[user_index].clone();
-        let auth_token = my_info.auth_token.clone();
-        let name = my_info.user_profile.display_name.clone();
-        let proxy = ServiceProxy::new(true, HOST_URL);
-
-        thread_info!(name, "Waiting for 500ms");
-        tokio::time::sleep(Duration::from_millis(500)).await;
-        thread_info!(
-            name,
-            "Client thread. Waiting on Start Message from poll thread"
-        );
-        let message = wait_for_message!(name, rx);
-
-        let mut game_id = "".to_string();
-
-        //
-        //  in the browser app, the browser worker is up and running before the UI, so you don't
-        //  need to worry the issue of the main thread running before the polling threads. here
-        //  we do -- so we just go to sleep for a bit.
-        thread_info!(name, "Sleeping for 1 second...");
-        sleep(Duration::from_secs(1)).await;
-        thread_info!(name, "Game Thread Woke up!");
-
-        //
-        // create the game if the index is 0
-        if user_index == 0 {
-            full_info!("creating new game with token {}", auth_token.clone());
-            let response = proxy
-                .new_game(CatanGames::Regular, &auth_token)
-                .await
-                .unwrap();
-            assert!(
-                response.status().is_success(),
-                "error loggin in user: {}, err: {:#?}",
-                my_info.user_profile.display_name,
-                response
-            );
-            let message = wait_for_message!(name, rx);
-
-            game_id = match message {
-                CatanMessage::GameUpdate(_) => {
-                    panic!("unexpected GameUpdate");
-                }
-                CatanMessage::Invite(_) => {
-                    panic!("wrong message received. expected GameUpdate, got Invite");
-                }
-                CatanMessage::InvitationResponse(_) => {
-                    panic!("wrong message received. expected GameUpdate, got InviteAccepted");
-                }
-                CatanMessage::Error(_) => {
-                    panic!("error message received");
-                }
-                CatanMessage::GameCreated(msg) => {
-                    thread_info!(
-                        name,
-                        "Received GameCreated Message.  game_id: {}",
-                        msg.game_id.clone()
-                    );
-                    msg.game_id
-                }
-                CatanMessage::Started(_) => todo!(),
-                CatanMessage::Ended(_) => todo!(),
-                CatanMessage::PlayerAdded(_) => todo!(),
-            };
-            assert!(game_id != "");
-
-            //
-            // get the lobby
-            thread_info!(name, "Getting Lobby.");
-            let response = proxy.get_lobby(&auth_token).await.unwrap();
-            assert!(
-                response.status().is_success(),
-                "error loggin in user: {}, err: {:#?}",
-                my_info.user_profile.display_name,
-                response
-            );
-
-            let lobby: Vec<String> = response.json().await.unwrap();
-            thread_info!(name, "get_lobby returned: {:#?}", lobby);
-            assert!(lobby.len() == 2); // there should be two people waiting in the lobby
-
-            for user_id in lobby {
-                let my_clone = my_info.clone();
-                let profile = my_clone.user_profile;
-
-                let invite_message = "Join my game!".to_string();
-                let invitation = Invitation {
-                    originator_id: my_clone.client_id.clone(),
-                    recipient_id: user_id.clone(),
-                    originator_name: profile.display_name.clone(),
-                    message: invite_message.clone(),
-                    picture_url: profile.picture_url.clone(),
-                    game_id: game_id.to_owned(),
-                };
-                thread_info!(name, "Sending GameInvite");
-                let response = proxy.send_invite(&invitation, &auth_token).await.unwrap();
-                assert!(
-                    response.status().is_success(),
-                    "error loggin in user: {}, err: {:#?}",
-                    my_info.user_profile.display_name,
-                    response
-                );
-            }
-        } else {
-            // end first user creates game an invites everybody
-            let message = wait_for_message!(name, rx);
-            let invitation = match message {
-                CatanMessage::Invite(invitation) => {
-                    //    assert_eq!(invitation.game_id, game_id);
-                    thread_info!(
-                        name,
-                        "recieved invitation for game_id: {} from: {}",
-                        invitation.game_id,
-                        invitation.originator_name.clone()
-                    );
-                    invitation // return the invitation if the variant is Invite
-                }
-                CatanMessage::GameUpdate(_) => {
-                    panic!("wrong message received"); // you can use panic! or assert! as per your requirement
-                }
-                CatanMessage::InvitationResponse(_) => {
-                    panic!("wrong message received. expected GameUpdate, got InviteAccepted");
-                }
-                CatanMessage::Error(_) => {
-                    panic!("error message received");
-                }
-                CatanMessage::GameCreated(_) => {
-                    panic!("got GameCreated msg");
-                }
-                CatanMessage::Started(_) => todo!(),
-                CatanMessage::Ended(_) => todo!(),
-                CatanMessage::PlayerAdded(_) => todo!(),
-            };
-
-            assert_eq!(invitation.game_id, game_id);
-        }
-
-        let message = wait_for_message!(name, rx);
-        // next we start the game
-    }
-
-    // async fn game_thread_message_loop(
-    //     name: &str,
-    //     auth_token: &str,
-    //     client_id: &str,
-    //     mut rx: Receiver<CatanMessage>,
-    // ) {
-    //     let proxy = ServiceProxy::new(true, HOST_URL);
-    //     loop {
-    //         let message = wait_for_message!(name, rx);
-    //         match message {
-    //             CatanMessage::GameUpdate(_) => todo!(),
-    //             CatanMessage::Invite(invitation) => {
-    //                 thread_info!(
-    //                     "name",
-    //                     "Invitation received from {}",
-    //                     invitation.originator_name
-    //                 );
-    //                 // respond to invite
-    //                 let response = proxy.invitation_response(&invitation, auth_token).await.unwrap();
-    //                 assert!(response.status().is_success(), "error: {:#?}", response);
-    //             }
-    //             CatanMessage::Error(e) => {
-    //                 panic!("Error message received: {:#?}", e);
-    //             }
-    //             CatanMessage::InvitationResponse(_) => todo!(),
-    //             CatanMessage::GameCreated(_) => todo!(),
-    //             CatanMessage::Started(_) => todo!(),
-    //             CatanMessage::Ended(_) => {
-    //                 break;
-    //             }
-    //             CatanMessage::PlayerAdded(_) => todo!(),
-    //         }
-    //     }
-    // }
 }

@@ -54,7 +54,8 @@ pub struct RegularGame {
     pub creator_id: String,
     pub baron_tile: TileKey,
     pub can_undo: bool,
-    pub shuffle_count: i32,
+    pub shuffle_count: u32,
+    pub game_index: u32,
 }
 
 impl RegularGame {
@@ -114,7 +115,37 @@ impl RegularGame {
             baron_tile: TileKey::new(0, 0, 0),
             can_undo: true,
             shuffle_count: 1,
+            game_index: 1,
         }
+    }
+
+    /**
+     *  clone the game, add the user, and return the clone.  presumably it will be added to the undo_stack
+     *  so that the operation can be undone by simply going to the previous game struct
+     */
+
+    pub fn add_user(&self, profile: &ClientUser) -> Result<Self, GameError> {
+
+        if self.players.contains_key(&profile.id){
+            return Err(GameError::BadId(format!("{} is already in the game", profile.id)));
+        }
+
+        let mut clone = self.clone();
+        let player = {
+            Player {
+                user_data: profile.clone(),
+                roads: vec![],
+                buildings: vec![],
+                harbors: vec![],
+                targets: vec![],
+                resource_count: ResourceCount::default(),
+                good_rolls: 0,
+                bad_rolls: 0,
+                state: CalculatedState::default(),
+            }
+        };
+        clone.players.insert(profile.id.clone(), player);
+        Ok(clone)
     }
 
     /// Sets up the game tiles according to the provided game information.
@@ -498,12 +529,16 @@ impl<'a> CatanGame<'a> for RegularGame {
     fn set_player_order(&mut self, id_order: Vec<String>) -> Result<(), GameError> {
         // Check if the number of players matches the number of IDs in id_order
         if self.players.len() != id_order.len() {
-            return Err(GameError::PlayerMismatch);
+            return Err(GameError::BadActionData(format!(
+                "games has {} players and order has {} players",
+                self.players.len(),
+                id_order.len()
+            )));
         }
         let order = id_order.clone();
         for id in order {
             if !self.players.contains_key(&id) {
-                return Err(GameError::IdNotFoundInOrder);
+                return Err(GameError::BadId(format!("{} not in players", id)));
             }
         }
         self.player_order = id_order.clone();

@@ -1,15 +1,16 @@
 #![allow(dead_code)]
-use std::env;
-use std::pin::Pin;
-use std::sync::atomic::Ordering;
 use futures::Future;
 use log4rs::encode::pattern::PatternEncoder;
 use serde::{Deserialize, Serialize};
+use std::env;
+use std::pin::Pin;
+use std::sync::atomic::Ordering;
 use tokio::sync::mpsc::Receiver;
 
 use crate::full_info;
 use crate::{
-    games_service::game_container::game_messages::CatanMessage, shared::models::UserProfile, LOGGER_INIT, LOGGER_INIT_LOCK
+    games_service::game_container::game_messages::CatanMessage, shared::models::UserProfile,
+    LOGGER_INIT, LOGGER_INIT_LOCK,
 };
 
 pub const HOST_URL: &str = "http://localhost:8082";
@@ -48,16 +49,58 @@ type AsyncClientThread = fn(rx: Receiver<CatanMessage>) -> Pin<Box<dyn Future<Ou
 #[macro_export]
 macro_rules! wait_for_message {
     ($name:expr, $rx:expr) => {{
+        use crate::test::test_structs::log_for_message;
         thread_info!($name, "Begin wait for message");
         let message = $rx
             .recv()
             .await
-            .unwrap_or_else(|| panic!("failed to receive message"));
-        thread_info!($name, "received message: {:?}", message);
+            .expect("failed to receive message"); // Changed to expect
+        let msg = log_for_message(&message);
+        thread_info!($name, "received {:#?}", msg);
         message
     }};
 }
 
+pub fn log_for_message(message: &CatanMessage) -> String {
+    match message {
+        CatanMessage::GameUpdate(game) => {
+            format!(
+                "GameUpdate [id={}] [index={}] [players={}]",
+                game.id,
+                game.game_index,
+                game.players.len()
+            )
+        }
+        CatanMessage::Invite(invite) => {
+            format!(
+                "Invitation [id={}] [from={}] [to={}]",
+                invite.game_id, invite.from_name, invite.to_name
+            )
+        }
+        CatanMessage::InvitationResponse(response) => {
+            format!(
+                "InvitationResponse [id={}] [from={}] [to={}]",
+                response.game_id, response.from_name, response.to_name
+            )
+        }
+        CatanMessage::GameCreated(game) => {
+            format!(
+                "GameCreated [game_id={}] [user_id: {}]",
+                game.game_id, game.user_id
+            )
+        }
+        CatanMessage::PlayerAdded(p) => {
+            format!("PlayerAdded [players={}]", p.join(","))
+        }
+        CatanMessage::Started(s) => {
+            format!("Started: {}", s)
+        }
+        CatanMessage::Ended(_) => {
+            format!("Ended")
+        }
+        CatanMessage::Error(e) => {format!("Error: {:#?}", e)},
+    }
+}
 pub async fn init_test_logger() {
     if LOGGER_INIT.load(Ordering::Relaxed) {
         return;
@@ -70,11 +113,11 @@ pub async fn init_test_logger() {
     path.pop(); // Remove the binary name
     path.pop(); // Remove the 'debug' directory
     path.pop(); // Remove the 'target' directory
-    path.pop(); 
+    path.pop();
     path.push("log4rs.yaml");
-    
+
     log4rs::init_file(path, Default::default()).unwrap();
-    
+
     let current_dir = env::current_dir().unwrap();
     full_info!("CWD: {:#?}", current_dir.display());
 
@@ -92,8 +135,3 @@ impl OneLineEncoder {
         }
     }
 }
-
-
-
-
-
