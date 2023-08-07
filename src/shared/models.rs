@@ -15,7 +15,7 @@ use crate::games_service::game_container::game_messages::CatanMessage;
 
 use super::utility::get_id;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub enum GameError {
 
     MissingData(String),
