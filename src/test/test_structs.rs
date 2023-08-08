@@ -2,7 +2,7 @@
 use futures::Future;
 use log4rs::encode::pattern::PatternEncoder;
 use serde::{Deserialize, Serialize};
-use std::env;
+use std::{env, fs::OpenOptions};
 use std::pin::Pin;
 use std::sync::atomic::Ordering;
 use tokio::sync::mpsc::Receiver;
@@ -115,6 +115,10 @@ pub async fn init_test_logger() {
     path.pop(); // Remove the 'target' directory
     path.pop();
     path.push("log4rs.yaml");
+   
+    let file = OpenOptions::new().write(true).truncate(true).open("log/log.csv").unwrap();
+    file.set_len(0).unwrap();
+    drop(file);
 
     log4rs::init_file(path, Default::default()).unwrap();
 

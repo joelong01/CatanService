@@ -2,7 +2,11 @@
 #![allow(unused_variables)]
 
 use crate::{
-    games_service::game_container::game_messages::{CatanMessage, Invitation},
+    game_from_message,
+    games_service::{
+        catan_games::games::regular::regular_game::RegularGame,
+        game_container::game_messages::{CatanMessage, Invitation},
+    },
     log_thread_info,
     shared::models::ClientUser,
     trace_thread_info, wait_for_message,
@@ -62,16 +66,17 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
     trace_thread_info!(name, "Game Thread Woke up!");
 
     trace_thread_info!(name, "creating new game");
+    let test_game = load_game().expect(&format!("Test game should be in {}", TEST_GAME_LOC));
     let response = proxy
-        .new_game(CatanGames::Regular, &auth_token)
+        .new_game(CatanGames::Regular, &auth_token, Some(&test_game))
         .await
         .unwrap();
-    assert!(
-        response.status().is_success(),
-        "error loggin in user: {}, err: {:#?}",
-        my_info.user_profile.display_name,
-        response
-    );
+    // assert!(
+    //     response.status().is_success(),
+    //     "error loggin in user: {}, err: {:#?}",
+    //     my_info.user_profile.display_name,
+    //     response
+    // );
     loop {
         let message = wait_for_message!(name, rx);
         if let CatanMessage::GameCreated(game) = message.clone() {
@@ -136,10 +141,51 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
     }
     trace_thread_info!(name, "all players accepted: {:#?}", players);
 
-    log_thread_info!(name, "finished invitations.");
+    proxy
+        .start_game(&game_id, &auth_token)
+        .await
+        .expect("start should not fail");
+    let message = wait_for_message!(name, rx);
 
-    //
-    //  next tell service that all the players are added and we can start the game
-    trace_thread_info!(name, "end of test:");
+    assert!(
+        matches!(message, CatanMessage::GameUpdate(_)),
+        "Expected GameUpdate variant, got {:?}",
+        message
+    );
+
+    let game = game_from_message!(message).expect("Should be a GameUpdate!");
+    assert_eq!(game.players.len(), 3);
+
+    log_thread_info!(name, "end of test");
     // next we start the game
 }
+const TEST_GAME_LOC: &'static str = "./src/test/test_game.json";
+
+
+fn save_game(game: &RegularGame) {
+   assert_eq!(game.players.len(), 1); // needed for the new_game logic
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(TEST_GAME_LOC)
+        .unwrap();
+
+    // Write the JSON string to the file
+    std::io::Write::write_all(
+        &mut file,
+        serde_json::to_string_pretty(game).unwrap().as_bytes(),
+    )
+    .unwrap();
+}
+
+fn load_game() -> Result<RegularGame, Box<dyn std::error::Error>> {
+    // Read the file to a string
+    let contents = std::fs::read_to_string(TEST_GAME_LOC)?;
+
+    // Parse the string as JSON into a RegularGame object
+    let game: RegularGame = serde_json::from_str(&contents)?;
+
+    Ok(game)
+}
+

@@ -99,22 +99,8 @@ pub async fn respond_to_invite(
         );
     }
 
-    // tell the sender the result of the invitation
-    let mut invite_response_clone = invite_response.clone();
-    invite_response_clone.to_id = invite_response.from_id.clone();
-
-    if let Err(e) = LongPoller::send_message(
-        vec![invite_response_clone.to_id.clone()],
-        &CatanMessage::InvitationResponse(invite_response.clone()),
-    )
-    .await
-    {
-        return create_http_response(
-            StatusCode::BadRequest,
-            &format!("Error in sending message to lobby, {:#?}", e),
-            "",
-        );
-    }
+    // 
+    //  don't tell the sender as they know they accepted it
 
     create_http_response(StatusCode::Accepted, "accepted", "")
 }

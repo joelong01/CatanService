@@ -154,3 +154,12 @@ macro_rules! trace_function {
         defer! {trace_thread_info!(format!("leave {}", $function), $($arg)*);}
     }}
 }
+#[macro_export]
+macro_rules! game_from_message {
+    ($message:expr) => {
+        match $message {
+            CatanMessage::GameUpdate(regular_game) => Ok(regular_game),
+            _ => Err("Expected GameUpdate variant"),
+        }
+    };
+}

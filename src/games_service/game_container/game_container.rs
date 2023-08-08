@@ -142,7 +142,7 @@ impl GameContainer {
         }
     }
 
-    pub async fn push_game(game_id: &String, game: &RegularGame) -> Result<(), GameError> {
+    pub async fn push_game(game_id: &str, game: &RegularGame) -> Result<(), GameError> {
         let game_container = Self::get_locked_container(game_id).await?;
         let mut rw_game_container = game_container.write().await;
         let game_clone = game.clone();

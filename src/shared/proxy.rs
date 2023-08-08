@@ -11,7 +11,7 @@ use url::Url;
 
 use crate::games_service::{
     game_container::game_messages::{GameHeader, Invitation, InvitationResponseData},
-    shared::game_enums::CatanGames,
+    shared::game_enums::CatanGames, catan_games::games::regular::regular_game::RegularGame,
 };
 
 use super::models::{ClientUser, UserProfile};
@@ -191,11 +191,12 @@ impl ServiceProxy {
         self.get(url, headers)
     }
 
-    pub fn new_game(
+    pub async fn new_game(
         &self,
         game_type: CatanGames,
         auth_token: &str,
-    ) -> impl Future<Output = Result<Response, reqwest::Error>> {
+        game: Option<&RegularGame>
+    ) -> Result<RegularGame, reqwest::Error> {
         let url = format!("auth/api/v1/games/{:?}", game_type);
 
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
@@ -209,8 +210,26 @@ impl ServiceProxy {
             reqwest::header::AUTHORIZATION,
             HeaderValue::from_str(auth_token).expect("Invalid header value"),
         );
+        
+        let result = match game {
+            Some(g) => {
+                self.post::<&RegularGame>(&url, headers, Some(g)).await
+            },
+            None => {
+                self.post::<()>(&url, headers, None).await
+            }
+        };
 
-        self.post::<()>(&url, headers, None)
+        match result {
+            Ok(g) => {
+               let game:RegularGame =  g.json().await.expect("This should be a game");
+               Ok(game)
+            }
+            Err(e) => {
+                Err(e)
+            }
+        }
+        
     }
 
     pub fn get_lobby(
@@ -308,5 +327,27 @@ impl ServiceProxy {
         );
 
         self.post::<&InvitationResponseData>(&url, headers, Some(invite))
+    }
+
+    pub fn start_game(&self,  game_id: &str, auth_token: &str) -> impl Future<Output = Result<Response, reqwest::Error>> {
+        let url = format!("/auth/api/v1/games/start/{}", game_id);
+
+        let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
+        if self.is_test {
+            headers.insert(
+                HeaderName::from_static(GameHeader::IS_TEST),
+                HeaderValue::from_static("true"),
+            );
+        }
+        headers.insert(
+            reqwest::header::AUTHORIZATION,
+            HeaderValue::from_str(auth_token).expect("Invalid header value"),
+        );
+        headers.insert(
+            reqwest::header::CONTENT_TYPE,
+            HeaderValue::from_str("application/json").expect("that should be non-controversial"),
+        );
+
+        self.post::<()>(&url, headers, None)
     }
 }

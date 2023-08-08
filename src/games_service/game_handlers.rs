@@ -6,7 +6,7 @@ use crate::{
     },
     middleware::environment_mw::ServiceEnvironmentContext,
     shared::models::{ClientUser, ServiceResponse},
-    trace_thread_info, trace_function,
+    trace_function, trace_thread_info,
     user_service::users::{create_http_response, internal_find_user},
 };
 use actix_web::{
@@ -17,12 +17,15 @@ use azure_core::StatusCode;
 
 use scopeguard::defer;
 
-
 use crate::games_service::shared::game_enums::{CatanGames, SupportedGames};
 
 use super::{
-    catan_games::{games::regular::regular_game::RegularGame, traits::game_trait::CatanGame},
+    catan_games::{
+        games::regular::regular_game::RegularGame,
+        traits::{game_state_machine_trait::StateMachineTrait, game_trait::CatanGame},
+    },
     game_container::{game_container::GameContainer, game_messages::GameHeader},
+    shared::game_enums::GameState,
 };
 
 ///
@@ -73,6 +76,7 @@ pub async fn new_game(
     game_type: Path<CatanGames>,
     data: Data<ServiceEnvironmentContext>,
     req: HttpRequest,
+    test_game: Option<web::Json<RegularGame>>
 ) -> impl Responder {
     trace_function!("new_game", "");
     let game_type = game_type.into_inner();
@@ -104,11 +108,24 @@ pub async fn new_game(
             );
         }
     };
-
-    let mut game = RegularGame::new(&ClientUser::from_persist_user(user));
-    game.shuffle();
-
+    //
+    //  "if it is a test game and the game has been passed in, use it.  otherwise create a new game and shuffle"
+    let game = if is_test {
+        match test_game {
+            Some(g) => g.clone(),
+            None => {
+                let mut game = RegularGame::new(&ClientUser::from_persist_user(user));
+                game.shuffle();
+                game
+            }
+        }
+    } else {
+        let mut game = RegularGame::new(&ClientUser::from_persist_user(user));
+        game.shuffle();
+        game
+    };
     
+
     //
     //  the sequence is
     //  1. create_and_add_container
@@ -134,7 +151,7 @@ pub async fn new_game(
         }),
     )
     .await;
-    
+
     HttpResponse::Ok()
         .content_type("application/json")
         .json(game)
@@ -147,4 +164,23 @@ pub async fn supported_games() -> impl Responder {
     HttpResponse::Ok()
         .content_type("application/json")
         .json(games)
+}
+
+pub async fn start_game(game_id_path: web::Path<String>, _req: HttpRequest) -> impl Responder {
+    let game_id: &str = &game_id_path;
+
+    let game = match GameContainer::current(&game_id.to_owned()).await {
+        Ok(g) => g,
+        Err(e) => {
+            return create_http_response(
+                StatusCode::NotFound,
+                &format!("invalid game_id: {}.  error: {:?}", game_id, e),
+                "",
+            )
+        }
+    };
+    let mut game_clone = game.clone();
+    game_clone.set_current_state(GameState::ChoosingBoard);
+    let _ = GameContainer::push_game(game_id, &game_clone).await;
+    HttpResponse::Ok().into()
 }

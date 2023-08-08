@@ -16,3 +16,5 @@ Cargo.lock
 tmp.txt
 output.json
 log/log.csv
+src/test/client2.rs
+*.csv
