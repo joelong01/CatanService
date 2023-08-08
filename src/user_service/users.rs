@@ -10,7 +10,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use crate::cosmos_db::cosmosdb::UserDb;
 use crate::cosmos_db::mocked_db::TestDb;
 use crate::games_service::game_container::game_messages::GameHeader;
-use crate::games_service::lobby::lobby::Lobby;
+use crate::games_service::long_poller::long_poller::LongPoller;
 use crate::middleware::environment_mw::{ServiceEnvironmentContext, CATAN_ENV};
 use crate::shared::models::{Claims, ClientUser, PersistUser, ServiceResponse, UserProfile};
 use actix_web::web::Data;
@@ -193,6 +193,7 @@ pub async fn register(
  * find the user in the database
  * hash the password and make sure it matches the hash in the db
  * if it does, return a signed JWT token
+ * add the user to the ALL_USERS_MAP
  */
 pub async fn login(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> HttpResponse {
     let password_value: String = match req.headers().get(GameHeader::PASSWORD) {
@@ -286,7 +287,7 @@ pub async fn login(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> H
 
         match token_result {
             Ok(token) => {
-                Lobby::join_lobby(&user.id, &user.user_profile.display_name ).await;
+                let _ = LongPoller::add_user(&user.id).await;
                 create_http_response(StatusCode::Ok, "", &token)
             }
             Err(_) => {

@@ -1,5 +1,9 @@
 use crate::{
     full_info,
+    games_service::{
+        game_container::game_messages::{CatanMessage, GameCreatedData},
+        long_poller::long_poller::LongPoller,
+    },
     middleware::environment_mw::ServiceEnvironmentContext,
     shared::models::{ClientUser, ServiceResponse},
     thread_info, trace_function,
@@ -17,7 +21,6 @@ use crate::games_service::shared::game_enums::{CatanGames, SupportedGames};
 use super::{
     catan_games::{games::regular::regular_game::RegularGame, traits::game_trait::CatanGame},
     game_container::{game_container::GameContainer, game_messages::GameHeader},
-    lobby::lobby::Lobby,
 };
 
 ///
@@ -109,23 +112,26 @@ pub async fn new_game(
     //  1. create_and_add_container
     //  2. push_game
     //  3. add_player
-    match GameContainer::create_and_add_container(&game.id,  &game).await {
+    //  4. send notification
+    match GameContainer::create_and_add_container(&game.id, &game).await {
         Err(e) => {
             full_info!("insert_container returned an error.  {:#?}!", e);
-            return create_http_response(StatusCode::NotFound, &format!("{:?}", e), "")
+            return create_http_response(StatusCode::NotFound, &format!("{:?}", e), "");
         }
-        Ok(_) => {
-            
-        },
+        Ok(_) => {}
     }
-
-    thread_info!("new_game", "Lobby::game_created");
-    let _ = Lobby::game_created(&game.id, user_id).await;
     //
-    //  pull the user from the lobby
-    //  thread_info!("new_game", "Lobby::leave_lobby");
-    //  Lobby::leave_lobby(user_id).await;
-
+    //  send a message to the user that the game was created
+    thread_info!("new_game", "Lobby::game_created");
+    let _ = LongPoller::send_message(
+        vec![user_id.to_string()],
+        &CatanMessage::GameCreated(GameCreatedData {
+            user_id: user_id.to_string(),
+            game_id: game.id.to_string(),
+        }),
+    )
+    .await;
+    
     HttpResponse::Ok()
         .content_type("application/json")
         .json(game)

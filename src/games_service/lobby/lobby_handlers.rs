@@ -6,9 +6,12 @@ use actix_web::{
 use azure_core::StatusCode;
 
 use crate::{
-    games_service::game_container::{
-        game_container::GameContainer,
-        game_messages::{CatanMessage, GameHeader, Invitation, InvitationResponseData},
+    games_service::{
+        game_container::{
+            game_container::GameContainer,
+            game_messages::{CatanMessage, GameHeader, Invitation, InvitationResponseData},
+        },
+        long_poller::long_poller::LongPoller,
     },
     middleware::environment_mw::ServiceEnvironmentContext,
     shared::models::ClientUser,
@@ -16,12 +19,11 @@ use crate::{
     user_service::users::{create_http_response, internal_find_user},
 };
 
-use super::lobby::Lobby;
 
 pub async fn get_lobby(_req: HttpRequest) -> HttpResponse {
     return HttpResponse::Ok()
         .content_type("application/json")
-        .json(Lobby::copy_lobby().await);
+        .json(LongPoller::get_available().await);
 }
 pub async fn post_invite(req: HttpRequest, invite: web::Json<Invitation>) -> HttpResponse {
     let from_id = req
@@ -32,10 +34,13 @@ pub async fn post_invite(req: HttpRequest, invite: web::Json<Invitation>) -> Htt
         .unwrap();
     let invite: &Invitation = &invite;
 
-    match Lobby::send_message(&invite.to_id, &CatanMessage::Invite(invite.clone())).await {
-        Ok(_) => HttpResponse::Ok()
-            .content_type("application/json")
-            .json(Lobby::copy_lobby().await),
+    match LongPoller::send_message(
+        vec![invite.to_id.clone()],
+        &CatanMessage::Invite(invite.clone()),
+    )
+    .await
+    {
+        Ok(_) => create_http_response(StatusCode::Ok, "", ""),
         Err(e) => create_http_response(
             StatusCode::BadRequest,
             &format!("Error posting invite: {:?}", e),
@@ -76,30 +81,27 @@ pub async fn respond_to_invite(
             &invite_response.game_id,
             &ClientUser::from_persist_user(persist_user),
         )
-        .await.expect("add_player shouldn't fail.  TODO: handle failure");
-
-        //
-        // tell the long poller of the *sender* that they accepted the message -- this way the sender's long
-        // poller gets the game_id
-
-        // tell the long poller of the caller (e.g. the from_id) that the invitation was accepted
-        if let Err(e) = Lobby::send_message(
-            &invite_response.from_id,
-            &CatanMessage::InvitationResponse(invite_response.clone()),
-        )
         .await
-        {
-            return create_http_response(
-                StatusCode::BadRequest,
-                &format!("Error in sending message to lobby, {:#?}", e),
-                "",
-            );
-        }
+        .expect("add_player shouldn't fail.  TODO: handle failure");
     }
 
-   // the creator of the game has a game_id, so they will be waiting on the GameContainer, 
-   // so we don't send a message there. the act above of GameContainer::add_player() will 
-   // update that thread -- TODO: we do need a way to tell the client "user declined"
+    // tell both the sender and reciever the result of the invitation
+
+    if let Err(e) = LongPoller::send_message(
+        vec![
+            invite_response.from_id.clone(),
+            invite_response.to_id.clone(),
+        ],
+        &CatanMessage::InvitationResponse(invite_response.clone()),
+    )
+    .await
+    {
+        return create_http_response(
+            StatusCode::BadRequest,
+            &format!("Error in sending message to lobby, {:#?}", e),
+            "",
+        );
+    }
 
     create_http_response(StatusCode::Accepted, "accepted", "")
 }

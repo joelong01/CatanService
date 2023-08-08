@@ -9,11 +9,11 @@ mod shared;
 mod test;
 mod user_service;
 
-// dependencies...
 
 use actix_web::{web, HttpResponse, HttpServer, Scope};
+use games_service::long_poller::handler::long_poll_handler;
 
-use crate::games_service::{game_container::game_container, lobby::lobby_handlers};
+use crate::games_service::lobby::lobby_handlers;
 use games_service::game_handlers;
 use lazy_static::lazy_static;
 use log::error;
@@ -218,7 +218,7 @@ fn game_service() -> Scope {
 }
 
 fn longpoll_service() -> Scope {
-    web::scope("/longpoll/{index}").route("", web::get().to(game_container::long_poll_handler))
+    web::scope("/longpoll/{index}").route("", web::get().to(long_poll_handler))
 }
 
 fn profile_service() -> Scope {

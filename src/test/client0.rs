@@ -61,7 +61,7 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
     sleep(Duration::from_secs(1)).await;
     thread_info!(name, "Game Thread Woke up!");
 
-    full_info!("creating new game with token {}", auth_token.clone());
+    thread_info!(name, "creating new game");
     let response = proxy
         .new_game(CatanGames::Regular, &auth_token)
         .await

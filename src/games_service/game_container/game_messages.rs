@@ -122,6 +122,13 @@ impl fmt::Debug for CatanMessage {
         }
     }
 }
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Debug)]
+#[serde(rename_all = "camelCase")]
+pub enum GameStatus {
+    PlayingGame,
+    Available,
+    Hidden
+}
 
 #[macro_export]
 macro_rules! invite_message {
