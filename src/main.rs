@@ -219,6 +219,7 @@ fn game_service() -> Scope {
             web::post().to(game_handlers::shuffle_game),
         )
         .route("/start/{game_id}", web::post().to(game_handlers::start_game))
+        .route("/actions/{game_id}", web::get().to(game_handlers::valid_actions))
 }
 
 fn longpoll_service() -> Scope {

@@ -2,10 +2,10 @@
 #![allow(unused_variables)]
 
 use crate::{
-    game_from_message,
+    crack_game_created, crack_game_update,
     games_service::{
         catan_games::games::regular::regular_game::RegularGame,
-        game_container::game_messages::{CatanMessage, Invitation},
+        game_container::game_messages::{CatanMessage, Invitation}, shared::game_enums::GameAction,
     },
     log_thread_info,
     shared::models::ClientUser,
@@ -65,31 +65,17 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
     sleep(Duration::from_secs(1)).await;
     trace_thread_info!(name, "Game Thread Woke up!");
 
-    trace_thread_info!(name, "creating new game");
+
     let test_game = load_game().expect(&format!("Test game should be in {}", TEST_GAME_LOC));
-    let response = proxy
+    let returned_game = proxy
         .new_game(CatanGames::Regular, &auth_token, Some(&test_game))
         .await
         .unwrap();
 
-    // assert!(
-    //     response.status().is_success(),
-    //     "error loggin in user: {}, err: {:#?}",
-    //     my_info.user_profile.display_name,
-    //     response
-    // );
-    loop {
-        let message = wait_for_message!(name, rx);
-        if let CatanMessage::GameCreated(game) = message.clone() {
-            game_id = game.game_id;
-            break;
-        } else {
-            trace_thread_info!(name, "Wrong message received: {:?}", message);
-        }
-    }
-
+    let message = wait_for_message!(name, rx);
+    let game_created = crack_game_created!(message).expect("should be a game!");
+    game_id = game_created.game_id;
     assert_eq!(game_id, test_game.id);
-    
 
     //
     // get the lobby
@@ -142,6 +128,15 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
         } else {
             trace_thread_info!(name, "Wrong message received: {:?}", message);
         }
+
+        let actions = proxy
+            .get_actions(&game_id, &auth_token)
+            .await
+            .expect("get actdions to succeed");
+        assert!(actions.len() == 3);
+        assert!(actions.contains(&GameAction::AddPlayer));
+        assert!(actions.contains(&GameAction::RemovePlayer));
+        assert!(actions.contains(&GameAction::Done));
     }
     trace_thread_info!(name, "all players accepted: {:#?}", players);
 
@@ -157,17 +152,24 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
         message
     );
 
-    let game = game_from_message!(message).expect("Should be a GameUpdate!");
+    let game = crack_game_update!(message).expect("Should be a GameUpdate!");
     assert_eq!(game.players.len(), 3);
+
+    // what actions can I take?
+
+    let actions = proxy
+        .get_actions(&game_id, &auth_token)
+        .await
+        .expect("get actdions to succeed");
+    assert!(actions.len() == 2);
 
     log_thread_info!(name, "end of test");
     // next we start the game
 }
 const TEST_GAME_LOC: &'static str = "./src/test/test_game.json";
 
-
 fn save_game(game: &RegularGame) {
-   assert_eq!(game.players.len(), 1); // needed for the new_game logic
+    assert_eq!(game.players.len(), 1); // needed for the new_game logic
     let mut file = std::fs::OpenOptions::new()
         .write(true)
         .create(true)
@@ -192,4 +194,3 @@ fn load_game() -> Result<RegularGame, Box<dyn std::error::Error>> {
 
     Ok(game)
 }
-

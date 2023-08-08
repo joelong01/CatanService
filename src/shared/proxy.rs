@@ -11,7 +11,7 @@ use url::Url;
 
 use crate::games_service::{
     game_container::game_messages::{GameHeader, Invitation, InvitationResponseData},
-    shared::game_enums::CatanGames, catan_games::games::regular::regular_game::RegularGame,
+    shared::game_enums::{CatanGames, GameAction}, catan_games::games::regular::regular_game::RegularGame,
 };
 
 use super::models::{ClientUser, UserProfile};
@@ -250,6 +250,35 @@ impl ServiceProxy {
         );
 
         self.get(url, headers)
+    }
+
+    pub async fn get_actions(
+        &self,
+        game_id: &str,
+        auth_token: &str,
+    ) ->  Result<Vec<GameAction>, reqwest::Error> {
+        let url = format!("/auth/api/v1/games/actions/{}", game_id);
+        let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
+        if self.is_test {
+            headers.insert(
+                HeaderName::from_static(GameHeader::IS_TEST),
+                HeaderValue::from_static("true"),
+            );
+        }
+        headers.insert(
+            reqwest::header::AUTHORIZATION,
+            HeaderValue::from_str(auth_token).expect("Invalid header value"),
+        );
+        headers.insert(
+            HeaderName::from_static(GameHeader::GAME_ID),
+            HeaderValue::from_str(game_id).expect("Invalid header value"),
+        );
+
+
+        let response = self.get(&url, headers).await.expect("GET should not fail");
+        let ret:Vec<GameAction> = response.json().await.expect("Vec<GameAction> should deserialize");
+        Ok(ret)
+
     }
 
     pub fn long_poll(

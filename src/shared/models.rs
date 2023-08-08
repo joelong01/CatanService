@@ -62,7 +62,7 @@ impl CosmosEntity for PersistUser {
  */
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "PascalCase")]
 pub struct PersistUser {
     pub id: String,                    // not set by client
     pub partition_key: u64,            // Option<> so that the client can skip this
@@ -107,7 +107,7 @@ impl Default for PersistUser {
 /// UserProfile is just information about the client.  this can be as much or little information as the app needs
 /// to run
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "PascalCase")]
 pub struct UserProfile {
     pub email: String,
     pub first_name: String,
@@ -156,7 +156,7 @@ impl UserProfile {
 /// that data is passed from the client to the service.  Note that the password is not in this structure -- it passes
 /// from the client in a header, as does the JWT token when it is needed.
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "PascalCase")]
 pub struct ClientUser {
     pub id: String,
     pub user_profile: UserProfile,

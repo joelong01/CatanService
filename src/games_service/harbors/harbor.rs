@@ -6,7 +6,7 @@ use super::{harbor_enums::HarborType, harbor_key::HarborKey};
 
 // Defining HarborInfo struct to be analogous to TypeScript's class
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "PascalCase")]
 pub struct Harbor {
     pub harbor_key: HarborKey,
     pub harbor_type: HarborType,

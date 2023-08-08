@@ -35,7 +35,7 @@ use super::game_info::{RegularGameInfo, REGULAR_GAME_INFO};
 
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "PascalCase")]
 pub struct RegularGame {
     pub id: String,
     #[serde_as(as = "Vec<(_, _)>")]

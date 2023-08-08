@@ -85,7 +85,7 @@ mod tests {
         println!("test_serialization");
         let game_json = serde_json::to_string_pretty(game).unwrap();
         assert_eq!(game_json.contains("_"), false, 
-        "There should be no _ in the json.  set #[serde(rename_all = \"camelCase\")] in the struct");
+        "There should be no _ in the json.  set #[serde(rename_all = \"PascalCase\")] in the struct");
         let mut file = File::create("output.json").expect("Could not create file");
         write!(file, "{}", game_json).expect("Could not write to file");
 

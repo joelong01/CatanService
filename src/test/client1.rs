@@ -6,7 +6,7 @@
 use std::time::Duration;
 
 use crate::games_service::game_container::game_messages::InvitationResponseData;
-use crate::{wait_for_message, game_from_message};
+use crate::{wait_for_message, crack_game_update};
 use crate::{
     games_service::game_container::game_messages::CatanMessage, shared::models::ClientUser,
     trace_thread_info, log_thread_info
@@ -76,7 +76,7 @@ pub(crate) async fn client1_thread(mut rx: Receiver<CatanMessage>) {
 
     assert!(matches!(message, CatanMessage::GameUpdate(_)), "Expected GameUpdate variant, got {:?}", message);
 
-    let game = game_from_message!(message).expect("Should be a GameUpdate!");
+    let game = crack_game_update!(message).expect("Should be a GameUpdate!");
     assert_eq!(game.players.len(), 3);
     log_thread_info!(name, "end of test");
 }

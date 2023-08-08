@@ -76,7 +76,7 @@ pub async fn new_game(
     game_type: Path<CatanGames>,
     data: Data<ServiceEnvironmentContext>,
     req: HttpRequest,
-    test_game: Option<web::Json<RegularGame>>
+    test_game: Option<web::Json<RegularGame>>,
 ) -> impl Responder {
     trace_function!("new_game", "");
     let game_type = game_type.into_inner();
@@ -124,7 +124,6 @@ pub async fn new_game(
         game.shuffle();
         game
     };
-    
 
     //
     //  the sequence is
@@ -179,8 +178,29 @@ pub async fn start_game(game_id_path: web::Path<String>, _req: HttpRequest) -> i
             )
         }
     };
+   // let next_state = game.state_data.state()
     let mut game_clone = game.clone();
     game_clone.set_current_state(GameState::ChoosingBoard);
     let _ = GameContainer::push_game(game_id, &game_clone).await;
     HttpResponse::Ok().into()
+}
+/**
+ * look at the state of the game and asnwer the question "what are the valid actions"
+ */
+pub async fn valid_actions(game_id_path: web::Path<String>, _req: HttpRequest) -> impl Responder {
+    let game_id: &str = &game_id_path;
+
+    let game = match GameContainer::current(&game_id.to_owned()).await {
+        Ok(g) => g,
+        Err(e) => {
+            return create_http_response(
+                StatusCode::NotFound,
+                &format!("invalid game_id: {}.  error: {:?}", game_id, e),
+                "",
+            )
+        }
+    };
+    HttpResponse::Ok()
+        .content_type("application/json")
+        .json(game.state_data.actions())
 }

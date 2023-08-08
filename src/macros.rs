@@ -155,11 +155,20 @@ macro_rules! trace_function {
     }}
 }
 #[macro_export]
-macro_rules! game_from_message {
+macro_rules! crack_game_update {
     ($message:expr) => {
         match $message {
             CatanMessage::GameUpdate(regular_game) => Ok(regular_game),
             _ => Err("Expected GameUpdate variant"),
+        }
+    };
+}
+#[macro_export]
+macro_rules! crack_game_created {
+    ($message:expr) => {
+        match $message {
+            CatanMessage::GameCreated(data) => Ok(data),
+            _ => Err("Expected GameCreated variant"),
         }
     };
 }

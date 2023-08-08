@@ -14,7 +14,7 @@ use crate::{
 use super::regular_game::RegularGame;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "PascalCase")]
 pub struct RegularGameInfo {
     pub name: String,
     pub tile_resources: Vec<TileResource>,
