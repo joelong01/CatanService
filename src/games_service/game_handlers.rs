@@ -6,7 +6,7 @@ use crate::{
     },
     middleware::environment_mw::ServiceEnvironmentContext,
     shared::models::{ClientUser, ServiceResponse},
-    thread_info, trace_function,
+    trace_thread_info, trace_function,
     user_service::users::{create_http_response, internal_find_user},
 };
 use actix_web::{
@@ -14,7 +14,9 @@ use actix_web::{
     HttpRequest, HttpResponse, Responder,
 };
 use azure_core::StatusCode;
+
 use scopeguard::defer;
+
 
 use crate::games_service::shared::game_enums::{CatanGames, SupportedGames};
 
@@ -106,7 +108,7 @@ pub async fn new_game(
     let mut game = RegularGame::new(&ClientUser::from_persist_user(user));
     game.shuffle();
 
-    full_info!("new_game: insert_container");
+    
     //
     //  the sequence is
     //  1. create_and_add_container
@@ -120,9 +122,10 @@ pub async fn new_game(
         }
         Ok(_) => {}
     }
+
     //
     //  send a message to the user that the game was created
-    thread_info!("new_game", "Lobby::game_created");
+    trace_thread_info!("new_game", "Lobby::game_created");
     let _ = LongPoller::send_message(
         vec![user_id.to_string()],
         &CatanMessage::GameCreated(GameCreatedData {

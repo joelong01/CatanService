@@ -129,19 +129,28 @@ macro_rules! full_info {
 }
 
 #[macro_export]
-macro_rules! thread_info {
+macro_rules! log_thread_info {
     ($from:expr, $($arg:tt)*) => {
-        log::info!("{}:{},{},{}", file!(), line!(), $from, format!($($arg)*))
+        log::info!("[{}]:{},[{}:{}]", $from, { format!($($arg)*).replace("\n", "").replace("  ", "") }, file!(), line!())
     };
+}
+
+
+#[macro_export]
+macro_rules! trace_thread_info {
+    ($from:expr, $($arg:tt)*) => {{
+
+       // log::info!("{}:{},{},{}", file!(), line!(), $from, format!($($arg)*))
+    }};
 }
 #[macro_export]
 macro_rules! trace_function {
     ($function:expr, $($arg:tt)*) => {{
 
     use scopeguard::defer;
-    use crate::thread_info;
+    use crate::trace_thread_info;
     
-        thread_info!(format!("enter {}", $function), $($arg)*);
-        defer! {thread_info!(format!("leave {}", $function), $($arg)*);}
+    trace_thread_info!(format!("enter {}", $function), $($arg)*);
+        defer! {trace_thread_info!(format!("leave {}", $function), $($arg)*);}
     }}
 }

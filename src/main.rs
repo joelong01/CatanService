@@ -27,6 +27,9 @@ use std::env;
 use std::sync::atomic::{AtomicBool, Ordering};
 use user_service::users;
 
+pub use log::info;
+pub use log::trace;
+
 /**
  *  Code to pick a port in a threadsafe way -- either specified in an environment variable named COSMOS_RUST_SAMPLE_PORT
  *  or 8080

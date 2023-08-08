@@ -7,7 +7,7 @@ use std::pin::Pin;
 use std::sync::atomic::Ordering;
 use tokio::sync::mpsc::Receiver;
 
-use crate::full_info;
+
 use crate::{
     games_service::game_container::game_messages::CatanMessage, shared::models::UserProfile,
     LOGGER_INIT, LOGGER_INIT_LOCK,
@@ -50,13 +50,13 @@ type AsyncClientThread = fn(rx: Receiver<CatanMessage>) -> Pin<Box<dyn Future<Ou
 macro_rules! wait_for_message {
     ($name:expr, $rx:expr) => {{
         use crate::test::test_structs::log_for_message;
-        thread_info!($name, "Begin wait for message");
+        log_thread_info!($name, "Begin wait for message");
         let message = $rx
             .recv()
             .await
             .expect("failed to receive message"); // Changed to expect
         let msg = log_for_message(&message);
-        thread_info!($name, "received {:#?}", msg);
+        log_thread_info!($name, "received {:#?}", msg);
         message
     }};
 }
@@ -118,8 +118,6 @@ pub async fn init_test_logger() {
 
     log4rs::init_file(path, Default::default()).unwrap();
 
-    let current_dir = env::current_dir().unwrap();
-    full_info!("CWD: {:#?}", current_dir.display());
 
     LOGGER_INIT.store(true, Ordering::Relaxed);
 }

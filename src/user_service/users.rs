@@ -157,6 +157,7 @@ pub async fn register(
 
     // Create the user record
     let mut persist_user = PersistUser::from_user_profile(&profile_in, password_hash.to_owned());
+
     // ignore the game stats passed in by the client and create a new one
     persist_user.user_profile.games_played = Some(0);
     persist_user.user_profile.games_won = Some(0);
@@ -180,6 +181,9 @@ pub async fn register(
             ),
         }
     } else {
+        //
+        //  if it is a test, set the user_id to the email name so that it is easier to follow in the logs
+        persist_user.id = profile_in.email.clone();
         TestDb::create_user(persist_user.clone()).await.unwrap();
         HttpResponse::Ok()
             .content_type("application/json")
@@ -287,7 +291,7 @@ pub async fn login(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> H
 
         match token_result {
             Ok(token) => {
-                let _ = LongPoller::add_user(&user.id).await;
+                let _ = LongPoller::add_user(&user.id, &user.user_profile).await;
                 create_http_response(StatusCode::Ok, "", &token)
             }
             Err(_) => {
@@ -375,13 +379,11 @@ pub async fn find_user_by_id(
                 .content_type("application/json")
                 .json(user)
         }
-        Err(err) => {
-            create_http_response(
-                StatusCode::NotFound,
-                &format!("Failed to find user: {}", err),
-                "",
-            )
-        }
+        Err(err) => create_http_response(
+            StatusCode::NotFound,
+            &format!("Failed to find user: {}", err),
+            "",
+        ),
     }
 }
 
@@ -437,11 +439,7 @@ pub async fn delete(
     }
     match result {
         Ok(..) => {
-            create_http_response(
-                StatusCode::Ok,
-                &format!("deleted user with id: {}", id),
-                "",
-            )
+            create_http_response(StatusCode::Ok, &format!("deleted user with id: {}", id), "")
         }
         Err(err) => create_http_response(
             StatusCode::BadRequest,

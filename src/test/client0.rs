@@ -2,10 +2,10 @@
 #![allow(unused_variables)]
 
 use crate::{
-    full_info,
-    games_service::game_container::game_messages::{CatanMessage, Invitation, LobbyUser},
+    games_service::game_container::game_messages::{CatanMessage, Invitation},
+    log_thread_info,
     shared::models::ClientUser,
-    thread_info, wait_for_message,
+    trace_thread_info, wait_for_message,
 };
 use crate::{
     games_service::shared::game_enums::CatanGames, shared::proxy::ServiceProxy,
@@ -47,7 +47,7 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
         .await
         .expect("get_profile should return a ClientUser");
 
-    thread_info!(name, "Waiting for 500ms");
+    trace_thread_info!(name, "Waiting for 500ms");
     tokio::time::sleep(Duration::from_millis(500)).await;
     let message = wait_for_message!(name, rx);
 
@@ -57,11 +57,11 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
     //  in the browser app, the browser worker is up and running before the UI, so you don't
     //  need to worry the issue of the main thread running before the polling threads. here
     //  we do -- so we just go to sleep for a bit.
-    thread_info!(name, "Sleeping for 1 second...");
+    trace_thread_info!(name, "Sleeping for 1 second...");
     sleep(Duration::from_secs(1)).await;
-    thread_info!(name, "Game Thread Woke up!");
+    trace_thread_info!(name, "Game Thread Woke up!");
 
-    thread_info!(name, "creating new game");
+    trace_thread_info!(name, "creating new game");
     let response = proxy
         .new_game(CatanGames::Regular, &auth_token)
         .await
@@ -78,63 +78,68 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
             game_id = game.game_id;
             break;
         } else {
-            thread_info!(name, "Wrong message received: {:?}", message);
+            trace_thread_info!(name, "Wrong message received: {:?}", message);
         }
     }
 
     //
     // get the lobby
-    thread_info!(name, "Getting Lobby.");
-    let lobby: Vec<LobbyUser> = proxy
-        .get_lobby(&auth_token)
-        .await
-        .expect("get_lobby should not fail")
-        .json()
-        .await
-        .expect("get_lobby deserialization should work");
+    trace_thread_info!(name, "Getting Lobby.");
+    let res = proxy.get_lobby(&auth_token).await;
 
-    thread_info!(name, "get_lobby returned: {:#?}", lobby);
+    let lobby = match res {
+        Ok(response) => response
+            .json::<Vec<ClientUser>>()
+            .await
+            .expect("should deserialize"),
+        Err(e) => panic!("Error from get_lobby: {:?}", e),
+    };
+
+    trace_thread_info!(name, "get_lobby returned: {:#?}", lobby);
 
     for lobby_user in lobby {
         let my_clone = my_info.clone();
         let profile = my_clone.user_profile;
-        if lobby_user.user_id == my_clone.id {
+        if lobby_user.id == my_clone.id {
             continue; // don't invite myself
         }
         let invite_message = "Join my game!".to_string();
         let invitation = Invitation {
             from_id: my_clone.id.clone(),
             from_name: profile.display_name.clone(),
-            to_id: lobby_user.user_id.clone(),
-            to_name: lobby_user.user_name.clone(),
+            to_id: lobby_user.id.clone(),
+            to_name: lobby_user.user_profile.display_name.clone(),
             message: invite_message.clone(),
             from_picture: profile.picture_url.clone(),
             game_id: game_id.to_owned(),
         };
-        thread_info!(name, "Sending GameInvite");
+        trace_thread_info!(name, "Sending GameInvite");
         let response = proxy
             .send_invite(&invitation, &auth_token)
             .await
             .expect("send_invite should not fail");
     }
 
-    let mut players = Vec::new();
+    let mut invited_players = Vec::new();
     loop {
         let message = wait_for_message!(name, rx);
         if let CatanMessage::InvitationResponse(invite_response) = message.clone() {
             assert!(invite_response.accepted, "invite should be accepted");
-            thread_info!(name, "players accepted: {}", invite_response.from_name);
-            players.push(invite_response.from_id);
+            trace_thread_info!(name, "players accepted: {}", invite_response.from_name);
+            invited_players.push(invite_response.from_id);
+            if invited_players.len() == 2 {
+                break;
+            }
         } else {
-            thread_info!(name, "Wrong message received: {:?}", message);
-        }
-        if players.len() == 3 {
-            break;
+            trace_thread_info!(name, "Wrong message received: {:?}", message);
         }
     }
-    thread_info!(name, "all players accepted: {:#?}", players);
+    trace_thread_info!(name, "all players accepted: {:#?}", players);
+
+    log_thread_info!(name, "finished invitations.");
+
     //
     //  next tell service that all the players are added and we can start the game
-    thread_info!(name, "end of test:");
+    trace_thread_info!(name, "end of test:");
     // next we start the game
 }

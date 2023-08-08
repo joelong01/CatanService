@@ -112,7 +112,7 @@ impl fmt::Debug for CatanMessage {
             ),
             CatanMessage::Invite(invitation) => write!(f, "Invite: {:?}", invitation),
             CatanMessage::InvitationResponse(response) => {
-                write!(f, "InvitationResponse: {:?}", response)
+                write!(f, "[Accepted={:?}]", response.accepted)
             }
             CatanMessage::GameCreated(data) => write!(f, "GameCreated: {:?}", data),
             CatanMessage::PlayerAdded(players) => write!(f, "PlayerAdded: {:?}", players),
@@ -160,9 +160,3 @@ macro_rules! error_message {
     };
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct LobbyUser {
-    pub user_id: String,
-    pub user_name: String,
-}

@@ -19,7 +19,6 @@ use crate::{
     user_service::users::{create_http_response, internal_find_user},
 };
 
-
 pub async fn get_lobby(_req: HttpRequest) -> HttpResponse {
     return HttpResponse::Ok()
         .content_type("application/json")
@@ -85,13 +84,27 @@ pub async fn respond_to_invite(
         .expect("add_player shouldn't fail.  TODO: handle failure");
     }
 
-    // tell both the sender and reciever the result of the invitation
+    // tell the reciever the result of the invitation
 
     if let Err(e) = LongPoller::send_message(
-        vec![
-            invite_response.from_id.clone(),
-            invite_response.to_id.clone(),
-        ],
+        vec![invite_response.to_id.clone()],
+        &CatanMessage::InvitationResponse(invite_response.clone()),
+    )
+    .await
+    {
+        return create_http_response(
+            StatusCode::BadRequest,
+            &format!("Error in sending message to lobby, {:#?}", e),
+            "",
+        );
+    }
+
+    // tell the sender the result of the invitation
+    let mut invite_response_clone = invite_response.clone();
+    invite_response_clone.to_id = invite_response.from_id.clone();
+
+    if let Err(e) = LongPoller::send_message(
+        vec![invite_response_clone.to_id.clone()],
         &CatanMessage::InvitationResponse(invite_response.clone()),
     )
     .await

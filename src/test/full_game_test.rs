@@ -30,7 +30,7 @@ pub mod test {
         },
         setup_test,
         shared::models::{ClientUser, ServiceResponse, UserProfile},
-        thread_info,
+        trace_thread_info,
     };
     use crate::{games_service::game_container::game_messages::ErrorData, init_env_logger};
     use actix_web::{http::header, test, HttpServer};
@@ -56,16 +56,16 @@ pub mod test {
         //
         //  first start with the setting up the service
         start_server().await.unwrap();
-        thread_info!("test_thread", "created server");
+        trace_thread_info!("test_thread", "created server");
         let client = Client::new();
         wait_for_server_to_start(&client, Duration::from_secs(10))
             .await
             .expect("Server not started");
-        thread_info!("test_thread", "starting test_lobby_invite_flow");
+        trace_thread_info!("test_thread", "starting test_lobby_invite_flow");
 
         //
         //  setup the test database
-        thread_info!("test_thread", "setting up service");
+        trace_thread_info!("test_thread", "setting up service");
         let proxy = ServiceProxy::new(true, HOST_URL);
         let response = proxy.setup().await.unwrap();
         assert!(response.status().is_success(), "error: {:#?}", response);
@@ -73,7 +73,7 @@ pub mod test {
         //
         //  create new users to play our game
         const CLIENT_COUNT: &'static usize = &3;
-        thread_info!("test_thread", "creating users");
+        trace_thread_info!("test_thread", "creating users");
         let test_users: Vec<ClientUser> = register_test_users(*CLIENT_COUNT).await;
         assert_eq!(test_users.len(), *CLIENT_COUNT);
         //
@@ -88,11 +88,11 @@ pub mod test {
         //
         //  create the client
         for (i, handler) in handlers.into_iter().enumerate() {
-            thread_info!("test_thread", "creating clients: {}", i);
+            trace_thread_info!("test_thread", "creating clients: {}", i);
  
             let (tx, rx) = mpsc::channel::<CatanMessage>(32);
             let username = test_users[i].user_profile.email.clone();
-            thread_info!("test_thread", "starting polling thread for {}", username.clone());
+            trace_thread_info!("test_thread", "starting polling thread for {}", username.clone());
             let _ = tokio::spawn(async move {
                 crate::test::polling_thread::game_poller(&username, tx).await;
             });
@@ -104,21 +104,21 @@ pub mod test {
         }
 
         let handles: FuturesUnordered<_> = handles.into_iter().collect();
-        thread_info!("test_thread", "test_thread: waiting for client_threads");
+        trace_thread_info!("test_thread", "test_thread: waiting for client_threads");
         handles
             .for_each_concurrent(None, |result| async move {
                 match result {
                     Ok(_) => {
-                        thread_info!("test_thread", "client exited ok")
+                        trace_thread_info!("test_thread", "client exited ok")
                     }
                     Err(e) => {
-                        thread_info!("test_thread", "client exited withe erro: {:#?}", e)
+                        trace_thread_info!("test_thread", "client exited withe erro: {:#?}", e)
                     }
                 }
             })
             .await;
 
-        thread_info!("test_thread", "client_threads all finished");
+        trace_thread_info!("test_thread", "client_threads all finished");
     }
 
     #[allow(unused_macros)]
@@ -188,7 +188,7 @@ pub mod test {
             "doug@longshotdev.com",
         ];
         for i in 0..count {
-            thread_info!("TestThread", "creating: {}", first_names[i].clone());
+            trace_thread_info!("TestThread", "creating: {}", first_names[i].clone());
 
             let user_profile = UserProfile {
                 email: email_names[i].into(),

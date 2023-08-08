@@ -10,7 +10,7 @@ use crate::games_service::game_container::game_messages::InvitationResponseData;
 use crate::wait_for_message;
 use crate::{
     games_service::game_container::game_messages::CatanMessage, shared::models::ClientUser,
-    thread_info,
+    trace_thread_info, log_thread_info
 };
 use crate::{shared::proxy::ServiceProxy, test::test_structs::HOST_URL};
 
@@ -46,9 +46,9 @@ pub(crate) async fn client2_thread(mut rx: Receiver<CatanMessage>) {
         .await
         .expect("get_profile should return a ClientUser");
 
-    thread_info!(name, "Waiting for 500ms");
+    trace_thread_info!(name, "Waiting for 500ms");
     tokio::time::sleep(Duration::from_millis(500)).await;
-    thread_info!(
+    trace_thread_info!(
         name,
         "Client thread. Waiting on Start Message from poll thread"
     );
@@ -60,9 +60,9 @@ pub(crate) async fn client2_thread(mut rx: Receiver<CatanMessage>) {
     //  in the browser app, the browser worker is up and running before the UI, so you don't
     //  need to worry the issue of the main thread running before the polling threads. here
     //  we do -- so we just go to sleep for a bit.
-    thread_info!(name, "Sleeping for 1 second...");
+    trace_thread_info!(name, "Sleeping for 1 second...");
     sleep(Duration::from_secs(1)).await;
-    thread_info!(name, "Game Thread Woke up!");
+    trace_thread_info!(name, "Game Thread Woke up!");
 
     let message = wait_for_message!(name, rx);
     if let CatanMessage::Invite(invite) = message.clone() {
@@ -73,6 +73,6 @@ pub(crate) async fn client2_thread(mut rx: Receiver<CatanMessage>) {
             .expect("accept invite should succeed)");
         game_id = invite.game_id.clone();
     } else {
-        thread_info!(name, "Wrong message received: {:?}", message);
+        trace_thread_info!(name, "Wrong message received: {:?}", message);
     }
 }
