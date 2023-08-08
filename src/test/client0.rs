@@ -71,6 +71,7 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
         .new_game(CatanGames::Regular, &auth_token, Some(&test_game))
         .await
         .unwrap();
+
     // assert!(
     //     response.status().is_success(),
     //     "error loggin in user: {}, err: {:#?}",
@@ -86,6 +87,9 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
             trace_thread_info!(name, "Wrong message received: {:?}", message);
         }
     }
+
+    assert_eq!(game_id, test_game.id);
+    
 
     //
     // get the lobby
