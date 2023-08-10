@@ -9,8 +9,8 @@ mod shared;
 mod test;
 mod user_service;
 
-
 use actix_web::{web, HttpResponse, HttpServer, Scope};
+use games_service::action_handlers::actions;
 use games_service::long_poller::handler::long_poll_handler;
 
 use crate::games_service::lobby::lobby_handlers;
@@ -187,7 +187,10 @@ fn lobby_service() -> Scope {
     web::scope("/lobby")
         .route("", web::get().to(lobby_handlers::get_lobby))
         .route("/invite", web::post().to(lobby_handlers::post_invite))
-        .route("/acceptinvite", web::post().to(lobby_handlers::respond_to_invite))
+        .route(
+            "/acceptinvite",
+            web::post().to(lobby_handlers::respond_to_invite),
+        )
 }
 
 /**
@@ -218,8 +221,12 @@ fn game_service() -> Scope {
             "/shuffle/{game_id}",
             web::post().to(game_handlers::shuffle_game),
         )
-        .route("/start/{game_id}", web::post().to(game_handlers::start_game))
-        .route("/actions/{game_id}", web::get().to(game_handlers::valid_actions))
+}
+
+fn action_service() -> Scope {
+    web::scope("/action")
+        .route("/start/{game_id}", web::post().to(actions::start_game))
+        .route("/actions/{game_id}", web::get().to(actions::valid_actions))
 }
 
 fn longpoll_service() -> Scope {

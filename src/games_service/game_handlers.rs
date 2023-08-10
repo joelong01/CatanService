@@ -13,7 +13,7 @@ use actix_web::{
     web::{self, Data, Path},
     HttpRequest, HttpResponse, Responder,
 };
-use azure_core::StatusCode;
+use reqwest::StatusCode;
 
 use scopeguard::defer;
 
@@ -22,10 +22,9 @@ use crate::games_service::shared::game_enums::{CatanGames, SupportedGames};
 use super::{
     catan_games::{
         games::regular::regular_game::RegularGame,
-        traits::{game_state_machine_trait::StateMachineTrait, game_trait::CatanGame},
+        traits::game_trait::CatanGame,
     },
     game_container::{game_container::GameContainer, game_messages::GameHeader},
-    shared::game_enums::GameState,
 };
 
 ///
@@ -46,7 +45,7 @@ pub async fn shuffle_game(game_id_path: web::Path<String>, _req: HttpRequest) ->
                     .content_type("application/json")
                     .json(game),
                 Err(e) => create_http_response(
-                    StatusCode::InternalServerError,
+                    StatusCode::INTERNAL_SERVER_ERROR,
                     &format!("GameContainer::push_game error: {:#?}", e),
                     "",
                 ),
@@ -57,7 +56,7 @@ pub async fn shuffle_game(game_id_path: web::Path<String>, _req: HttpRequest) ->
                 message: format!(
                     "Only the creator can shuffle the board, and you are not the creator."
                 ),
-                status: StatusCode::BadRequest,
+                status: StatusCode::BAD_REQUEST,
                 body: "".to_owned(),
             };
             return HttpResponse::BadRequest()
@@ -89,7 +88,7 @@ pub async fn new_game(
 
     if game_type != CatanGames::Regular {
         return create_http_response(
-            StatusCode::BadRequest,
+            StatusCode::BAD_REQUEST,
             &format!("Game not supported: {:#?}", game_type),
             "",
         );
@@ -102,7 +101,7 @@ pub async fn new_game(
         Ok(u) => u,
         Err(_) => {
             return create_http_response(
-                StatusCode::NotFound,
+                StatusCode::NOT_FOUND,
                 &format!("invalid user id: {}", user_id),
                 "",
             );
@@ -134,7 +133,7 @@ pub async fn new_game(
     match GameContainer::create_and_add_container(&game.id, &game).await {
         Err(e) => {
             full_info!("insert_container returned an error.  {:#?}!", e);
-            return create_http_response(StatusCode::NotFound, &format!("{:?}", e), "");
+            return create_http_response(StatusCode::NOT_FOUND, &format!("{:?}", e), "");
         }
         Ok(_) => {}
     }
@@ -163,44 +162,4 @@ pub async fn supported_games() -> impl Responder {
     HttpResponse::Ok()
         .content_type("application/json")
         .json(games)
-}
-
-pub async fn start_game(game_id_path: web::Path<String>, _req: HttpRequest) -> impl Responder {
-    let game_id: &str = &game_id_path;
-
-    let game = match GameContainer::current(&game_id.to_owned()).await {
-        Ok(g) => g,
-        Err(e) => {
-            return create_http_response(
-                StatusCode::NotFound,
-                &format!("invalid game_id: {}.  error: {:?}", game_id, e),
-                "",
-            )
-        }
-    };
-   // let next_state = game.state_data.state()
-    let mut game_clone = game.clone();
-    game_clone.set_current_state(GameState::ChoosingBoard);
-    let _ = GameContainer::push_game(game_id, &game_clone).await;
-    HttpResponse::Ok().into()
-}
-/**
- * look at the state of the game and asnwer the question "what are the valid actions"
- */
-pub async fn valid_actions(game_id_path: web::Path<String>, _req: HttpRequest) -> impl Responder {
-    let game_id: &str = &game_id_path;
-
-    let game = match GameContainer::current(&game_id.to_owned()).await {
-        Ok(g) => g,
-        Err(e) => {
-            return create_http_response(
-                StatusCode::NotFound,
-                &format!("invalid game_id: {}.  error: {:?}", game_id, e),
-                "",
-            )
-        }
-    };
-    HttpResponse::Ok()
-        .content_type("application/json")
-        .json(game.state_data.actions())
 }

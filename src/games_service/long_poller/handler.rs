@@ -1,5 +1,5 @@
 use actix_web::{HttpRequest, HttpResponse};
-use azure_core::StatusCode;
+use reqwest::StatusCode;
 
 
 use crate::{
@@ -31,6 +31,6 @@ pub async fn long_poll_handler(req: HttpRequest) -> HttpResponse {
         Ok(message) => HttpResponse::Ok()
             .content_type("application/json")
             .json(message),
-        Err(e) => create_http_response(StatusCode::BadRequest, &format!("error: {:#?}", e), ""),
+        Err(e) => create_http_response(StatusCode::BAD_REQUEST, &format!("error: {:#?}", e), ""),
     }
 }

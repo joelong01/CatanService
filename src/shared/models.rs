@@ -1,13 +1,14 @@
 #![allow(dead_code)]
-use azure_core::StatusCode;
+
 /**
  * this is the module where I define the structures needed for the data in Cosmos
  */
 use azure_data_cosmos::CosmosEntity;
-use serde::{Deserialize, Serialize};
+use reqwest::StatusCode;
+use serde::{Deserialize, Serialize, Serializer, Deserializer};
 use tokio::sync::{mpsc, RwLock};
 use std::{env, sync::Arc, fmt};
-
+use serde::de::Error as SerdeError;
 
 use anyhow::{Context, Result};
 
@@ -180,6 +181,7 @@ impl ClientUser {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 pub struct Claims {
     pub id: String,
     pub sub: String,
@@ -190,12 +192,68 @@ pub struct Claims {
  *  We want every response to be in JSON format so that it is easier to script calling the service...when
  *  we don't have "natural" JSON (e.g. when we call 'setup'), we return the JSON of this object.
  */
-#[derive(Debug, Serialize, Clone, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct ServiceResponse {
     pub message: String,
     pub status: StatusCode,
     pub body: String,
 }
+
+impl Serialize for ServiceResponse {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let status_code = self.status.as_u16();
+
+        // Using a map to represent the ServiceResponse with PascalCase keys
+        let mut map = serde_json::Map::new();
+        map.insert("Message".to_string(), serde_json::json!(self.message));
+        map.insert("Status".to_string(), serde_json::json!(status_code));
+        map.insert("Body".to_string(), serde_json::json!(self.body));
+
+        // Serialize the map
+        map.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for ServiceResponse {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // Deserialize into a map
+        let map: serde_json::Map<String, serde_json::Value> = Deserialize::deserialize(deserializer)?;
+
+        let message = map
+            .get("Message")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| D::Error::custom("Missing Message"))?
+            .to_string();
+
+        let status_code = map
+            .get("Status")
+            .and_then(|v| v.as_u64())
+            .ok_or_else(|| D::Error::custom("Missing Status"))?;
+
+        let status = StatusCode::from_u16(status_code as u16)
+            .map_err(|e| D::Error::custom(format!("Invalid Status: {}", e)))?;
+
+        let body = map
+            .get("Body")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| D::Error::custom("Missing Body"))?
+            .to_string();
+
+        // Construct the ServiceResponse
+        Ok(ServiceResponse {
+            message,
+            status,
+            body,
+        })
+    }
+}
+
 
 /**
  *  the .devcontainer/required-secrets.json contains the list of secrets needed to run this application.  this stuctu

@@ -15,11 +15,10 @@ use crate::middleware::environment_mw::{ServiceEnvironmentContext, CATAN_ENV};
 use crate::shared::models::{Claims, ClientUser, PersistUser, ServiceResponse, UserProfile};
 use actix_web::web::Data;
 use actix_web::{web, HttpRequest, HttpResponse};
-use azure_core::error::Result as AzureResult;
-use azure_core::StatusCode;
 use bcrypt::{hash, verify, DEFAULT_COST};
 use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use lazy_static::lazy_static;
+use reqwest::StatusCode;
 use tokio::sync::Mutex;
 
 lazy_static! {
@@ -39,14 +38,14 @@ pub async fn setup(data: Data<ServiceEnvironmentContext>) -> HttpResponse {
     //  do not check claims as the db doesn't exist yet.
     if !request_context.is_test {
         return create_http_response(
-            StatusCode::Unauthorized,
+            StatusCode::UNAUTHORIZED,
             &format!("setup is only available when the test header is set."),
             "",
         );
     }
     if DB_SETUP.load(Ordering::Relaxed) {
         return create_http_response(
-            StatusCode::Accepted,
+            StatusCode::ACCEPTED,
             &format!(
                 "database: {} container: {} already exists",
                 request_context.database_name, request_context.env.container_name
@@ -59,7 +58,7 @@ pub async fn setup(data: Data<ServiceEnvironmentContext>) -> HttpResponse {
 
     if DB_SETUP.load(Ordering::Relaxed) {
         return create_http_response(
-            StatusCode::Accepted,
+            StatusCode::ACCEPTED,
             &format!(
                 "database: {} container: {} already exists",
                 request_context.database_name, request_context.env.container_name
@@ -72,7 +71,7 @@ pub async fn setup(data: Data<ServiceEnvironmentContext>) -> HttpResponse {
         Ok(..) => {
             DB_SETUP.store(true, Ordering::Relaxed);
             create_http_response(
-                StatusCode::Created,
+                StatusCode::CREATED,
                 &format!(
                     "database: {} container: {} created",
                     request_context.database_name, request_context.env.container_name
@@ -81,7 +80,7 @@ pub async fn setup(data: Data<ServiceEnvironmentContext>) -> HttpResponse {
             )
         }
         Err(err) => create_http_response(
-            StatusCode::BadRequest,
+            StatusCode::BAD_REQUEST,
             &format!("Failed to create database/collection: {}", err),
             "",
         ),
@@ -114,7 +113,7 @@ pub async fn register(
             Ok(pwd) => pwd.to_string(),
             Err(e) => {
                 return create_http_response(
-                    StatusCode::BadRequest,
+                    StatusCode::BAD_REQUEST,
                     &format!("X-Password header is set, but the value is not. Err: {}", e),
                     "",
                 )
@@ -122,7 +121,7 @@ pub async fn register(
         },
         None => {
             return create_http_response(
-                StatusCode::BadRequest,
+                StatusCode::BAD_REQUEST,
                 &format!("X-Password header not set"),
                 "",
             )
@@ -133,7 +132,7 @@ pub async fn register(
     match user_result {
         Ok(_) => {
             return create_http_response(
-                StatusCode::Conflict,
+                StatusCode::CONFLICT,
                 &format!("User already registered: {}", profile_in.email),
                 "",
             );
@@ -148,7 +147,7 @@ pub async fn register(
         Ok(hp) => hp,
         Err(_) => {
             return create_http_response(
-                StatusCode::InternalServerError,
+                StatusCode::INTERNAL_SERVER_ERROR,
                 "Error hashing password",
                 "",
             );
@@ -175,7 +174,7 @@ pub async fn register(
                     .json(ClientUser::from_persist_user(persist_user))
             }
             Err(err) => create_http_response(
-                StatusCode::BadRequest,
+                StatusCode::BAD_REQUEST,
                 &format!("Failed to add user to collection: {}", err),
                 "",
             ),
@@ -205,7 +204,7 @@ pub async fn login(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> H
             Ok(pwd) => pwd.to_string(),
             Err(e) => {
                 return create_http_response(
-                    StatusCode::BadRequest,
+                    StatusCode::BAD_REQUEST,
                     &format!(
                         "{} header is set, but the value is not. Err: {}",
                         GameHeader::PASSWORD,
@@ -217,7 +216,7 @@ pub async fn login(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> H
         },
         None => {
             return create_http_response(
-                StatusCode::BadRequest,
+                StatusCode::BAD_REQUEST,
                 &format!("{} header not set", GameHeader::PASSWORD),
                 "",
             )
@@ -229,7 +228,7 @@ pub async fn login(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> H
             Ok(name) => name,
             Err(e) => {
                 return create_http_response(
-                    StatusCode::BadRequest,
+                    StatusCode::BAD_REQUEST,
                     &format!(
                         "{} header is set, but the value is not. Err: {}",
                         GameHeader::EMAIL,
@@ -241,7 +240,7 @@ pub async fn login(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> H
         },
         None => {
             return create_http_response(
-                StatusCode::BadRequest,
+                StatusCode::BAD_REQUEST,
                 &format!("{} header not set", GameHeader::EMAIL),
                 "",
             )
@@ -254,17 +253,17 @@ pub async fn login(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> H
         Ok(u) => u,
         Err(_) => {
             return create_http_response(
-                StatusCode::NotFound,
+                StatusCode::NOT_FOUND,
                 &format!("invalid user id: {}", username),
                 "",
             );
         }
     };
-    let password_hash = match user.password_hash {
+    let password_hash: String = match user.password_hash {
         Some(p) => p,
         None => {
             return create_http_response(
-                StatusCode::InternalServerError,
+                StatusCode::INTERNAL_SERVER_ERROR,
                 "user document does not contain a password hash",
                 "",
             );
@@ -292,14 +291,14 @@ pub async fn login(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> H
         match token_result {
             Ok(token) => {
                 let _ = LongPoller::add_user(&user.id, &user.user_profile).await;
-                create_http_response(StatusCode::Ok, "", &token)
+                create_http_response(StatusCode::OK, "", &token)
             }
             Err(_) => {
-                create_http_response(StatusCode::InternalServerError, "error hashing token", "")
+                create_http_response(StatusCode::INTERNAL_SERVER_ERROR, "error hashing token", "")
             }
         }
     } else {
-        create_http_response(StatusCode::Unauthorized, "incorrect password", "")
+        create_http_response(StatusCode::UNAUTHORIZED, "incorrect password", "")
     }
 }
 /**
@@ -326,7 +325,7 @@ pub async fn list_users(data: Data<ServiceEnvironmentContext>, req: HttpRequest)
             }
             Err(err) => {
                 return create_http_response(
-                    StatusCode::NotFound,
+                    StatusCode::NOT_FOUND,
                     &format!("Failed to retrieve user list: {}", err),
                     "",
                 );
@@ -353,7 +352,7 @@ pub async fn get_profile(data: Data<ServiceEnvironmentContext>, req: HttpRequest
             .content_type("application/json")
             .json(ClientUser::from_persist_user(user)),
         Err(err) => create_http_response(
-            StatusCode::NotFound,
+            StatusCode::NOT_FOUND,
             &format!("Failed to find user: {}", err),
             "",
         ),
@@ -380,7 +379,7 @@ pub async fn find_user_by_id(
                 .json(user)
         }
         Err(err) => create_http_response(
-            StatusCode::NotFound,
+            StatusCode::NOT_FOUND,
             &format!("Failed to find user: {}", err),
             "",
         ),
@@ -392,7 +391,7 @@ pub async fn internal_find_user(
     id: &str,
     is_test: bool,
     data: &Data<ServiceEnvironmentContext>,
-) -> AzureResult<PersistUser> {
+) -> Result<PersistUser, azure_core::Error> {
     if is_test {
         if prop == "id" {
             return TestDb::find_user_by_id(id).await;
@@ -421,12 +420,12 @@ pub async fn delete(
     let header_id = match header_id_result {
         Ok(val) => val,
         Err(_) => {
-            return create_http_response(StatusCode::BadRequest, "Invalid id header value", "")
+            return create_http_response(StatusCode::BAD_REQUEST, "Invalid id header value", "")
         }
     };
 
     if header_id != *id {
-        return create_http_response(StatusCode::Unauthorized, "you can only delete yourself", "");
+        return create_http_response(StatusCode::UNAUTHORIZED, "you can only delete yourself", "");
     }
     let use_cosmos_db = !req.headers().contains_key(GameHeader::IS_TEST);
     let result;
@@ -439,10 +438,10 @@ pub async fn delete(
     }
     match result {
         Ok(..) => {
-            create_http_response(StatusCode::Ok, &format!("deleted user with id: {}", id), "")
+            create_http_response(StatusCode::OK, &format!("deleted user with id: {}", id), "")
         }
         Err(err) => create_http_response(
-            StatusCode::BadRequest,
+            StatusCode::BAD_REQUEST,
             &format!("Failed to delete user: {}", err),
             "",
         ),
@@ -456,13 +455,13 @@ pub fn create_http_response(status_code: StatusCode, message: &str, body: &str) 
         body: body.to_string(),
     };
     match status_code {
-        StatusCode::Ok => HttpResponse::Ok().json(response),
-        StatusCode::Unauthorized => HttpResponse::Unauthorized().json(response),
-        StatusCode::InternalServerError => HttpResponse::InternalServerError().json(response),
-        StatusCode::NotFound => HttpResponse::NotFound().json(response),
-        StatusCode::Conflict => HttpResponse::Conflict().json(response),
-        StatusCode::Accepted => HttpResponse::Accepted().json(response),
-        StatusCode::Created => HttpResponse::Created().json(response),
-        _ => HttpResponse::BadRequest().json(response),
+        StatusCode::OK => HttpResponse::Ok().json(response),
+        StatusCode::UNAUTHORIZED => HttpResponse::Unauthorized().json(response),
+        StatusCode::INTERNAL_SERVER_ERROR => HttpResponse::InternalServerError().json(response),
+        StatusCode::NOT_FOUND => HttpResponse::NotFound().json(response),
+        StatusCode::CONFLICT => HttpResponse::Conflict().json(response),
+        StatusCode::ACCEPTED => HttpResponse::Accepted().json(response),
+        StatusCode::CREATED => HttpResponse::Created().json(response),
+        _ => HttpResponse::BadGateway().json(response),
     }
 }

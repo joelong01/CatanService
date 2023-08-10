@@ -45,7 +45,7 @@ impl TestDb {
         }
     }
 
-    pub async fn find_user_by_id(id: &str) -> AzureResult<PersistUser> {
+    pub async fn find_user_by_id(id: &str) -> Result<PersistUser, Error> {
         match MOCKED_DB
             .users
             .read()
@@ -58,7 +58,7 @@ impl TestDb {
         }
     }
 
-    pub async fn find_user_by_profile(prop: &str, val: &str) -> AzureResult<PersistUser> {
+    pub async fn find_user_by_profile(prop: &str, val: &str) -> Result<PersistUser, Error> {
         // the only prop we support is email
         if prop != "email" {
             panic!("Only email is allowed for find_user_by_profile")

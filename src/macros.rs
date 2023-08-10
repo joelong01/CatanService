@@ -87,7 +87,7 @@ macro_rules! create_app {
         use actix_web::{middleware::Logger, web, App};
 
         use crate::ServiceEnvironmentContext;
-        use crate::{game_service, lobby_service, longpoll_service, profile_service, user_service};
+        use crate::{game_service, lobby_service, longpoll_service, profile_service, user_service, action_service};
         use actix_web::web::Data;
         App::new()
             .wrap(Logger::default())
@@ -102,7 +102,9 @@ macro_rules! create_app {
                     .service(lobby_service())
                     .service(game_service())
                     .service(longpoll_service())
-                    .service(profile_service()), // Make sure this function is in scope
+                    .service(profile_service())
+                    .service(action_service())
+                    
             )
     }};
 }

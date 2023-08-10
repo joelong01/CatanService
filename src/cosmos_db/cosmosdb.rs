@@ -106,7 +106,7 @@ impl UserDb {
      *  let userdb = UserDb::new();
      *  userdb.setupdb()
      */
-    pub async fn setupdb(&self) -> AzureResult<()> {
+    pub async fn setupdb(&self) -> Result<(), azure_core::Error> {
         info!("Deleting existing database");
 
         match self.database.as_ref().unwrap().delete_database().await {
@@ -202,7 +202,7 @@ impl UserDb {
      *  an api that creates a user in the cosmosdb users collection. in this sample, we return
      *  the full User object in the body, giving the client the partitionKey and user id
      */
-    pub async fn create_user(&self, user: PersistUser) -> AzureResult<()> {
+    pub async fn create_user(&self, user: PersistUser) -> Result<(), azure_core::Error> {
         match self
             .database
             .as_ref()
@@ -221,7 +221,7 @@ impl UserDb {
     /**
      *  delete the user with the unique id
      */
-    pub async fn delete_user(&self, unique_id: &str) -> AzureResult<()> {
+    pub async fn delete_user(&self, unique_id: &str) -> Result<(), azure_core::Error> {
         let collection = self
             .collection_clients
             .get(&CosmosCollectionName::User)
@@ -235,7 +235,7 @@ impl UserDb {
     /**
      *  an api that finds a user by the id in the cosmosdb users collection.
      */
-    pub async fn find_user_by_id(&self, val: &str) -> AzureResult<PersistUser> {
+    pub async fn find_user_by_id(&self, val: &str) -> Result<PersistUser, azure_core::Error> {
         let query = format!(r#"SELECT * FROM c WHERE c.id = '{}'"#, val);
         match self.execute_query(CosmosCollectionName::User, &query).await {
             Ok(users) => {
@@ -248,7 +248,7 @@ impl UserDb {
             Err(e) => log_return_err!(e),
         }
     }
-    pub async fn find_user_by_profile(&self, prop: &str, val: &str) -> AzureResult<PersistUser> {
+    pub async fn find_user_by_profile(&self, prop: &str, val: &str) -> Result<PersistUser, azure_core::Error> {
         let query = format!(
             r#"SELECT * FROM c WHERE c.userProfile.{} = '{}'"#,
             prop, val

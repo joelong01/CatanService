@@ -3,7 +3,7 @@ use actix_web::{
     web::{self, Data},
     HttpRequest, HttpResponse,
 };
-use azure_core::StatusCode;
+use reqwest::StatusCode;
 
 use crate::{
     games_service::{
@@ -39,9 +39,9 @@ pub async fn post_invite(req: HttpRequest, invite: web::Json<Invitation>) -> Htt
     )
     .await
     {
-        Ok(_) => create_http_response(StatusCode::Ok, "", ""),
+        Ok(_) => create_http_response(StatusCode::OK, "", ""),
         Err(e) => create_http_response(
-            StatusCode::BadRequest,
+            StatusCode::BAD_REQUEST,
             &format!("Error posting invite: {:?}", e),
             "",
         ),
@@ -70,7 +70,7 @@ pub async fn respond_to_invite(
         let persist_user = internal_find_user("id", &invite_response.from_id, is_test, &data).await;
         if persist_user.is_err() {
             return create_http_response(
-                StatusCode::NotFound,
+                StatusCode::NOT_FOUND,
                 &format!("could not find user with id {}", invite_response.from_id),
                 "",
             );
@@ -93,7 +93,7 @@ pub async fn respond_to_invite(
     .await
     {
         return create_http_response(
-            StatusCode::BadRequest,
+            StatusCode::BAD_REQUEST,
             &format!("Error in sending message to lobby, {:#?}", e),
             "",
         );
@@ -102,5 +102,5 @@ pub async fn respond_to_invite(
     // 
     //  don't tell the sender as they know they accepted it
 
-    create_http_response(StatusCode::Accepted, "accepted", "")
+    create_http_response(StatusCode::ACCEPTED, "accepted", "")
 }
