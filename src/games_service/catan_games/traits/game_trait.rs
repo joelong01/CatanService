@@ -2,7 +2,7 @@
 
 use crate::{
     games_service::{
-        catan_games::games::regular::regular_game::RegularGame, player::player::Player,
+        catan_games::games::regular::regular_game::RegularGame, player::player::Player, shared::game_enums::{GameAction, GameState},
     },
     shared::models::{ClientUser, GameError},
 };
@@ -24,7 +24,7 @@ use crate::shared::models::PersistUser;
 
 use super::game_info_trait::GameInfoTrait;
 
-pub trait CatanGame<'a> {
+pub trait GameTrait<'a> {
     type Players: Borrow<Vec<Player>>;
     type Tiles: BorrowMut<HashMap<TileKey, Tile>>;
     type GameInfoType: GameInfoTrait;
@@ -48,6 +48,11 @@ pub trait CatanGame<'a> {
     fn shuffle(&mut self);
     fn set_player_order(&mut self, id_order: Vec<String>) -> Result<(), GameError>;
     fn get_next_player(&mut self) -> Player;
+    fn valid_actions(&self, can_redo: bool) -> Vec<GameAction>;
+    fn current_state(&self) -> GameState;
+    fn get_next_state(&self) -> GameState;
+    fn set_next_state(&self) -> Result<RegularGame, GameError>;
+
     // fn new(creator: User) -> Self
     // where
     //     Self: Sized;

@@ -37,15 +37,9 @@ pub(crate) async fn client2_thread(mut rx: Receiver<CatanMessage>) {
         .expect("login should work");
 
     let name = "Doug";
-
     let my_info: ClientUser = proxy
-        .get_profile(&auth_token)
-        .await
-        .expect("Unable to get profile")
-        .json()
-        .await
-        .expect("get_profile should return a ClientUser");
-
+    .get_profile(&auth_token)
+    .await.expect("get_profile should return a ClientUser");
     trace_thread_info!(name, "Waiting for 500ms");
     tokio::time::sleep(Duration::from_millis(500)).await;
     trace_thread_info!(

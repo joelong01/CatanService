@@ -1,13 +1,28 @@
-use actix_web::{web, HttpRequest, Responder, HttpResponse};
+#![allow(dead_code)]
+#![allow(unused_imports)]
+use actix_web::{web, HttpRequest, HttpResponse, Responder};
 use reqwest::StatusCode;
 
-use crate::{games_service::{game_container::game_container::GameContainer, catan_games::traits::game_state_machine_trait::StateMachineTrait, shared::game_enums::GameState}, user_service::users::create_http_response};
+use crate::{
+    games_service::{
+        catan_games::{
+            games::regular::regular_game::RegularGame,
+            traits::{
+                game_info_trait::GameInfoTrait, game_state_machine_trait::StateMachineTrait,
+                game_trait::GameTrait,
+            },
+        },
+        game_container::game_container::GameContainer,
+        shared::game_enums::{GameAction, GameState},
+    },
+    shared::models::GameError,
+    user_service::users::create_http_response,
+};
 
-
-pub async fn start_game(game_id_path: web::Path<String>, _req: HttpRequest) -> impl Responder {
+pub async fn next(game_id_path: web::Path<String>, _req: HttpRequest) -> impl Responder {
     let game_id: &str = &game_id_path;
 
-    let game = match GameContainer::current(&game_id.to_owned()).await {
+    let (game, can_redo) = match GameContainer::current_game(&game_id.to_owned()).await {
         Ok(g) => g,
         Err(e) => {
             return create_http_response(
@@ -17,11 +32,23 @@ pub async fn start_game(game_id_path: web::Path<String>, _req: HttpRequest) -> i
             )
         }
     };
-   //if game.next_state(None)
-    let mut game_clone = game.clone();
-    game_clone.set_current_state(GameState::ChoosingBoard);
+    let actions = game.valid_actions(can_redo);
+    if !actions.contains(&GameAction::Next) {
+        return create_http_response(
+            StatusCode::BAD_REQUEST,
+            "next not allowed. allowed actions in body.".into(),
+            &serde_json::to_string(&actions).expect("serialization should work"),
+        );
+    }
+
+    // we don't validate if next is ok because next won't be in the list if they can't do it.  we do it this way 
+    // so that the client can enable the next button based on the existence of the action...eg if the game doesn't
+    // have enough players, we won't give them a "next" action. or if there are unspend entitlements, etc.
+
+    let game_clone = game.set_next_state().unwrap();
     let _ = GameContainer::push_game(game_id, &game_clone).await;
-    HttpResponse::Ok().finish()
+    HttpResponse::Ok().json(game_clone.valid_actions(can_redo))
+    
 }
 /**
  * look at the state of the game and asnwer the question "what are the valid actions"
@@ -29,7 +56,7 @@ pub async fn start_game(game_id_path: web::Path<String>, _req: HttpRequest) -> i
 pub async fn valid_actions(game_id_path: web::Path<String>, _req: HttpRequest) -> impl Responder {
     let game_id: &str = &game_id_path;
 
-    let game = match GameContainer::current(&game_id.to_owned()).await {
+    let (game, can_redo) = match GameContainer::current_game(&game_id.to_owned()).await {
         Ok(g) => g,
         Err(e) => {
             return create_http_response(
@@ -41,5 +68,5 @@ pub async fn valid_actions(game_id_path: web::Path<String>, _req: HttpRequest) -
     };
     HttpResponse::Ok()
         .content_type("application/json")
-        .json(game.state_data.actions())
+        .json(game.valid_actions(can_redo))
 }

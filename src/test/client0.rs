@@ -45,11 +45,7 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
 
     let my_info: ClientUser = proxy
         .get_profile(&auth_token)
-        .await
-        .expect("Unable to get profile")
-        .json()
-        .await
-        .expect("get_profile should return a ClientUser");
+        .await.expect("get_profile should return a ClientUser");
 
     trace_thread_info!(name, "Waiting for 500ms");
     tokio::time::sleep(Duration::from_millis(500)).await;
@@ -135,8 +131,8 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
             .expect("get actdions to succeed");
         assert!(actions.len() == 3);
         assert!(actions.contains(&GameAction::AddPlayer));
-        assert!(actions.contains(&GameAction::RemovePlayer));
-        assert!(actions.contains(&GameAction::Done));
+
+        assert!(actions.contains(&GameAction::Next));
     }
     trace_thread_info!(name, "all players accepted: {:#?}", players);
 

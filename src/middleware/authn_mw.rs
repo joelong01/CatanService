@@ -4,7 +4,7 @@ use actix::fut::err;
 use actix_service::{Service, Transform};
 use actix_web::{dev::ServiceRequest, dev::ServiceResponse, error::ErrorUnauthorized, Error};
 
-use crate::{games_service::game_container::game_messages::GameHeader, shared::models::Claims};
+use crate::{games_service::game_container::game_messages::GameHeader, shared::models::Claims, full_info};
 use futures::{
     future::{ok, Ready},
     Future,
@@ -107,10 +107,21 @@ where
 
 pub fn is_token_valid(token: &str) -> Option<TokenData<Claims>> {
     let validation = Validation::new(Algorithm::HS512);
-    decode::<Claims>(
+    let secret_key = CATAN_ENV.login_secret_key.clone();
+
+    match decode::<Claims>(
         &token,
-        &DecodingKey::from_secret(CATAN_ENV.login_secret_key.as_ref()),
+        &DecodingKey::from_secret(secret_key.as_ref()),
         &validation,
-    )
-    .ok()
+    ) {
+        Ok(c) => {
+            full_info!("token VALID");
+            Some(c)  // or however you want to handle a valid token
+        },
+        Err(e) => {
+            full_info!("token NOT VALID: {:?}", e);
+            None
+        }
+    }
+    
 }

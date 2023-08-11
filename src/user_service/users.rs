@@ -9,8 +9,10 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
  */
 use crate::cosmos_db::cosmosdb::UserDb;
 use crate::cosmos_db::mocked_db::TestDb;
+use crate::full_info;
 use crate::games_service::game_container::game_messages::GameHeader;
 use crate::games_service::long_poller::long_poller::LongPoller;
+use crate::middleware::authn_mw::is_token_valid;
 use crate::middleware::environment_mw::{ServiceEnvironmentContext, CATAN_ENV};
 use crate::shared::models::{Claims, ClientUser, PersistUser, ServiceResponse, UserProfile};
 use actix_web::web::Data;
@@ -269,27 +271,28 @@ pub async fn login(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> H
             );
         }
     };
-    let is_password_match = verify(password_value, &password_hash).unwrap();
+    let result = verify(password_value, &password_hash);
+    let is_password_match = match result {
+        Ok(m) => m,
+        Err(e) => {
+            return create_http_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                &format!("Error from bcrypt library: {:#?}", e),
+                "",
+            );
+        }
+    };
 
     if is_password_match {
-        let expire_duration = ((SystemTime::now() + Duration::from_secs(24 * 60 * 60))
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs()) as usize;
-        let claims = Claims {
-            id: user.id.clone(), // has to be there as we searched for it above
-            sub: username.to_string(),
-            exp: expire_duration,
-        };
-
-        let token_result = encode(
-            &Header::new(Algorithm::HS512),
-            &claims,
-            &EncodingKey::from_secret(CATAN_ENV.login_secret_key.as_ref()),
-        );
+        let token_result = encode_token(&user.id, &user.user_profile.email);
 
         match token_result {
             Ok(token) => {
+                match is_token_valid(&token) {
+                    Some(_) => full_info!("token valid!"),
+                    None => full_info!("token NOT VALID"),
+                };
+
                 let _ = LongPoller::add_user(&user.id, &user.user_profile).await;
                 create_http_response(StatusCode::OK, "", &token)
             }
@@ -301,6 +304,39 @@ pub async fn login(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> H
         create_http_response(StatusCode::UNAUTHORIZED, "incorrect password", "")
     }
 }
+
+fn encode_token(id: &str, email: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let expire_duration = ((SystemTime::now() + Duration::from_secs(24 * 60 * 60))
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()) as usize;
+    
+    let claims = Claims {
+        id: id.to_owned(),
+        sub: email.to_owned(),
+        exp: expire_duration,
+    };
+    
+    let secret_key = CATAN_ENV.login_secret_key.clone();
+    
+    let token_result = encode(
+        &Header::new(Algorithm::HS512),
+        &claims,
+        &EncodingKey::from_secret(secret_key.as_ref()),
+    );
+
+    let test = token_result.clone();
+    if test.is_ok() {
+        match is_token_valid(&test.unwrap()) {
+            Some(_) => full_info!("token VALID"),
+            None => full_info!("token NOT VALID"),
+        }
+    }
+
+    token_result.map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
+}
+
+
 /**
  *  this will get a list of all documents.  Note this does *not* do pagination. This would be a reasonable next step to
  *  show in the sample

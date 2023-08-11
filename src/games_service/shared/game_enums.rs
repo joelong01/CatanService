@@ -18,7 +18,7 @@ pub struct SupportedGames {
     pub catan_games: Vec<CatanGames>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy, Eq)]
 pub enum CatanGames {
     Regular,
     Expansion,
@@ -49,7 +49,6 @@ pub enum Entitlement {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum GameAction {
     AddPlayer,
-    RemovePlayer,
     NewBoard,
     SetOrder,
     Start,
@@ -58,7 +57,7 @@ pub enum GameAction {
     Roll,
     MoveBaron,
     Trade,
-    Done,
+    Next,
     Undo,
     Redo,
 }

@@ -4,7 +4,7 @@ use std::{collections::HashMap, fmt};
 use super::{
     catan_games::{
         games::regular::{game_info::RegularGameInfo, regular_game::RegularGame},
-        traits::game_trait::CatanGame,
+        traits::game_trait::GameTrait,
     },
     player::player::Player,
     shared::game_enums::CatanGames,
@@ -14,7 +14,7 @@ use crate::shared::models::ClientUser;
 
 pub struct GameHolder<'a> {
     pub catan_game: Box<
-        dyn CatanGame<
+        dyn GameTrait<
             'a,
             Players = &'a Vec<Player>,
             Tiles = &'a mut HashMap<TileKey, Tile>,
@@ -64,7 +64,7 @@ impl<'a> PartialEq for GameHolder<'a> {
 impl<'a> GameHolder<'a> {
     pub fn new(game_type: CatanGames, creator: ClientUser) -> Self {
         let game: Box<
-            dyn CatanGame<
+            dyn GameTrait<
                 Players = &'a Vec<Player>,
                 Tiles = &'a mut HashMap<TileKey, Tile>,
                 GameInfoType = RegularGameInfo,

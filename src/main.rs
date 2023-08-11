@@ -225,8 +225,9 @@ fn game_service() -> Scope {
 
 fn action_service() -> Scope {
     web::scope("/action")
-        .route("/start/{game_id}", web::post().to(actions::start_game))
+        .route("/start/{game_id}", web::post().to(actions::next))
         .route("/actions/{game_id}", web::get().to(actions::valid_actions))
+        .route("/next/{game_id}", web::post().to(actions::next))
 }
 
 fn longpoll_service() -> Scope {

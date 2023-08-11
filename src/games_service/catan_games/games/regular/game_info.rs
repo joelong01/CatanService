@@ -21,6 +21,8 @@ pub struct RegularGameInfo {
     pub rolls: Vec<u32>,
     pub rows_per_column: Vec<u32>,
     pub harbor_data: Vec<Harbor>,
+    pub min_players: usize,
+    pub max_players: usize
 }
 
 impl GameInfoTrait for RegularGameInfo {
@@ -42,6 +44,14 @@ impl GameInfoTrait for RegularGameInfo {
 
     fn harbor_data(&self) -> &[Harbor] {
         &self.harbor_data
+    }
+
+    fn min_players(&self) -> usize {
+        self.min_players
+    }
+
+    fn max_players(&self) -> usize {
+        self.max_players
     }
 }
 fn create_regular_game_info() -> RegularGameInfo {
@@ -113,6 +123,8 @@ fn create_regular_game_info() -> RegularGameInfo {
                 HarborType::Wood
             ),
         ],
+        min_players: 3,
+        max_players: 4,
     }
 }
 
@@ -137,5 +149,13 @@ impl GameInfoTrait for RegularGame {
 
     fn harbor_data(&self) -> &[Harbor] {
         &REGULAR_GAME_INFO.harbor_data
+    }
+
+    fn min_players(&self) -> usize {
+        3
+    }
+
+    fn max_players(&self) -> usize {
+       4
     }
 }

@@ -102,7 +102,7 @@ impl GameContainer {
 
     pub async fn get_game_players(game_id: &str) -> Result<Vec<String>, GameError> {
         let mut players = Vec::new();
-        let game = GameContainer::current(game_id).await?;
+        let (game, _) = GameContainer::current_game(game_id).await?;
         for p in game.players.values() {
             players.push(p.user_data.id.clone());
         }
@@ -132,15 +132,17 @@ impl GameContainer {
         Ok(())
     }
 
-    pub async fn current(game_id: &str) -> Result<RegularGame, GameError> {
+    pub async fn current_game(game_id: &str) -> Result<(RegularGame, bool), GameError> {
         match Self::get_locked_container(game_id).await {
             Ok(game_container) => {
                 let ro_container = game_container.read().await;
-                Ok(ro_container.undo_stack.last().unwrap().clone())
+                Ok((ro_container.undo_stack.last().unwrap().clone(), ro_container.redo_stack.len() > 0))
             }
             Err(_) => Err(GameError::BadId(format!("{} not found", game_id))),
         }
     }
+
+    
 
     pub async fn push_game(game_id: &str, game: &RegularGame) -> Result<(), GameError> {
         let game_container = Self::get_locked_container(game_id).await?;

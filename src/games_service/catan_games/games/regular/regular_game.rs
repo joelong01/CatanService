@@ -7,10 +7,12 @@ use crate::games_service::catan_games::traits::game_state_machine_trait::{
 };
 use crate::games_service::harbors::harbor_enums::HarborType;
 use crate::games_service::player::calculated_state::{CalculatedState, ResourceCount};
-use crate::games_service::shared::game_enums::{Direction, GamePhase, GameState};
+use crate::games_service::shared::game_enums::{
+    CatanGames, Direction, GameAction, GamePhase, GameState, GameType,
+};
 use crate::games_service::{
     buildings::{building::Building, building_enums::BuildingPosition, building_key::BuildingKey},
-    catan_games::traits::{game_info_trait::GameInfoTrait, game_trait::CatanGame},
+    catan_games::traits::{game_info_trait::GameInfoTrait, game_trait::GameTrait},
     game,
     harbors::{harbor::Harbor, harbor_key::HarborKey},
     player::player::Player,
@@ -50,12 +52,13 @@ pub struct RegularGame {
     pub buildings: HashMap<BuildingKey, Building>,
     pub current_player_id: String,
     pub player_order: Vec<String>,
-    pub state_data: StateData,
+    pub game_state: GameState,
     pub creator_id: String,
     pub baron_tile: TileKey,
     pub can_undo: bool,
     pub shuffle_count: u32,
     pub game_index: u32,
+    pub game_type: CatanGames,
 }
 
 impl RegularGame {
@@ -110,12 +113,13 @@ impl RegularGame {
             buildings,
             current_player_id: user_id.clone(),
             player_order: vec![],
-            state_data: StateData::new(GameState::AddingPlayers),
+            game_state: GameState::AddingPlayers,
             creator_id: user_id.clone(),
             baron_tile: TileKey::new(0, 0, 0),
             can_undo: true,
             shuffle_count: 1,
             game_index: 1,
+            game_type: CatanGames::Regular,
         }
     }
 
@@ -125,9 +129,11 @@ impl RegularGame {
      */
 
     pub fn add_user(&self, profile: &ClientUser) -> Result<Self, GameError> {
-
-        if self.players.contains_key(&profile.id){
-            return Err(GameError::BadId(format!("{} is already in the game", profile.id)));
+        if self.players.contains_key(&profile.id) {
+            return Err(GameError::BadId(format!(
+                "{} is already in the game",
+                profile.id
+            )));
         }
 
         let mut clone = self.clone();
@@ -397,7 +403,7 @@ impl RegularGame {
     }
 }
 
-impl<'a> CatanGame<'a> for RegularGame {
+impl<'a> GameTrait<'a> for RegularGame {
     type Players = &'a Vec<Player>;
     type Tiles = &'a mut HashMap<TileKey, Tile>;
     type GameInfoType = RegularGameInfo;
@@ -544,6 +550,96 @@ impl<'a> CatanGame<'a> for RegularGame {
         self.player_order = id_order.clone();
         self.current_player_id = id_order[0].clone();
         Ok(())
+    }
+
+    fn valid_actions(&self, can_redo: bool) -> Vec<GameAction> {
+        let mut actions = Vec::new();
+        if can_redo {
+            actions.push(GameAction::Redo);
+        }
+        match self.game_state {
+            GameState::AddingPlayers => {
+                let len = self.players.len();
+                if len < self.max_players() {
+                    // if you get to max, there won't be a way to add another player
+                    actions.push(GameAction::AddPlayer);
+                };
+
+                if len >= self.min_players() {
+                    actions.push(GameAction::Next);
+                }
+            }
+            GameState::ChoosingBoard => {
+                actions.push(GameAction::Next);
+                actions.push(GameAction::NewBoard);
+            },
+            GameState::SettingPlayerOrder => {
+                actions.push(GameAction::Next);
+                actions.push(GameAction::SetOrder);
+            },
+            GameState::AllocateResourceForward => {
+                actions.push(GameAction::Next);
+                actions.push(GameAction::Build);
+            },
+            GameState::AllocateResourceReverse => todo!(),
+            GameState::WaitingForRoll => todo!(),
+            GameState::MustMoveBaron => todo!(),
+            GameState::BuyingAndTrading => todo!(),
+            GameState::Supplemental => todo!(),
+            GameState::GameOver => todo!(),
+        }
+        actions
+    }
+
+    fn current_state(&self) -> GameState {
+        self.game_state
+    }
+
+    fn get_next_state(&self) -> GameState {
+        let state =
+            match self.game_state {
+                GameState::AddingPlayers => GameState::ChoosingBoard,
+                GameState::ChoosingBoard => GameState::SettingPlayerOrder,
+                GameState::SettingPlayerOrder => GameState::AllocateResourceForward,
+                GameState::AllocateResourceForward => {
+                    if self.current_player_id
+                        == *self.player_order.last().expect(
+                            "We can't be in the allocation state with an empty list of players",
+                        )
+                    {
+                        GameState::AllocateResourceReverse
+                    } else {
+                        GameState::AllocateResourceForward
+                    }
+                }
+                GameState::AllocateResourceReverse => {
+                    if self.current_player_id
+                        == *self.player_order.first().expect(
+                            "We can't be in the allocation state with an empty list of players",
+                        )
+                    {
+                        GameState::AllocateResourceReverse
+                    } else {
+                        GameState::WaitingForRoll
+                    }
+                }
+                GameState::WaitingForRoll => todo!(),
+                GameState::MustMoveBaron => todo!(),
+                GameState::BuyingAndTrading => todo!(),
+                GameState::Supplemental => todo!(),
+                GameState::GameOver => todo!(),
+            };
+
+        state
+    }
+    ///
+    /// the state of the game is immutable, so when we set the gamestate, we clone the game first, set the state, and
+    /// return the clone.  We assume this is called from the next() handler, which has validated that next is the right
+    /// state
+    fn set_next_state(&self) -> Result<RegularGame, GameError> {
+        let mut clone = self.clone();
+        clone.game_state = self.get_next_state();
+        Ok(clone)
     }
 }
 

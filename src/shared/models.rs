@@ -25,9 +25,16 @@ pub enum GameError {
     ChannelError(String),
     AlreadyExists(String),
     ActionError(String),
+    TooFewPlayers(usize),
+    TooManyPlayers(usize),
+    ReqwestError(String)
 
 }
-
+impl From<reqwest::Error> for GameError {
+    fn from(err: reqwest::Error) -> Self {
+        GameError::ReqwestError(format!("{:#?}", err))
+    }
+}
 impl fmt::Display for GameError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -38,6 +45,10 @@ impl fmt::Display for GameError {
             GameError::MissingData(desc) => write!(f, "Missing Data {}", desc),
             GameError::BadActionData(desc) => write!(f, "Bad Data {}", desc),
             GameError::BadId(desc) => write!(f, "Bad Id {}", desc),
+            GameError::TooFewPlayers(s) => write!(f, "Min Players {}", s),
+            GameError::TooManyPlayers(c) => write!(f, "Max Players {}", c),
+            GameError::ReqwestError(c) => write!(f, "ReqwestError error: {}", c),
+            
 
         }
     }
@@ -181,7 +192,6 @@ impl ClientUser {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "PascalCase")]
 pub struct Claims {
     pub id: String,
     pub sub: String,

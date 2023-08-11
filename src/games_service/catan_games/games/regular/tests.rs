@@ -5,7 +5,7 @@ mod tests {
         games_service::{
             catan_games::{
                 games::regular::regular_game::RegularGame,
-                traits::{game_state_machine_trait::StateMachineTrait, game_trait::CatanGame},
+                traits::{game_state_machine_trait::StateMachineTrait, game_trait::GameTrait},
             },
             roads::road_key::RoadKey,
             shared::game_enums::{Direction, GameAction, GamePhase, GameState},
@@ -23,17 +23,17 @@ mod tests {
         println!("test_regular_game");
         let mut game = create_game(); // GameState::AddingPlayers
         test_add_players(&mut game);
-        game.next_state(None).unwrap(); // GameState::ChoosingBoard
-        assert_eq!(game.current_state().state(), GameState::ChoosingBoard);
+        game = game.set_next_state().expect("set_next_state shouldn't fail");
+        assert_eq!(game.current_state(), GameState::ChoosingBoard);
         test_shuffle(&mut game);
         test_shuffle(&mut game);
-        game.next_state(None).unwrap(); // GameState::SettingPlayerOrder
-        assert_eq!(game.current_state().state(), GameState::SettingPlayerOrder);
+        game = game.set_next_state().expect("set_next_state shouldn't fail"); // GameState::SettingPlayerOrder
+        assert_eq!(game.current_state(), GameState::SettingPlayerOrder);
         test_player_order(&mut game);
 
-        game.next_state(None).unwrap(); // GameState::AllocateResourcesForward
+        game = game.set_next_state().expect("set_next_state shouldn't fail"); // GameState::AllocateResourcesForward
         assert_eq!(
-            game.current_state().state(),
+            game.current_state(),
             GameState::AllocateResourceForward
         );
         test_allocate_resources(&mut game);
@@ -44,15 +44,13 @@ mod tests {
     fn verify_state_and_actions(
         game: &RegularGame,
         name: &str,
-        phase: GamePhase,
         expected_state: GameState,
         expected_actions: Vec<GameAction>,
     ) {
         println!("{}", name);
-        assert_eq!(game.current_state().phase(), phase);
-        assert_eq!(game.current_state().state(), expected_state);
+        assert_eq!(game.current_state(), expected_state);
 
-        let actions = game.current_state().actions().clone();
+        let actions = game.valid_actions(false).clone();
         assert!(
             expected_actions
                 .iter()
@@ -157,11 +155,10 @@ mod tests {
         assert_eq!(*resource_counts.get(&TileResource::Desert).expect("3"), 1);
     }
     fn test_player_order(game: &mut RegularGame) {
-        let expected_actions = vec![GameAction::Done, GameAction::SetOrder];
+        let expected_actions = vec![GameAction::Next, GameAction::SetOrder];
         verify_state_and_actions(
             game,
             "test_player_order",
-            GamePhase::SettingUp,
             GameState::SettingPlayerOrder,
             expected_actions,
         );
@@ -208,13 +205,10 @@ mod tests {
     fn test_add_players(game: &mut RegularGame) {
         let expected_actions = vec![
             GameAction::AddPlayer,
-            GameAction::RemovePlayer,
-            GameAction::Done,
         ];
         verify_state_and_actions(
             game,
             "test_add_players",
-            GamePhase::SettingUp,
             GameState::AddingPlayers,
             expected_actions,
         );
@@ -257,11 +251,10 @@ mod tests {
     }
 
     fn test_shuffle(game: &mut RegularGame) {
-        let expected_actions = vec![GameAction::NewBoard, GameAction::Done];
+        let expected_actions = vec![GameAction::NewBoard, GameAction::Next];
         verify_state_and_actions(
             game,
             "test_shuffle",
-            GamePhase::SettingUp,
             GameState::ChoosingBoard,
             expected_actions,
         );
@@ -271,11 +264,10 @@ mod tests {
         test_rolls_and_resources(game);
     }
     fn test_allocate_resources(game: &mut RegularGame) {
-        let expected_actions = vec![GameAction::Done, GameAction::Build];
+        let expected_actions = vec![GameAction::Next, GameAction::Build];
         verify_state_and_actions(
             game,
             "test_allocate_resources",
-            GamePhase::SettingUp,
             GameState::AllocateResourceForward,
             expected_actions,
         );

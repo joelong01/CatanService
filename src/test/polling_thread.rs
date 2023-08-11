@@ -15,9 +15,6 @@ pub async fn game_poller(username: &str, tx: tokio::sync::mpsc::Sender<CatanMess
     let client_user: ClientUser = proxy
         .get_profile(&auth_token)
         .await
-        .expect("get profile should work")
-        .json()
-        .await
         .expect("Client User should deserialize");
     // Create the client inside the spawned task
     let name = &client_user.user_profile.display_name;

@@ -8,6 +8,8 @@ pub trait GameInfoTrait {
     fn rolls(&self) -> &[u32];
     fn rows_per_column(&self) -> &[u32];
     fn harbor_data(&self) -> &[Harbor];
+    fn min_players(&self) -> usize;
+    fn max_players(&self) -> usize;
 }
 #[macro_export]
 macro_rules! harbor_data {

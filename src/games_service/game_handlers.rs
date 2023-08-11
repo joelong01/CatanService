@@ -22,7 +22,7 @@ use crate::games_service::shared::game_enums::{CatanGames, SupportedGames};
 use super::{
     catan_games::{
         games::regular::regular_game::RegularGame,
-        traits::game_trait::CatanGame,
+        traits::game_trait::GameTrait,
     },
     game_container::{game_container::GameContainer, game_messages::GameHeader},
 };
@@ -34,8 +34,8 @@ use super::{
 pub async fn shuffle_game(game_id_path: web::Path<String>, _req: HttpRequest) -> impl Responder {
     let game_id: &str = &game_id_path;
 
-    match GameContainer::current(&game_id.to_owned()).await {
-        Ok(game) => {
+    match GameContainer::current_game(&game_id.to_owned()).await {
+        Ok((game, _)) => {
             let mut new_game = game.clone();
             new_game.shuffle_count = new_game.shuffle_count + 1;
             new_game.shuffle();
