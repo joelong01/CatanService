@@ -5,7 +5,7 @@ use crate::{
         long_poller::long_poller::LongPoller,
     },
     middleware::environment_mw::ServiceEnvironmentContext,
-    shared::models::{ClientUser, ServiceResponse},
+    shared::models::{ClientUser, ServiceResponse, ResponseType},
     trace_function, trace_thread_info,
     user_service::{user_handlers::create_http_response, users::internal_find_user},
 };
@@ -52,7 +52,7 @@ pub async fn shuffle_game(game_id_path: web::Path<String>, _req: HttpRequest) ->
             let response = ServiceResponse::new(
                 &format!("Only the creator can shuffle the board, and you are not the creator."),
                 StatusCode::BAD_REQUEST,
-                String::new(),
+                ResponseType::NoData,
                 e,
             );
             return HttpResponse::BadRequest()

@@ -3,7 +3,7 @@ use crate::{
     middleware::environment_mw::ServiceEnvironmentContext,
     shared::{
         header_extractor::HeadersExtractor,
-        models::{ServiceResponse, UserProfile, GameError},
+        models::{ServiceResponse, UserProfile, GameError, ResponseType},
     },
 };
 use actix_web::{
@@ -106,10 +106,10 @@ pub async fn delete_handler(
 }
 
 pub fn create_http_response(status_code: StatusCode, message: &str, body: &str) -> HttpResponse {
-    let response = ServiceResponse::<String>::new(
+    let response = ServiceResponse::new(
         message,
         status_code,
-        body.to_string(),
+        ResponseType::Todo(body.to_string()),
         GameError::HttpError
     );
     match status_code {

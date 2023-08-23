@@ -15,7 +15,7 @@ use crate::games_service::long_poller::long_poller::LongPoller;
 
 use crate::middleware::environment_mw::{ServiceEnvironmentContext, CATAN_ENV};
 use crate::shared::models::{
-    Claims, ClientUser, GameError, PersistUser, ServiceResponse, UserProfile,
+    Claims, ClientUser, GameError, PersistUser, ResponseType, ServiceResponse, UserProfile,
 };
 use actix_web::web::Data;
 use bcrypt::{hash, verify};
@@ -42,12 +42,12 @@ pub async fn setup(
     is_test: bool,
     database_name: &str,
     container_name: &str,
-) -> Result<ServiceResponse<String>, ServiceResponse<String>> {
+) -> Result<ServiceResponse, ServiceResponse> {
     if !is_test {
         return Err(ServiceResponse::new(
             "Test Header must be set",
             StatusCode::UNAUTHORIZED,
-            String::new(),
+            ResponseType::NoData,
             GameError::HttpError,
         ));
     }
@@ -55,7 +55,7 @@ pub async fn setup(
         return Ok(ServiceResponse::new(
             "already exists",
             StatusCode::ACCEPTED,
-            String::new(),
+            ResponseType::NoData,
             GameError::NoError,
         ));
     }
@@ -66,7 +66,7 @@ pub async fn setup(
         return Ok(ServiceResponse::new(
             "already exists",
             StatusCode::ACCEPTED,
-            String::new(),
+            ResponseType::NoData,
             GameError::NoError,
         ));
     }
@@ -77,14 +77,14 @@ pub async fn setup(
             return Ok(ServiceResponse::new(
                 "created",
                 StatusCode::CREATED,
-                String::new(),
+                ResponseType::NoData,
                 GameError::NoError,
             ));
         }
         Err(e) => Err(ServiceResponse::new(
             "Bad Request",
             StatusCode::BAD_REQUEST,
-            format!("{:#?}", e),
+            ResponseType::ErrorInfo(format!("{:#?}", e)),
             GameError::HttpError,
         )),
     }
@@ -107,7 +107,7 @@ pub async fn register(
     password: &str,
     profile_in: &UserProfile,
     data: &Data<ServiceEnvironmentContext>,
-) -> Result<ServiceResponse<ClientUser>, ServiceResponse<String>> {
+) -> Result<ServiceResponse, ServiceResponse> {
     if internal_find_user("email", &profile_in.email, is_test, data)
         .await
         .is_ok()
@@ -115,7 +115,7 @@ pub async fn register(
         return Err(ServiceResponse::new(
             "User already exists",
             StatusCode::CONFLICT,
-            String::new(),
+            ResponseType::NoData,
             GameError::HttpError,
         ));
     }
@@ -128,7 +128,7 @@ pub async fn register(
             return Err(ServiceResponse::new(
                 "Error Hashing Password",
                 StatusCode::INTERNAL_SERVER_ERROR,
-                err_message.to_owned(),
+                ResponseType::ErrorInfo(err_message.to_owned()),
                 GameError::HttpError,
             ));
         }
@@ -152,7 +152,7 @@ pub async fn register(
                 Ok(ServiceResponse::new(
                     "created",
                     StatusCode::CREATED,
-                    ClientUser::from_persist_user(persist_user),
+                    ResponseType::ClientUser(ClientUser::from_persist_user(persist_user)),
                     GameError::NoError,
                 ))
             }
@@ -160,7 +160,7 @@ pub async fn register(
                 return Err(ServiceResponse::new(
                     "Bad Request",
                     StatusCode::BAD_REQUEST,
-                    format!("{:#?}", e),
+                    ResponseType::ErrorInfo(format!("{:#?}", e)),
                     GameError::HttpError,
                 ))
             }
@@ -173,7 +173,7 @@ pub async fn register(
         Ok(ServiceResponse::new(
             "created",
             StatusCode::CREATED,
-            ClientUser::from_persist_user(persist_user),
+            ResponseType::ClientUser(ClientUser::from_persist_user(persist_user)),
             GameError::NoError,
         ))
     }
@@ -192,7 +192,7 @@ pub async fn login(
     password: &str,
     is_test: bool,
     data: &Data<ServiceEnvironmentContext>,
-) -> Result<ServiceResponse<String>, ServiceResponse<String>> {
+) -> Result<ServiceResponse, ServiceResponse> {
     let user_result = internal_find_user("email", username, is_test, data).await;
 
     let user = match user_result {
@@ -201,7 +201,7 @@ pub async fn login(
             return Err(ServiceResponse::new(
                 &format!("invalid user id: {}", username),
                 StatusCode::NOT_FOUND,
-                format!("{:#?}", e),
+                ResponseType::ErrorInfo(format!("{:#?}", e)),
                 GameError::HttpError,
             ))
         }
@@ -212,7 +212,7 @@ pub async fn login(
             return Err(ServiceResponse::new(
                 "user document does not contain a password hash",
                 StatusCode::INTERNAL_SERVER_ERROR,
-                String::new(),
+                ResponseType::NoData,
                 GameError::HttpError,
             ));
         }
@@ -224,7 +224,7 @@ pub async fn login(
             return Err(ServiceResponse::new(
                 &format!("Error from bcrypt library: {:#?}", e),
                 StatusCode::INTERNAL_SERVER_ERROR,
-                String::new(),
+                ResponseType::NoData,
                 GameError::HttpError,
             ));
         }
@@ -238,7 +238,7 @@ pub async fn login(
                 Ok(ServiceResponse::new(
                     "",
                     StatusCode::OK,
-                    token,
+                    ResponseType::Token(token),
                     GameError::NoError,
                 ))
             }
@@ -246,7 +246,7 @@ pub async fn login(
                 return Err(ServiceResponse::new(
                     "Error Hashing token",
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("{:#?}", e),
+                    ResponseType::ErrorInfo(format!("{:#?}", e)),
                     GameError::HttpError,
                 ));
             }
@@ -255,7 +255,7 @@ pub async fn login(
         return Err(ServiceResponse::new(
             "invalid password",
             StatusCode::UNAUTHORIZED,
-            String::new(),
+            ResponseType::NoData,
             GameError::HttpError,
         ));
     }
@@ -310,7 +310,7 @@ pub fn validate_jwt_token(token: &str) -> Option<TokenData<Claims>> {
 pub async fn list_users(
     data: &Data<ServiceEnvironmentContext>,
     is_test: bool,
-) -> Result<ServiceResponse<Vec<ClientUser>>, ServiceResponse<String>> {
+) -> Result<ServiceResponse, ServiceResponse> {
     let request_context = data.context.lock().unwrap();
 
     if !is_test {
@@ -327,7 +327,7 @@ pub async fn list_users(
                 Ok(ServiceResponse::new(
                     "",
                     StatusCode::OK,
-                    client_users,
+                    ResponseType::ClientUsers(client_users),
                     GameError::NoError,
                 ))
             }
@@ -335,7 +335,7 @@ pub async fn list_users(
                 return Err(ServiceResponse::new(
                     "",
                     StatusCode::NOT_FOUND,
-                    format!("Failed to retrieve user list: {}", err),
+                    ResponseType::ErrorInfo(format!("Failed to retrieve user list: {}", err)),
                     GameError::HttpError,
                 ));
             }
@@ -351,7 +351,7 @@ pub async fn list_users(
         Ok(ServiceResponse::new(
             "",
             StatusCode::OK,
-            client_users,
+            ResponseType::ClientUsers(client_users),
             GameError::NoError,
         ))
     }
@@ -360,19 +360,19 @@ pub async fn get_profile(
     user_id: &str,
     is_test: bool,
     data: &Data<ServiceEnvironmentContext>,
-) -> Result<ServiceResponse<ClientUser>, ServiceResponse<String>> {
+) -> Result<ServiceResponse, ServiceResponse> {
     let result = internal_find_user("id", user_id, is_test, &data).await;
     match result {
         Ok(user) => Ok(ServiceResponse::new(
             "",
             StatusCode::OK,
-            ClientUser::from_persist_user(user),
+            ResponseType::ClientUser(ClientUser::from_persist_user(user)),
             GameError::NoError,
         )),
         Err(err) => Err(ServiceResponse::new(
             "",
             StatusCode::NOT_FOUND,
-            format!("FFailed to find user: {}", err),
+            ResponseType::ErrorInfo(format!("FFailed to find user: {}", err)),
             GameError::HttpError,
         )),
     }
@@ -382,7 +382,7 @@ pub async fn find_user_by_id(
     id: &str,
     is_test: bool,
     data: &Data<ServiceEnvironmentContext>,
-) -> Result<ServiceResponse<ClientUser>, ServiceResponse<String>> {
+) -> Result<ServiceResponse, ServiceResponse> {
     get_profile(id, is_test, data).await
 }
 
@@ -413,7 +413,7 @@ pub async fn delete(
     id_token: &str,
     is_test: bool,
     data: &Data<ServiceEnvironmentContext>,
-) -> Result<ServiceResponse<String>, ServiceResponse<String>> {
+) -> Result<ServiceResponse, ServiceResponse> {
     //
     // unwrap is ok here because our middleware put it there.
 
@@ -421,7 +421,7 @@ pub async fn delete(
         return Err(ServiceResponse::new(
             "you can only delete yourself",
             StatusCode::UNAUTHORIZED,
-            String::new(),
+            ResponseType::NoData,
             GameError::HttpError,
         ));
     }
@@ -438,14 +438,14 @@ pub async fn delete(
         Ok(..) => Ok(ServiceResponse::new(
             &format!("deleted user with id: {}", id_path),
             StatusCode::OK,
-            String::new(),
+            ResponseType::NoData,
             GameError::NoError,
         )),
         Err(err) => {
             return Err(ServiceResponse::new(
                 "failed to delete user",
                 StatusCode::BAD_REQUEST,
-                String::new(),
+                ResponseType::NoData,
                 GameError::HttpError,
             ))
         }
@@ -469,7 +469,7 @@ mod tests {
         let sr = register(true, "password", &profile, &data)
             .await
             .expect("this should work");
-        let client_user: ClientUser = sr.body;
+        let client_user = sr.get_client_user().expect("This should be a client user");
 
         // Test login with correct credentials
         let response = login(&profile.email, "password", true, &data)

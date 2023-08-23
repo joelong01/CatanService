@@ -19,7 +19,7 @@ use crate::{
     shared::models::GameError,
 };
 
-use super::models::{ClientUser, UserProfile};
+use super::models::{ClientUser, UserProfile, ResponseType};
 
 pub struct ServiceProxy {
     pub client: Client,
@@ -172,10 +172,15 @@ impl ServiceProxy {
                 return Err(e);
             }
         };
-        let service_response: super::models::ServiceResponse<String> = serde_json::from_str(&body).unwrap();
+        let service_response: super::models::ServiceResponse = serde_json::from_str(&body).unwrap();
 
         // Extract auth token from response
-        let auth_token = service_response.body;
+        let auth_token: String = match service_response.response_type {
+            ResponseType::Token(token) => token,
+            _ => panic!("Expected Token response type"),
+        };
+        
+        
         Ok(auth_token)
     }
 

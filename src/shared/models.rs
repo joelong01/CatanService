@@ -8,6 +8,7 @@ use azure_data_cosmos::CosmosEntity;
 use reqwest::StatusCode;
 
 use serde::{Deserialize, Serialize};
+
 use std::{env, fmt, sync::Arc};
 use tokio::sync::{mpsc, RwLock};
 
@@ -227,27 +228,40 @@ pub struct Claims {
     pub sub: String,
     pub exp: usize,
 }
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+pub enum ResponseType {
+    ClientUser(ClientUser),
+    ClientUsers(Vec<ClientUser>),
+    Token(String),
+    ErrorInfo(String),
+    Todo(String),
+    NoData,
+}
 
 /**
- *  We want every response to be in JSON format so that it is easier to script calling the service...when
- *  we don't have "natural" JSON (e.g. when we call 'setup'), we return the JSON of this object.
+ *  We want every response to be in JSON format so that it is easier to script calling the service.
  */
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "PascalCase")]
-pub struct ServiceResponse<T> {
+pub struct ServiceResponse {
     pub message: String,
     #[serde(serialize_with = "serialize_status_code")]
     #[serde(deserialize_with = "deserialize_status_code")]
     pub status: reqwest::StatusCode,
-    pub body: T,
+    pub response_type: ResponseType,
     pub game_error: GameError,
 }
-impl<T: Serialize> ServiceResponse<T> {
-    pub fn new(message: &str, status: StatusCode, body: T, error: GameError) -> Self {
+impl ServiceResponse {
+    pub fn new(
+        message: &str,
+        status: StatusCode,
+        response_type: ResponseType,
+        error: GameError,
+    ) -> Self {
         ServiceResponse {
             message: message.into(),
             status,
-            body,
+            response_type,
             game_error: error,
         }
     }
@@ -255,6 +269,57 @@ impl<T: Serialize> ServiceResponse<T> {
         let status_code = self.status;
         let response = HttpResponse::build(status_code).json(self);
         response
+    }
+
+    pub fn get_client_user(&self) -> Option<ClientUser> {
+        match self.response_type.clone() {
+            ResponseType::ClientUser(data) => Some(data),
+            _ => None,
+        }
+    }
+
+    pub fn to_client_user(json: &str) -> Option<(ServiceResponse, ClientUser)> {
+        let service_response: ServiceResponse = match serde_json::from_str(json) {
+            Ok(sr) => sr,
+            Err(_) => return None,
+        };
+        match service_response.response_type.clone() {
+            ResponseType::ClientUser(client_user) => Some((service_response, client_user)),
+            _ => None,
+        }
+    }
+
+    pub fn to_client_users(json: &str) -> Option<(ServiceResponse, Vec<ClientUser>)> {
+        let service_response: ServiceResponse = match serde_json::from_str(json) {
+            Ok(sr) => sr,
+            Err(_) => return None,
+        };
+        match service_response.response_type.clone() {
+            ResponseType::ClientUsers(client_users) => Some((service_response, client_users)),
+            _ => None,
+        }
+    }
+
+    pub fn to_token(json: &str) -> Option<(ServiceResponse, String)> {
+        let service_response: ServiceResponse = match serde_json::from_str(json) {
+            Ok(sr) => sr,
+            Err(_) => return None,
+        };
+        match service_response.response_type.clone() {
+            ResponseType::Token(token) => Some((service_response, token)),
+            _ => None,
+        }
+    }
+
+    pub fn to_error_info(json: &str) -> Option<(ServiceResponse, String)> {
+        let service_response: ServiceResponse = match serde_json::from_str(json) {
+            Ok(sr) => sr,
+            Err(_) => return None,
+        };
+        match service_response.response_type.clone() {
+            ResponseType::ErrorInfo(error_info) => Some((service_response, error_info)),
+            _ => None,
+        }
     }
 }
 fn serialize_status_code<S>(status: &reqwest::StatusCode, serializer: S) -> Result<S::Ok, S::Error>
