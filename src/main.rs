@@ -10,7 +10,7 @@ mod test;
 mod user_service;
 
 use actix_web::{web, HttpResponse, HttpServer, Scope};
-use games_service::action_handlers::actions;
+use games_service::actions::action_handlers;
 use games_service::long_poller::handler::long_poll_handler;
 
 use crate::games_service::lobby::lobby_handlers;
@@ -231,9 +231,9 @@ fn game_service() -> Scope {
 
 fn action_service() -> Scope {
     web::scope("/action")
-        .route("/start/{game_id}", web::post().to(actions::next))
-        .route("/actions/{game_id}", web::get().to(actions::valid_actions))
-        .route("/next/{game_id}", web::post().to(actions::next))
+        .route("/start/{game_id}", web::post().to(action_handlers::next))
+        .route("/actions/{game_id}", web::get().to(action_handlers::valid_actions))
+        .route("/next/{game_id}", web::post().to(action_handlers::next))
 }
 
 fn longpoll_service() -> Scope {

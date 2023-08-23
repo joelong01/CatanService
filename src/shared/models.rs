@@ -14,7 +14,7 @@ use tokio::sync::{mpsc, RwLock};
 
 use anyhow::{Context, Result};
 
-use crate::games_service::game_container::game_messages::CatanMessage;
+use crate::games_service::{game_container::game_messages::CatanMessage, shared::game_enums::GameAction};
 
 use super::utility::get_id;
 
@@ -236,6 +236,7 @@ pub enum ResponseType {
     ErrorInfo(String),
     Todo(String),
     NoData,
+    ValidActions(Vec<GameAction>)
 }
 
 /**

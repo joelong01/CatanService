@@ -13,4 +13,4 @@ pub mod tiles;
 pub mod game_container;
 pub mod lobby;
 pub mod long_poller;
-pub mod action_handlers;
+pub mod actions;
