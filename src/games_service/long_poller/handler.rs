@@ -2,12 +2,9 @@ use actix_web::{HttpRequest, HttpResponse};
 use reqwest::StatusCode;
 
 
-use crate::{
-    games_service::{
+use crate::{games_service::{
         game_container::game_messages::GameHeader, long_poller::long_poller::LongPoller,
-    },
-    user_service::users::create_http_response,
-};
+    }, user_service::user_handlers::create_http_response};
 
 /**
  *  a GET that is a long polling get.  the call waits here until the game changes and then the service will signal

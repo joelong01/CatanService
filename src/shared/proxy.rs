@@ -172,7 +172,7 @@ impl ServiceProxy {
                 return Err(e);
             }
         };
-        let service_response: super::models::ServiceResponse = serde_json::from_str(&body).unwrap();
+        let service_response: super::models::ServiceResponse<String> = serde_json::from_str(&body).unwrap();
 
         // Extract auth token from response
         let auth_token = service_response.body;

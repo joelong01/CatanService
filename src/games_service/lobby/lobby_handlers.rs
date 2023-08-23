@@ -16,7 +16,7 @@ use crate::{
     middleware::environment_mw::ServiceEnvironmentContext,
     shared::models::ClientUser,
     trace_function,
-    user_service::users::{create_http_response, internal_find_user},
+    user_service::{users:: internal_find_user, user_handlers::create_http_response},
 };
 
 pub async fn get_lobby(_req: HttpRequest) -> HttpResponse {

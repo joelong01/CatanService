@@ -1,14 +1,15 @@
 #![allow(dead_code)]
 
+use actix_web::HttpResponse;
 /**
  * this is the module where I define the structures needed for the data in Cosmos
  */
 use azure_data_cosmos::CosmosEntity;
 use reqwest::StatusCode;
-use serde::{Deserialize, Serialize, Serializer, Deserializer};
+
+use serde::{Deserialize, Serialize};
+use std::{env, fmt, sync::Arc};
 use tokio::sync::{mpsc, RwLock};
-use std::{env, sync::Arc, fmt};
-use serde::de::Error as SerdeError;
 
 use anyhow::{Context, Result};
 
@@ -18,7 +19,6 @@ use super::utility::get_id;
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub enum GameError {
-
     MissingData(String),
     BadActionData(String),
     BadId(String),
@@ -27,8 +27,9 @@ pub enum GameError {
     ActionError(String),
     TooFewPlayers(usize),
     TooManyPlayers(usize),
-    ReqwestError(String)
-
+    ReqwestError(String),
+    NoError,
+    HttpError,
 }
 impl From<reqwest::Error> for GameError {
     fn from(err: reqwest::Error) -> Self {
@@ -38,9 +39,12 @@ impl From<reqwest::Error> for GameError {
 impl fmt::Display for GameError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-   
-            GameError::ChannelError(desc) => write!(f, "Error reading tokio channel (ChannelError): {}", desc),
-            GameError::AlreadyExists(desc) => write!(f, "Resource Already Exists (AlreadyExists): {}", desc),
+            GameError::ChannelError(desc) => {
+                write!(f, "Error reading tokio channel (ChannelError): {}", desc)
+            }
+            GameError::AlreadyExists(desc) => {
+                write!(f, "Resource Already Exists (AlreadyExists): {}", desc)
+            }
             GameError::ActionError(desc) => write!(f, "Action Error: {}", desc),
             GameError::MissingData(desc) => write!(f, "Missing Data {}", desc),
             GameError::BadActionData(desc) => write!(f, "Bad Data {}", desc),
@@ -48,8 +52,8 @@ impl fmt::Display for GameError {
             GameError::TooFewPlayers(s) => write!(f, "Min Players {}", s),
             GameError::TooManyPlayers(c) => write!(f, "Max Players {}", c),
             GameError::ReqwestError(c) => write!(f, "ReqwestError error: {}", c),
-            
-
+            GameError::NoError => write!(f, "Success!"),
+            GameError::HttpError => write!(f, "HttpError. see StatusCode"),
         }
     }
 }
@@ -162,6 +166,32 @@ impl UserProfile {
             && self.games_played.unwrap_or(0) == other.games_played.unwrap_or(0)
             && self.games_won.unwrap_or(0) == other.games_won.unwrap_or(0)
     }
+
+    pub fn new_test_user() -> Self {
+        let random_string = || {
+            use rand::distributions::Alphanumeric;
+            use rand::{thread_rng, Rng};
+            thread_rng()
+                .sample_iter(&Alphanumeric)
+                .take(8)
+                .map(char::from)
+                .collect::<String>()
+        };
+
+        let random_name = random_string();
+        UserProfile {
+            email: format!("{}@test_user.com", random_string()),
+            first_name: random_name.clone(),
+            last_name: random_name.clone(),
+            display_name: random_name,
+            picture_url: String::default(),
+            foreground_color: String::default(),
+            background_color: String::default(),
+            text_color: String::default(),
+            games_played: None,
+            games_won: None,
+        }
+    }
 }
 ///
 /// This is the struct that is returned to the clien whenever User data needs to be returned.  it is also the format
@@ -202,68 +232,45 @@ pub struct Claims {
  *  We want every response to be in JSON format so that it is easier to script calling the service...when
  *  we don't have "natural" JSON (e.g. when we call 'setup'), we return the JSON of this object.
  */
-#[derive(Debug, Clone)]
-pub struct ServiceResponse {
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "PascalCase")]
+pub struct ServiceResponse<T> {
     pub message: String,
-    pub status: StatusCode,
-    pub body: String,
+    #[serde(serialize_with = "serialize_status_code")]
+    #[serde(deserialize_with = "deserialize_status_code")]
+    pub status: reqwest::StatusCode,
+    pub body: T,
+    pub game_error: GameError,
 }
-
-impl Serialize for ServiceResponse {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let status_code = self.status.as_u16();
-
-        // Using a map to represent the ServiceResponse with PascalCase keys
-        let mut map = serde_json::Map::new();
-        map.insert("Message".to_string(), serde_json::json!(self.message));
-        map.insert("Status".to_string(), serde_json::json!(status_code));
-        map.insert("Body".to_string(), serde_json::json!(self.body));
-
-        // Serialize the map
-        map.serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for ServiceResponse {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        // Deserialize into a map
-        let map: serde_json::Map<String, serde_json::Value> = Deserialize::deserialize(deserializer)?;
-
-        let message = map
-            .get("Message")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| D::Error::custom("Missing Message"))?
-            .to_string();
-
-        let status_code = map
-            .get("Status")
-            .and_then(|v| v.as_u64())
-            .ok_or_else(|| D::Error::custom("Missing Status"))?;
-
-        let status = StatusCode::from_u16(status_code as u16)
-            .map_err(|e| D::Error::custom(format!("Invalid Status: {}", e)))?;
-
-        let body = map
-            .get("Body")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| D::Error::custom("Missing Body"))?
-            .to_string();
-
-        // Construct the ServiceResponse
-        Ok(ServiceResponse {
-            message,
+impl<T: Serialize> ServiceResponse<T> {
+    pub fn new(message: &str, status: StatusCode, body: T, error: GameError) -> Self {
+        ServiceResponse {
+            message: message.into(),
             status,
             body,
-        })
+            game_error: error,
+        }
+    }
+    pub fn to_http_response(&self) -> HttpResponse {
+        let status_code = self.status;
+        let response = HttpResponse::build(status_code).json(self);
+        response
     }
 }
+fn serialize_status_code<S>(status: &reqwest::StatusCode, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    serializer.serialize_u16(status.as_u16())
+}
 
+fn deserialize_status_code<'de, D>(deserializer: D) -> Result<reqwest::StatusCode, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let code = u16::deserialize(deserializer)?;
+    Ok(StatusCode::from_u16(code).map_err(serde::de::Error::custom)?)
+}
 
 /**
  *  the .devcontainer/required-secrets.json contains the list of secrets needed to run this application.  this stuctu
@@ -325,11 +332,11 @@ impl ConfigEnvironmentVariables {
 impl Default for ConfigEnvironmentVariables {
     fn default() -> Self {
         Self {
-            cosmos_token: "".to_owned(),
-            cosmos_account: "".to_owned(),
-            ssl_key_location: "".to_owned(),
-            ssl_cert_location: "".to_owned(),
-            login_secret_key: "".to_owned(),
+            cosmos_token: String::new(),
+            cosmos_account: String::new(),
+            ssl_key_location: String::new(),
+            ssl_cert_location: String::new(),
+            login_secret_key: String::new(),
             database_name: "Users-Database".to_owned(),
             container_name: "User-Container".to_owned(),
             rust_log: "actix_web=trace,actix_server=trace,rust=trace".to_owned(),
@@ -345,7 +352,7 @@ pub struct LongPollUser {
     pub user_id: String,
     pub name: String,
     pub tx: mpsc::Sender<CatanMessage>,
-    pub rx: Arc<RwLock<mpsc::Receiver<CatanMessage>>>
+    pub rx: Arc<RwLock<mpsc::Receiver<CatanMessage>>>,
 }
 
 impl LongPollUser {

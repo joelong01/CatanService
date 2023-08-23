@@ -10,15 +10,18 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use crate::cosmos_db::cosmosdb::UserDb;
 use crate::cosmos_db::mocked_db::TestDb;
 use crate::full_info;
-use crate::games_service::game_container::game_messages::GameHeader;
+
 use crate::games_service::long_poller::long_poller::LongPoller;
-use crate::middleware::authn_mw::is_token_valid;
+
 use crate::middleware::environment_mw::{ServiceEnvironmentContext, CATAN_ENV};
-use crate::shared::models::{Claims, ClientUser, PersistUser, ServiceResponse, UserProfile};
+use crate::shared::models::{
+    Claims, ClientUser, GameError, PersistUser, ServiceResponse, UserProfile,
+};
 use actix_web::web::Data;
-use actix_web::{web, HttpRequest, HttpResponse};
-use bcrypt::{hash, verify, DEFAULT_COST};
-use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
+use bcrypt::{hash, verify};
+use jsonwebtoken::{
+    decode, encode, Algorithm, DecodingKey, EncodingKey, Header, TokenData, Validation,
+};
 use lazy_static::lazy_static;
 use reqwest::StatusCode;
 use tokio::sync::Mutex;
@@ -27,7 +30,6 @@ lazy_static! {
     static ref DB_SETUP: AtomicBool = AtomicBool::new(false);
     static ref SETUP_LOCK: Mutex<()> = Mutex::new(());
 }
-
 /**
  * this sets up CosmosDb to make the sample run. the only prereq is the secrets set in
  * .devconainter/required-secrets.json, this API will call setupdb. this just calls the setupdb api and deals with errors
@@ -35,57 +37,56 @@ lazy_static! {
  * you can't do the normal authn/authz here because the authn path requires the database to exist.  for this app,
  * the users database will be created out of band and this path is just for test users.
  */
-pub async fn setup(data: Data<ServiceEnvironmentContext>) -> HttpResponse {
-    let request_context = data.context.lock().unwrap();
-    //  do not check claims as the db doesn't exist yet.
-    if !request_context.is_test {
-        return create_http_response(
+
+pub async fn setup(
+    is_test: bool,
+    database_name: &str,
+    container_name: &str,
+) -> Result<ServiceResponse<String>, ServiceResponse<String>> {
+    if !is_test {
+        return Err(ServiceResponse::new(
+            "Test Header must be set",
             StatusCode::UNAUTHORIZED,
-            &format!("setup is only available when the test header is set."),
-            "",
-        );
+            String::new(),
+            GameError::HttpError,
+        ));
     }
     if DB_SETUP.load(Ordering::Relaxed) {
-        return create_http_response(
+        return Ok(ServiceResponse::new(
+            "already exists",
             StatusCode::ACCEPTED,
-            &format!(
-                "database: {} container: {} already exists",
-                request_context.database_name, request_context.env.container_name
-            ),
-            "",
-        );
+            String::new(),
+            GameError::NoError,
+        ));
     }
 
     let _lock_guard = SETUP_LOCK.lock().await;
 
     if DB_SETUP.load(Ordering::Relaxed) {
-        return create_http_response(
+        return Ok(ServiceResponse::new(
+            "already exists",
             StatusCode::ACCEPTED,
-            &format!(
-                "database: {} container: {} already exists",
-                request_context.database_name, request_context.env.container_name
-            ),
-            "",
-        );
+            String::new(),
+            GameError::NoError,
+        ));
     }
 
     match TestDb::setupdb().await {
         Ok(..) => {
             DB_SETUP.store(true, Ordering::Relaxed);
-            create_http_response(
+            return Ok(ServiceResponse::new(
+                "created",
                 StatusCode::CREATED,
-                &format!(
-                    "database: {} container: {} created",
-                    request_context.database_name, request_context.env.container_name
-                ),
-                "",
-            )
+                String::new(),
+                GameError::NoError,
+            ));
         }
-        Err(err) => create_http_response(
+        Err(e) => Err(ServiceResponse::new(
+            "Bad Request",
             StatusCode::BAD_REQUEST,
-            &format!("Failed to create database/collection: {}", err),
-            "",
-        ),
+            format!("{:#?}", e),
+            GameError::HttpError,
+        )),
     }
 }
 
@@ -93,66 +94,43 @@ pub async fn setup(data: Data<ServiceEnvironmentContext>) -> HttpResponse {
 ///
 /// # Arguments
 ///
-/// * `user_in` - UserProfile object
+/// * `profile_in` - UserProfile object
 /// * `data` - `ServiceEnvironmentContext` data.
-/// * `req` - `HttpRequest` object containing the request information.
-///
-/// # Headers
-/// * X-Password - The new password for the user
+/// * `is_test` - test header set?
+/// & `pwd_header_val` - the Option<> for the HTTP header containing the passwrod
 ///
 /// # Returns
 /// Body contains a ClientUser (an id + profile)
-/// Returns an HTTP response indicating the success or failure of the registration process.
+/// Returns an ServiceResponse indicating the success or failure of the registration process.
 pub async fn register(
-    profile_in: web::Json<UserProfile>,
-    data: Data<ServiceEnvironmentContext>,
-    req: HttpRequest,
-) -> HttpResponse {
-    let is_test = req.headers().contains_key(GameHeader::IS_TEST);
-    // Retrieve the password value from the "X-Password" header
-    let password_value: String = match req.headers().get(GameHeader::PASSWORD) {
-        Some(header_value) => match header_value.to_str() {
-            Ok(pwd) => pwd.to_string(),
-            Err(e) => {
-                return create_http_response(
-                    StatusCode::BAD_REQUEST,
-                    &format!("X-Password header is set, but the value is not. Err: {}", e),
-                    "",
-                )
-            }
-        },
-        None => {
-            return create_http_response(
-                StatusCode::BAD_REQUEST,
-                &format!("X-Password header not set"),
-                "",
-            )
-        }
-    };
-    let user_result = internal_find_user("email", &profile_in.email, is_test, &data).await;
-
-    match user_result {
-        Ok(_) => {
-            return create_http_response(
-                StatusCode::CONFLICT,
-                &format!("User already registered: {}", profile_in.email),
-                "",
-            );
-        }
-        Err(_) => {
-            // User not found, continue registration
-        }
+    is_test: bool,
+    password: &str,
+    profile_in: &UserProfile,
+    data: &Data<ServiceEnvironmentContext>,
+) -> Result<ServiceResponse<ClientUser>, ServiceResponse<String>> {
+    if internal_find_user("email", &profile_in.email, is_test, data)
+        .await
+        .is_ok()
+    {
+        return Err(ServiceResponse::new(
+            "User already exists",
+            StatusCode::CONFLICT,
+            String::new(),
+            GameError::HttpError,
+        ));
     }
 
     // Hash the password
-    let password_hash = match hash(&password_value, DEFAULT_COST) {
+    let password_hash = match hash(&password, bcrypt::DEFAULT_COST) {
         Ok(hp) => hp,
-        Err(_) => {
-            return create_http_response(
+        Err(e) => {
+            let err_message = format!("{:#?}", e);
+            return Err(ServiceResponse::new(
+                "Error Hashing Password",
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Error hashing password",
-                "",
-            );
+                err_message.to_owned(),
+                GameError::HttpError,
+            ));
         }
     };
 
@@ -171,24 +149,33 @@ pub async fn register(
         match userdb.create_user(persist_user.clone()).await {
             Ok(..) => {
                 persist_user.password_hash = None;
-                HttpResponse::Ok()
-                    .content_type("application/json")
-                    .json(ClientUser::from_persist_user(persist_user))
+                Ok(ServiceResponse::new(
+                    "created",
+                    StatusCode::CREATED,
+                    ClientUser::from_persist_user(persist_user),
+                    GameError::NoError,
+                ))
             }
-            Err(err) => create_http_response(
-                StatusCode::BAD_REQUEST,
-                &format!("Failed to add user to collection: {}", err),
-                "",
-            ),
+            Err(e) => {
+                return Err(ServiceResponse::new(
+                    "Bad Request",
+                    StatusCode::BAD_REQUEST,
+                    format!("{:#?}", e),
+                    GameError::HttpError,
+                ))
+            }
         }
     } else {
         //
         //  if it is a test, set the user_id to the email name so that it is easier to follow in the logs
         persist_user.id = profile_in.email.clone();
         TestDb::create_user(persist_user.clone()).await.unwrap();
-        HttpResponse::Ok()
-            .content_type("application/json")
-            .json(ClientUser::from_persist_user(persist_user))
+        Ok(ServiceResponse::new(
+            "created",
+            StatusCode::CREATED,
+            ClientUser::from_persist_user(persist_user),
+            GameError::NoError,
+        ))
     }
 }
 
@@ -200,226 +187,203 @@ pub async fn register(
  * if it does, return a signed JWT token
  * add the user to the ALL_USERS_MAP
  */
-pub async fn login(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> HttpResponse {
-    let password_value: String = match req.headers().get(GameHeader::PASSWORD) {
-        Some(header_value) => match header_value.to_str() {
-            Ok(pwd) => pwd.to_string(),
-            Err(e) => {
-                return create_http_response(
-                    StatusCode::BAD_REQUEST,
-                    &format!(
-                        "{} header is set, but the value is not. Err: {}",
-                        GameHeader::PASSWORD,
-                        e
-                    ),
-                    "",
-                )
-            }
-        },
-        None => {
-            return create_http_response(
-                StatusCode::BAD_REQUEST,
-                &format!("{} header not set", GameHeader::PASSWORD),
-                "",
-            )
-        }
-    };
-
-    let username = match req.headers().get(GameHeader::EMAIL) {
-        Some(header_value) => match header_value.to_str() {
-            Ok(name) => name,
-            Err(e) => {
-                return create_http_response(
-                    StatusCode::BAD_REQUEST,
-                    &format!(
-                        "{} header is set, but the value is not. Err: {}",
-                        GameHeader::EMAIL,
-                        e
-                    ),
-                    "",
-                )
-            }
-        },
-        None => {
-            return create_http_response(
-                StatusCode::BAD_REQUEST,
-                &format!("{} header not set", GameHeader::EMAIL),
-                "",
-            )
-        }
-    };
-    let is_test = req.headers().contains_key(GameHeader::IS_TEST);
-    let user_result = internal_find_user("email", username, is_test, &data).await;
+pub async fn login(
+    username: &str,
+    password: &str,
+    is_test: bool,
+    data: &Data<ServiceEnvironmentContext>,
+) -> Result<ServiceResponse<String>, ServiceResponse<String>> {
+    let user_result = internal_find_user("email", username, is_test, data).await;
 
     let user = match user_result {
         Ok(u) => u,
-        Err(_) => {
-            return create_http_response(
-                StatusCode::NOT_FOUND,
+        Err(e) => {
+            return Err(ServiceResponse::new(
                 &format!("invalid user id: {}", username),
-                "",
-            );
+                StatusCode::NOT_FOUND,
+                format!("{:#?}", e),
+                GameError::HttpError,
+            ))
         }
     };
     let password_hash: String = match user.password_hash {
         Some(p) => p,
         None => {
-            return create_http_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
+            return Err(ServiceResponse::new(
                 "user document does not contain a password hash",
-                "",
-            );
+                StatusCode::INTERNAL_SERVER_ERROR,
+                String::new(),
+                GameError::HttpError,
+            ));
         }
     };
-    let result = verify(password_value, &password_hash);
+    let result = verify(password, &password_hash);
     let is_password_match = match result {
         Ok(m) => m,
         Err(e) => {
-            return create_http_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
+            return Err(ServiceResponse::new(
                 &format!("Error from bcrypt library: {:#?}", e),
-                "",
-            );
+                StatusCode::INTERNAL_SERVER_ERROR,
+                String::new(),
+                GameError::HttpError,
+            ));
         }
     };
 
     if is_password_match {
-        let token_result = encode_token(&user.id, &user.user_profile.email);
-
+        let token_result = create_jwt_token(&user.id, &user.user_profile.email);
         match token_result {
             Ok(token) => {
-                match is_token_valid(&token) {
-                    Some(_) => full_info!("token valid!"),
-                    None => full_info!("token NOT VALID"),
-                };
-
                 let _ = LongPoller::add_user(&user.id, &user.user_profile).await;
-                create_http_response(StatusCode::OK, "", &token)
+                Ok(ServiceResponse::new(
+                    "",
+                    StatusCode::OK,
+                    token,
+                    GameError::NoError,
+                ))
             }
-            Err(_) => {
-                create_http_response(StatusCode::INTERNAL_SERVER_ERROR, "error hashing token", "")
+            Err(e) => {
+                return Err(ServiceResponse::new(
+                    "Error Hashing token",
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("{:#?}", e),
+                    GameError::HttpError,
+                ));
             }
         }
     } else {
-        create_http_response(StatusCode::UNAUTHORIZED, "incorrect password", "")
+        return Err(ServiceResponse::new(
+            "invalid password",
+            StatusCode::UNAUTHORIZED,
+            String::new(),
+            GameError::HttpError,
+        ));
     }
 }
 
-fn encode_token(id: &str, email: &str) -> Result<String, Box<dyn std::error::Error>> {
+fn create_jwt_token(id: &str, email: &str) -> Result<String, Box<dyn std::error::Error>> {
     let expire_duration = ((SystemTime::now() + Duration::from_secs(24 * 60 * 60))
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs()) as usize;
-    
+
     let claims = Claims {
         id: id.to_owned(),
         sub: email.to_owned(),
         exp: expire_duration,
     };
-    
+
     let secret_key = CATAN_ENV.login_secret_key.clone();
-    
+
     let token_result = encode(
         &Header::new(Algorithm::HS512),
         &claims,
         &EncodingKey::from_secret(secret_key.as_ref()),
     );
 
-    let test = token_result.clone();
-    if test.is_ok() {
-        match is_token_valid(&test.unwrap()) {
-            Some(_) => full_info!("token VALID"),
-            None => full_info!("token NOT VALID"),
-        }
-    }
-
     token_result.map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
 }
+pub fn validate_jwt_token(token: &str) -> Option<TokenData<Claims>> {
+    let validation = Validation::new(Algorithm::HS512);
+    let secret_key = CATAN_ENV.login_secret_key.clone();
 
+    match decode::<Claims>(
+        &token,
+        &DecodingKey::from_secret(secret_key.as_ref()),
+        &validation,
+    ) {
+        Ok(c) => {
+            full_info!("token VALID");
+            Some(c) // or however you want to handle a valid token
+        }
+        Err(e) => {
+            full_info!("token NOT VALID: {:?}", e);
+            None
+        }
+    }
+}
 
 /**
  *  this will get a list of all documents.  Note this does *not* do pagination. This would be a reasonable next step to
  *  show in the sample
  */
-pub async fn list_users(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> HttpResponse {
+pub async fn list_users(
+    data: &Data<ServiceEnvironmentContext>,
+    is_test: bool,
+) -> Result<ServiceResponse<Vec<ClientUser>>, ServiceResponse<String>> {
     let request_context = data.context.lock().unwrap();
-    let use_cosmos_db = !req.headers().contains_key(GameHeader::IS_TEST);
-    if use_cosmos_db {
+
+    if !is_test {
         let userdb = UserDb::new(&request_context).await;
 
         // Get list of users
         match userdb.list().await {
             Ok(users) => {
-                let mut client_users = Vec::new();
-                for user in users.iter() {
-                    client_users.push(ClientUser::from_persist_user(user.clone()));
-                }
+                let client_users: Vec<ClientUser> = users
+                    .iter()
+                    .map(|user| ClientUser::from_persist_user(user.clone()))
+                    .collect();
 
-                HttpResponse::Ok()
-                    .content_type("application/json")
-                    .json(client_users)
+                Ok(ServiceResponse::new(
+                    "",
+                    StatusCode::OK,
+                    client_users,
+                    GameError::NoError,
+                ))
             }
             Err(err) => {
-                return create_http_response(
-                    StatusCode::NOT_FOUND,
-                    &format!("Failed to retrieve user list: {}", err),
+                return Err(ServiceResponse::new(
                     "",
-                );
+                    StatusCode::NOT_FOUND,
+                    format!("Failed to retrieve user list: {}", err),
+                    GameError::HttpError,
+                ));
             }
         }
     } else {
-        HttpResponse::Ok()
-            .content_type("application/json")
-            .json(TestDb::list().await.unwrap())
+        let client_users: Vec<ClientUser> = TestDb::list()
+            .await
+            .unwrap()
+            .iter()
+            .map(|user| ClientUser::from_persist_user(user.clone()))
+            .collect();
+
+        Ok(ServiceResponse::new(
+            "",
+            StatusCode::OK,
+            client_users,
+            GameError::NoError,
+        ))
     }
 }
-pub async fn get_profile(data: Data<ServiceEnvironmentContext>, req: HttpRequest) -> HttpResponse {
-    let user_id = req
-        .headers()
-        .get(GameHeader::USER_ID)
-        .unwrap()
-        .to_str()
-        .unwrap();
-
-    let is_test = req.headers().contains_key(GameHeader::IS_TEST);
+pub async fn get_profile(
+    user_id: &str,
+    is_test: bool,
+    data: &Data<ServiceEnvironmentContext>,
+) -> Result<ServiceResponse<ClientUser>, ServiceResponse<String>> {
     let result = internal_find_user("id", user_id, is_test, &data).await;
     match result {
-        Ok(user) => HttpResponse::Ok()
-            .content_type("application/json")
-            .json(ClientUser::from_persist_user(user)),
-        Err(err) => create_http_response(
-            StatusCode::NOT_FOUND,
-            &format!("Failed to find user: {}", err),
+        Ok(user) => Ok(ServiceResponse::new(
             "",
-        ),
+            StatusCode::OK,
+            ClientUser::from_persist_user(user),
+            GameError::NoError,
+        )),
+        Err(err) => Err(ServiceResponse::new(
+            "",
+            StatusCode::NOT_FOUND,
+            format!("FFailed to find user: {}", err),
+            GameError::HttpError,
+        )),
     }
 }
 
-/**
- *  this will get a list of all documents.  Note this does *not* do pagination. This would be a reasonable next step to
- *  show in the sample
- */
 pub async fn find_user_by_id(
-    id: web::Path<String>,
-    data: Data<ServiceEnvironmentContext>,
-    req: HttpRequest,
-) -> HttpResponse {
-    let is_test = req.headers().contains_key(GameHeader::IS_TEST);
-    let result = internal_find_user("id", &id, is_test, &data).await;
-
-    match result {
-        Ok(mut user) => {
-            user.password_hash = None;
-            HttpResponse::Ok()
-                .content_type("application/json")
-                .json(user)
-        }
-        Err(err) => create_http_response(
-            StatusCode::NOT_FOUND,
-            &format!("Failed to find user: {}", err),
-            "",
-        ),
-    }
+    id: &str,
+    is_test: bool,
+    data: &Data<ServiceEnvironmentContext>,
+) -> Result<ServiceResponse<ClientUser>, ServiceResponse<String>> {
+    get_profile(id, is_test, data).await
 }
 
 pub async fn internal_find_user(
@@ -445,59 +409,95 @@ pub async fn internal_find_user(
 }
 
 pub async fn delete(
-    id: web::Path<String>,
-    data: Data<ServiceEnvironmentContext>,
-    req: HttpRequest,
-) -> HttpResponse {
+    id_path: &str,
+    id_token: &str,
+    is_test: bool,
+    data: &Data<ServiceEnvironmentContext>,
+) -> Result<ServiceResponse<String>, ServiceResponse<String>> {
     //
     // unwrap is ok here because our middleware put it there.
-    let header_id_result = req.headers().get(GameHeader::USER_ID).unwrap().to_str();
 
-    let header_id = match header_id_result {
-        Ok(val) => val,
-        Err(_) => {
-            return create_http_response(StatusCode::BAD_REQUEST, "Invalid id header value", "")
-        }
-    };
-
-    if header_id != *id {
-        return create_http_response(StatusCode::UNAUTHORIZED, "you can only delete yourself", "");
+    if id_path != id_token {
+        return Err(ServiceResponse::new(
+            "you can only delete yourself",
+            StatusCode::UNAUTHORIZED,
+            String::new(),
+            GameError::HttpError,
+        ));
     }
-    let use_cosmos_db = !req.headers().contains_key(GameHeader::IS_TEST);
+
     let result;
-    if use_cosmos_db {
+    if !is_test {
         let request_context = data.context.lock().unwrap();
         let userdb = UserDb::new(&request_context).await;
-        result = userdb.delete_user(&id).await
+        result = userdb.delete_user(&id_path).await
     } else {
-        result = TestDb::delete_user(&id).await;
+        result = TestDb::delete_user(&id_path).await;
     }
     match result {
-        Ok(..) => {
-            create_http_response(StatusCode::OK, &format!("deleted user with id: {}", id), "")
+        Ok(..) => Ok(ServiceResponse::new(
+            &format!("deleted user with id: {}", id_path),
+            StatusCode::OK,
+            String::new(),
+            GameError::NoError,
+        )),
+        Err(err) => {
+            return Err(ServiceResponse::new(
+                "failed to delete user",
+                StatusCode::BAD_REQUEST,
+                String::new(),
+                GameError::HttpError,
+            ))
         }
-        Err(err) => create_http_response(
-            StatusCode::BAD_REQUEST,
-            &format!("Failed to delete user: {}", err),
-            "",
-        ),
     }
 }
 
-pub fn create_http_response(status_code: StatusCode, message: &str, body: &str) -> HttpResponse {
-    let response = ServiceResponse {
-        message: message.to_string(),
-        status: status_code,
-        body: body.to_string(),
-    };
-    match status_code {
-        StatusCode::OK => HttpResponse::Ok().json(response),
-        StatusCode::UNAUTHORIZED => HttpResponse::Unauthorized().json(response),
-        StatusCode::INTERNAL_SERVER_ERROR => HttpResponse::InternalServerError().json(response),
-        StatusCode::NOT_FOUND => HttpResponse::NotFound().json(response),
-        StatusCode::CONFLICT => HttpResponse::Conflict().json(response),
-        StatusCode::ACCEPTED => HttpResponse::Accepted().json(response),
-        StatusCode::CREATED => HttpResponse::Created().json(response),
-        _ => HttpResponse::BadGateway().json(response),
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Test the login function
+    #[tokio::test]
+    async fn test_login() {
+        let profile = UserProfile::new_test_user();
+        let data = Data::new(ServiceEnvironmentContext::new()); // Customize with required fields
+
+        // setup
+        let response = setup(true, "db_name", "container_name").await;
+
+        // Register the user first
+        let sr = register(true, "password", &profile, &data)
+            .await
+            .expect("this should work");
+        let client_user: ClientUser = sr.body;
+
+        // Test login with correct credentials
+        let response = login(&profile.email, "password", true, &data)
+            .await
+            .expect("login should succeed");
+
+        // Test login with incorrect credentials
+        let response = login(&profile.email, "wrong_password", true, &data).await;
+        match response {
+            Ok(_) => panic!("this hsould be an error!"),
+            Err(e) => {
+                assert_eq!(e.status, StatusCode::UNAUTHORIZED);
+            }
+        }
+
+        // find user
+
+        //  let user = find_user_by_id(id, is_test, &data)
     }
+
+    // Similar tests for other functions: get_profile, find_user_by_id
+
+    // Test JWT token creation and validation
+    #[test]
+    fn test_jwt_token_creation_and_validation() {
+        let token = create_jwt_token("user_id", "user_email").unwrap();
+        assert!(validate_jwt_token(&token).is_some());
+    }
+
+    // Add more tests as needed
 }

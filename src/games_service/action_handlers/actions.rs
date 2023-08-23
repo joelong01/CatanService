@@ -3,21 +3,11 @@
 use actix_web::{web, HttpRequest, HttpResponse, Responder};
 use reqwest::StatusCode;
 
-use crate::{
-    games_service::{
-        catan_games::{
-            games::regular::regular_game::RegularGame,
-            traits::{
-                game_info_trait::GameInfoTrait, game_state_machine_trait::StateMachineTrait,
-                game_trait::GameTrait,
-            },
-        },
+use crate::{games_service::{
+        catan_games::traits::game_trait::GameTrait,
         game_container::game_container::GameContainer,
-        shared::game_enums::{GameAction, GameState},
-    },
-    shared::models::GameError,
-    user_service::users::create_http_response,
-};
+        shared::game_enums::GameAction,
+    }, user_service::user_handlers::create_http_response};
 
 pub async fn next(game_id_path: web::Path<String>, _req: HttpRequest) -> impl Responder {
     let game_id: &str = &game_id_path;

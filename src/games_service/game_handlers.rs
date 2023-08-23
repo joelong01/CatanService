@@ -7,7 +7,7 @@ use crate::{
     middleware::environment_mw::ServiceEnvironmentContext,
     shared::models::{ClientUser, ServiceResponse},
     trace_function, trace_thread_info,
-    user_service::users::{create_http_response, internal_find_user},
+    user_service::{user_handlers::create_http_response, users::internal_find_user},
 };
 use actix_web::{
     web::{self, Data, Path},
@@ -20,10 +20,7 @@ use scopeguard::defer;
 use crate::games_service::shared::game_enums::{CatanGames, SupportedGames};
 
 use super::{
-    catan_games::{
-        games::regular::regular_game::RegularGame,
-        traits::game_trait::GameTrait,
-    },
+    catan_games::{games::regular::regular_game::RegularGame, traits::game_trait::GameTrait},
     game_container::{game_container::GameContainer, game_messages::GameHeader},
 };
 
@@ -51,14 +48,13 @@ pub async fn shuffle_game(game_id_path: web::Path<String>, _req: HttpRequest) ->
                 ),
             }
         }
-        Err(_e) => {
-            let response = ServiceResponse {
-                message: format!(
-                    "Only the creator can shuffle the board, and you are not the creator."
-                ),
-                status: StatusCode::BAD_REQUEST,
-                body: "".to_owned(),
-            };
+        Err(e) => {
+            let response = ServiceResponse::new(
+                &format!("Only the creator can shuffle the board, and you are not the creator."),
+                StatusCode::BAD_REQUEST,
+                String::new(),
+                e,
+            );
             return HttpResponse::BadRequest()
                 .content_type("application/json")
                 .json(response);

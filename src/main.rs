@@ -25,7 +25,7 @@ use once_cell::sync::OnceCell;
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
 use std::env;
 use std::sync::atomic::{AtomicBool, Ordering};
-use user_service::users;
+use user_service::user_handlers;
 
 pub use log::info;
 pub use log::trace;
@@ -131,9 +131,12 @@ fn create_unauthenticated_service() -> Scope {
     web::scope("/api").service(
         web::scope("/v1")
             .route("/version", web::get().to(get_version))
-            .route("/users/register", web::post().to(users::register))
-            .route("/users/login", web::post().to(users::login))
-            .route("/test/setup", web::post().to(users::setup)), /* TEST ONLY */
+            .route(
+                "/users/register",
+                web::post().to(user_handlers::register_handler),
+            )
+            .route("/users/login", web::post().to(user_handlers::login_handler))
+            .route("/test/setup", web::post().to(user_handlers::setup_handler)), /* TEST ONLY */
     )
 }
 
@@ -158,9 +161,12 @@ fn create_unauthenticated_service() -> Scope {
  */
 fn user_service() -> Scope {
     web::scope("/users")
-        .route("", web::get().to(users::list_users))
-        .route("/{id}", web::delete().to(users::delete))
-        .route("/{id}", web::get().to(users::find_user_by_id))
+        .route("", web::get().to(user_handlers::list_users_handler))
+        .route("/{id}", web::delete().to(user_handlers::delete_handler))
+        .route(
+            "/{id}",
+            web::get().to(user_handlers::find_user_by_id_handler),
+        )
 }
 
 /**
@@ -235,7 +241,7 @@ fn longpoll_service() -> Scope {
 }
 
 fn profile_service() -> Scope {
-    web::scope("profile").route("", web::get().to(users::get_profile))
+    web::scope("profile").route("", web::get().to(user_handlers::get_profile_handler))
 }
 
 lazy_static! {
@@ -283,7 +289,7 @@ mod tests {
 
     use log::trace;
     use reqwest::StatusCode;
-    use serde_json::json;
+
 
     #[actix_rt::test]
     async fn test_version_and_log_intialized() {
@@ -331,17 +337,21 @@ mod tests {
         let response = test::call_service(&mut app, req).await;
         let status = response.status();
         let body = test::read_body(response).await;
-        if status != 200 {
+        if !status.is_success() {
             trace!("user_1 already registered");
             assert_eq!(status, 409);
-            let resp: ServiceResponse =
+            let resp: ServiceResponse<String> =
                 serde_json::from_slice(&body).expect("failed to deserialize into ServiceResponse");
             assert_eq!(resp.status, 409);
             assert_eq!(resp.body, "");
         } else {
+            //  we get back a service response with a client user in the body
+
+            let service_response:ServiceResponse::<ClientUser> = serde_json::from_slice(&body).expect("Failed to deserialize response body");
+
             // Deserialize the body into a ClientUser object
-            let client_user: ClientUser =
-                serde_json::from_slice(&body).expect("Failed to deserialize response body");
+            let client_user: ClientUser = service_response.body;
+                
 
             let pretty_json =
                 serde_json::to_string_pretty(&client_user).expect("Failed to pretty-print JSON");
@@ -356,21 +366,19 @@ mod tests {
         }
 
         // 2. Login the user
-        let login_payload = json!({
-            "username": user1_profile.email,
-            "password": USER_1_PASSWORD
-        });
+    
         let req = test::TestRequest::post()
             .uri("/api/v1/users/login")
             .append_header((GameHeader::IS_TEST, "true"))
-            .set_json(&login_payload)
+            .append_header((GameHeader::PASSWORD, USER_1_PASSWORD))
+            .append_header((GameHeader::EMAIL, user1_profile.email.clone()))
             .to_request();
 
         let resp = test::call_service(&mut app, req).await;
-        assert_eq!(resp.status(), 200);
+        assert!(resp.status().is_success());
 
         let body = test::read_body(resp).await;
-        let service_response: ServiceResponse =
+        let service_response: ServiceResponse<String> =
             serde_json::from_slice(&body).expect("failed to deserialize into ServiceResponse");
 
         // Extract auth token from response
@@ -388,12 +396,16 @@ mod tests {
         let resp = test::call_service(&mut app, req).await;
         assert_eq!(resp.status(), 200);
         let body = test::read_body(resp).await;
-        let profile_from_service: UserProfile =
-            serde_json::from_slice(&body).expect("error deserializing profile");
+        //
+        //  we get a service response where the body is a ClientUser
+        let sr :ServiceResponse<ClientUser>  = serde_json::from_slice(&body).expect("should be a service response!");
+
+        let profile_from_service: ClientUser = sr.body;
+            
         user1_profile.games_played = Some(0);
         user1_profile.games_won = Some(0); // service sets this when regisering.
         assert!(
-            profile_from_service.is_equal_byval(&user1_profile),
+            profile_from_service.user_profile.is_equal_byval(&user1_profile),
             "profile returned by service different than the one sent in"
         );
     }

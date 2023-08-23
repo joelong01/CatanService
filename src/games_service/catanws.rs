@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 use crate::full_info;
-use crate::middleware::authn_mw::is_token_valid;
+use crate::user_service::users::validate_jwt_token;
 use actix::prelude::*;
 use actix::{Actor, StreamHandler};
 use actix_web::error::{ErrorInternalServerError, ErrorUnauthorized};
@@ -170,7 +170,7 @@ pub async fn ws_bootstrap(
         .to_string();
 
     // Validate the token and extract claims
-    let claims = match is_token_valid(&token) {
+    let claims = match validate_jwt_token(&token) {
         Some(claims) => claims.claims,
         None => return Err(ErrorUnauthorized("No Authorization Parameter")),
     };

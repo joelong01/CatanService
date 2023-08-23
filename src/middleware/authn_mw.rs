@@ -4,15 +4,15 @@ use actix::fut::err;
 use actix_service::{Service, Transform};
 use actix_web::{dev::ServiceRequest, dev::ServiceResponse, error::ErrorUnauthorized, Error};
 
-use crate::{games_service::game_container::game_messages::GameHeader, shared::models::Claims, full_info};
+use crate::{games_service::game_container::game_messages::GameHeader,user_service::users::validate_jwt_token};
 use futures::{
     future::{ok, Ready},
     Future,
 };
-use jsonwebtoken::{decode, Algorithm, DecodingKey, TokenData, Validation};
+
 use reqwest::header::{HeaderName, HeaderValue};
 
-use super::environment_mw::CATAN_ENV;
+
 // AuthenticationMiddlewareFactory serves as a factory to create instances of AuthenticationMiddleware
 // which is the actual middleware component. It implements the Transform trait required by
 // Actix to apply transformations to requests/responses as they pass through the middleware.
@@ -73,7 +73,7 @@ where
         match auth_header {
             Some(header_value) => {
                 let token_str = header_value.to_str().unwrap_or("").replace("Bearer ", "");
-                if let Some(claims) = is_token_valid(&token_str) {
+                if let Some(claims) = validate_jwt_token(&token_str) {
                     // Extract the id and sub from the claims
                     let id = &claims.claims.id;
                     let sub = &claims.claims.sub;
@@ -105,23 +105,4 @@ where
     }
 }
 
-pub fn is_token_valid(token: &str) -> Option<TokenData<Claims>> {
-    let validation = Validation::new(Algorithm::HS512);
-    let secret_key = CATAN_ENV.login_secret_key.clone();
 
-    match decode::<Claims>(
-        &token,
-        &DecodingKey::from_secret(secret_key.as_ref()),
-        &validation,
-    ) {
-        Ok(c) => {
-            full_info!("token VALID");
-            Some(c)  // or however you want to handle a valid token
-        },
-        Err(e) => {
-            full_info!("token NOT VALID: {:?}", e);
-            None
-        }
-    }
-    
-}

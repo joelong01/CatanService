@@ -26,6 +26,7 @@ pub struct GameHeader {
     is_test: String,
     email: String,
 }
+
 impl GameHeader {
     pub const GAME_ID: &'static str = "x-game-id";
     pub const USER_ID: &'static str = "x-user-id";
