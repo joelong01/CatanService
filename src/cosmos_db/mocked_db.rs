@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use std::{collections::HashMap, sync::Arc};
 
-use crate::shared::models::PersistUser;
+use crate::shared::models::{PersistUser, ServiceResponse, ResponseType, GameError};
 use azure_core::{
     error::{ErrorKind, Result as AzureResult},
     Error,
@@ -45,7 +45,7 @@ impl TestDb {
         }
     }
 
-    pub async fn find_user_by_id(id: &str) -> Result<PersistUser, Error> {
+    pub async fn find_user_by_id(id: &str) -> Result<PersistUser, ServiceResponse> {
         match MOCKED_DB
             .users
             .read()
@@ -54,11 +54,16 @@ impl TestDb {
             .find(|(_key, user)| *user.id == *id)
         {
             Some(u) => Ok(u.1.clone()),
-            None => Err(Error::new(ErrorKind::MockFramework, "User Not found")),
+            None =>  Err(ServiceResponse::new(
+                "",
+                reqwest::StatusCode::NOT_FOUND,
+                ResponseType::NoData,
+                GameError::BadId(id.to_owned()),
+            ))
         }
     }
 
-    pub async fn find_user_by_profile(prop: &str, val: &str) -> Result<PersistUser, Error> {
+    pub async fn find_user_by_profile(prop: &str, val: &str) -> Result<PersistUser, ServiceResponse> {
         // the only prop we support is email
         if prop != "email" {
             panic!("Only email is allowed for find_user_by_profile")
@@ -72,7 +77,12 @@ impl TestDb {
             .find(|(_key, user)| *user.user_profile.email == *val)
         {
             Some(u) => Ok(u.1.clone()),
-            None => Err(Error::new(ErrorKind::MockFramework, "User Not found")),
+            None => Err(ServiceResponse::new(
+                "",
+                reqwest::StatusCode::NOT_FOUND,
+                ResponseType::NoData,
+                GameError::BadId(val.to_owned()),
+            ))
         }
     }
 }
@@ -128,7 +138,7 @@ mod tests {
                 Ok(found_user) => {
                     trace!("found user with email: {}", found_user.user_profile.email)
                 }
-                Err(e) => panic!("failed to find user that we just inserted. error: {}", e),
+                Err(e) => panic!("failed to find user that we just inserted. error: {:#?}", e),
             }
         } else {
             panic!("the list should not be empty since we just filled it up!")

@@ -8,13 +8,18 @@ use azure_data_cosmos::CosmosEntity;
 use reqwest::StatusCode;
 
 use serde::{Deserialize, Serialize};
+use strum_macros::Display;
 
 use std::{env, fmt, sync::Arc};
 use tokio::sync::{mpsc, RwLock};
 
 use anyhow::{Context, Result};
 
-use crate::games_service::{game_container::game_messages::CatanMessage, shared::game_enums::GameAction};
+use crate::games_service::{
+    catan_games::games::regular::regular_game::RegularGame,
+    game_container::game_messages::CatanMessage,
+    shared::game_enums::{CatanGames, GameAction},
+};
 
 use super::utility::get_id;
 
@@ -228,7 +233,7 @@ pub struct Claims {
     pub sub: String,
     pub exp: usize,
 }
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Display)]
 pub enum ResponseType {
     ClientUser(ClientUser),
     ClientUsers(Vec<ClientUser>),
@@ -236,7 +241,9 @@ pub enum ResponseType {
     ErrorInfo(String),
     Todo(String),
     NoData,
-    ValidActions(Vec<GameAction>)
+    ValidActions(Vec<GameAction>),
+    Game(RegularGame),
+    SupportedGames(Vec<CatanGames>),
 }
 
 /**

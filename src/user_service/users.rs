@@ -193,19 +193,7 @@ pub async fn login(
     is_test: bool,
     data: &Data<ServiceEnvironmentContext>,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    let user_result = internal_find_user("email", username, is_test, data).await;
-
-    let user = match user_result {
-        Ok(u) => u,
-        Err(e) => {
-            return Err(ServiceResponse::new(
-                &format!("invalid user id: {}", username),
-                StatusCode::NOT_FOUND,
-                ResponseType::ErrorInfo(format!("{:#?}", e)),
-                GameError::HttpError,
-            ))
-        }
-    };
+    let user = internal_find_user("email", username, is_test, data).await?;
     let password_hash: String = match user.password_hash {
         Some(p) => p,
         None => {
@@ -361,21 +349,14 @@ pub async fn get_profile(
     is_test: bool,
     data: &Data<ServiceEnvironmentContext>,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    let result = internal_find_user("id", user_id, is_test, &data).await;
-    match result {
-        Ok(user) => Ok(ServiceResponse::new(
-            "",
-            StatusCode::OK,
-            ResponseType::ClientUser(ClientUser::from_persist_user(user)),
-            GameError::NoError,
-        )),
-        Err(err) => Err(ServiceResponse::new(
-            "",
-            StatusCode::NOT_FOUND,
-            ResponseType::ErrorInfo(format!("FFailed to find user: {}", err)),
-            GameError::HttpError,
-        )),
-    }
+    let user = internal_find_user("id", user_id, is_test, &data).await?;
+
+    Ok(ServiceResponse::new(
+        "",
+        StatusCode::OK,
+        ResponseType::ClientUser(ClientUser::from_persist_user(user)),
+        GameError::NoError,
+    ))
 }
 
 pub async fn find_user_by_id(
@@ -391,7 +372,7 @@ pub async fn internal_find_user(
     id: &str,
     is_test: bool,
     data: &Data<ServiceEnvironmentContext>,
-) -> Result<PersistUser, azure_core::Error> {
+) -> Result<PersistUser, ServiceResponse> {
     if is_test {
         if prop == "id" {
             return TestDb::find_user_by_id(id).await;

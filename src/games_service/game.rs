@@ -1,117 +1,153 @@
-#![allow(dead_code)]
-use std::{collections::HashMap, fmt};
+use crate::{
+
+    games_service::{
+        game_container::game_messages::{CatanMessage, GameCreatedData},
+        long_poller::long_poller::LongPoller,
+    },
+    middleware::environment_mw::ServiceEnvironmentContext,
+    shared::models::{ClientUser, GameError, ResponseType, ServiceResponse},
+
+    user_service::users::internal_find_user,
+};
+use actix_web::web::Data;
+use reqwest::StatusCode;
+
+
+
+use crate::games_service::shared::game_enums::CatanGames;
 
 use super::{
-    catan_games::{
-        games::regular::{game_info::RegularGameInfo, regular_game::RegularGame},
-        traits::game_trait::GameTrait,
-    },
-    player::player::Player,
-    shared::game_enums::CatanGames,
-    tiles::{tile::Tile, tile_key::TileKey},
+    catan_games::{games::regular::regular_game::RegularGame, traits::game_trait::GameTrait},
+    game_container::game_container::GameContainer,
 };
-use crate::shared::models::ClientUser;
 
-pub struct GameHolder<'a> {
-    pub catan_game: Box<
-        dyn GameTrait<
-            'a,
-            Players = &'a Vec<Player>,
-            Tiles = &'a mut HashMap<TileKey, Tile>,
-            GameInfoType = RegularGameInfo,
-        >,
-    >,
-}
-impl<'a> fmt::Debug for GameHolder<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "GameHolder {{ catan_game: ")?;
-        self.catan_game.debug(f)?;
-        write!(f, " }}")
-    }
-}
-impl<'a> Eq for GameHolder<'a> {}
-
-impl<'a> PartialEq for GameHolder<'a> {
-    fn eq(&self, other: &Self) -> bool {
-        if self.catan_game.get_players() != other.catan_game.get_players() {
-            return false;
+///
+/// check the state to make sure the request is valid
+/// randomize the board and the harbors
+/// post the response to websocket
+pub async fn shuffle_game(game_id: &str) -> Result<ServiceResponse, ServiceResponse> {
+    match GameContainer::current_game(&game_id.to_owned()).await {
+        Ok((game, _)) => {
+            let mut new_game = game.clone();
+            new_game.shuffle_count = new_game.shuffle_count + 1;
+            new_game.shuffle();
+            let result = GameContainer::push_game(&game_id.to_owned(), &new_game).await;
+            match result {
+                Ok(_) => Ok(ServiceResponse::new(
+                    "shuffled",
+                    StatusCode::OK,
+                    ResponseType::Game(new_game),
+                    GameError::NoError,
+                )),
+                Err(e) => {
+                    let err_message = format!("GameContainer::push_game error: {:#?}", e);
+                    return Err(ServiceResponse::new(
+                        "Error Hashing Password",
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        ResponseType::ErrorInfo(err_message.to_owned()),
+                        GameError::HttpError,
+                    ));
+                }
+            }
         }
-        if self.catan_game.get_tiles_ro() != other.catan_game.get_tiles_ro() {
-            return false;
-        }
-        if self.catan_game.get_game_info_ro() != other.catan_game.get_game_info_ro() {
-            return false;
-        }
-
-        true
-    }
-}
-// impl<'a> Serialize for GameHolder<'a> {
-//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//     where
-//         S: Serializer,
-//     {
-//         let json = self
-//             .catan_game
-//             .to_json()
-//             .map_err(|e| serde::ser::Error::custom(e.to_string()))?;
-//         let mut state = serializer.serialize_struct("GameHolder", 1)?;
-//         state.serialize_field("catan_game", &json)?;
-//         state.end()
-//     }
-// }
-
-impl<'a> GameHolder<'a> {
-    pub fn new(game_type: CatanGames, creator: ClientUser) -> Self {
-        let game: Box<
-            dyn GameTrait<
-                Players = &'a Vec<Player>,
-                Tiles = &'a mut HashMap<TileKey, Tile>,
-                GameInfoType = RegularGameInfo,
-            >,
-        > = match game_type {
-            CatanGames::Regular => Box::new(RegularGame::new(&creator)),
-            CatanGames::Expansion => todo!(),
-            CatanGames::Seafarers => todo!(),
-            CatanGames::Seafarers4Player => todo!(),
-        };
-        Self { catan_game: game }
+        Err(e) => Err(ServiceResponse::new(
+            &format!("Only the creator can shuffle the board, and you are not the creator."),
+            StatusCode::BAD_REQUEST,
+            ResponseType::NoData,
+            e,
+        )),
     }
 }
 
-// #[cfg(test)]
-// mod tests {
+///
+/// creates a new game and returns a gamedId that is used for all subsequent game* apis.
+/// the user header is filled in by the auth middleware.  a JWT token from login must be
+/// passed in.  this creates a game and stores it in a global HashMap so that multiple
+/// cames can be run at the same time.
+pub async fn new_game(
+    game_type: CatanGames,
+    user_id: &str,
+    is_test: bool,
+    test_game: Option<RegularGame>,
+    data: Data<ServiceEnvironmentContext>,
+) -> Result<ServiceResponse, ServiceResponse> {
+    if game_type != CatanGames::Regular {
+        return Err(ServiceResponse::new(
+            &format!("Game not supported: {:#?}", game_type),
+            StatusCode::BAD_REQUEST,
+            ResponseType::NoData,
+            GameError::MissingData(String::default()),
+        ));
+    }
 
-//     use super::*;
+    let user = internal_find_user("id", user_id, is_test, &data).await?;
 
-//     #[test]
-//     fn game_marshal() {
-//         let user = User {
-//             id: Some("123".to_string()),
-//             partition_key: Some(456),
-//             password_hash: Some("hash".to_string()),
-//             password: Some("password".to_string()),
-//             email: "test@example.com".to_string(),
-//             first_name: "John".to_string(),
-//             last_name: "Doe".to_string(),
-//             display_name: "johndoe".to_string(),
-//             picture_url: "https://example.com/picture.jpg".to_string(),
-//             foreground_color: "#000000".to_string(),
-//             background_color: "#FFFFFF".to_string(),
-//             games_played: Some(10),
-//             games_won: Some(2),
-//         };
+    //
+    //  "if it is a test game and the game has been passed in, use it.  otherwise create a new game and shuffle"
+    let game = if is_test {
+        match test_game {
+            Some(g) => g.clone(),
+            None => {
+                let mut game = RegularGame::new(&ClientUser::from_persist_user(user));
+                game.shuffle();
+                game
+            }
+        }
+    } else {
+        let mut game = RegularGame::new(&ClientUser::from_persist_user(user));
+        game.shuffle();
+        game
+    };
 
-//         let game = GameHolder::new(CatanGames::Regular, user);
+    //
+    //  the sequence is
+    //  1. create_and_add_container
+    //  2. push_game
+    //  3. add_player
+    //  4. send notification
+    if GameContainer::create_and_add_container(&game.id, &game)
+        .await
+        .is_err()
+    {
+        return Err(ServiceResponse::new(
+            "",
+            reqwest::StatusCode::NOT_FOUND,
+            ResponseType::NoData,
+            GameError::BadId(game.id.to_owned()),
+        ));
+    }
 
-//         // Serialize the game
-//         let game_json = serde_json::to_string(&game).expect("Failed to serialize game");
-//         print!("{}", game_json);
-//         // Deserialize the game
-//         // let deserialized_game: GameHolder =
-//         //     serde_json::from_str(&game_json).expect("Failed to deserialize game");
+    //
+    //  send a message to the user that the game was created
 
-//         // Assert that the deserialized game is equal to the original game
-//         // assert_eq!(game, deserialized_game);
-//     }
-// }
+    let _ = LongPoller::send_message(
+        vec![user_id.to_string()],
+        &CatanMessage::GameCreated(GameCreatedData {
+            user_id: user_id.to_string(),
+            game_id: game.id.to_string(),
+        }),
+    )
+    .await;
+
+    //
+    //  return the game - perhaps this shouldn't be done to force parity between the caller and the other clients
+    //  - make them all get the game from the long poller.  as it is the client will set the context - forcing an update
+    //  and then get the update from the long_polller, which will do the same thing.  we might just ignore the return
+    //  value on the client, in which case we are wasting bytes on the wire.
+    Ok(ServiceResponse::new(
+        "shuffled",
+        StatusCode::OK,
+        ResponseType::Game(game),
+        GameError::NoError,
+    ))
+}
+
+pub async fn supported_games() -> Result<ServiceResponse, ServiceResponse> {
+    
+    Ok(ServiceResponse::new(
+        "shuffled",
+        StatusCode::OK,
+        ResponseType::SupportedGames(vec![CatanGames::Regular]),
+        GameError::NoError,
+    ))
+}

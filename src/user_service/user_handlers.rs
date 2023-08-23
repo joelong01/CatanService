@@ -99,8 +99,8 @@ pub async fn delete_handler(
     data: Data<ServiceEnvironmentContext>,
     headers: HeadersExtractor,
 ) -> HttpResponse {
-    let header_id = get_header_value!(user_id, headers);
-    super::users::delete(&id, &header_id, headers.is_test, &data).await
+    let user_id = get_header_value!(user_id, headers);
+    super::users::delete(&id, &user_id, headers.is_test, &data).await
     .map(|sr| sr.to_http_response())
     .unwrap_or_else(|sr| sr.to_http_response())
 }

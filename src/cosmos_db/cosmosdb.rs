@@ -1,12 +1,12 @@
 #![allow(dead_code)]
 use std::{collections::HashMap, fmt};
 
+use crate::middleware::environment_mw::RequestEnvironmentContext;
+use crate::shared::models::{GameError, PersistUser, ResponseType};
 /**
  *  this is the class that calls directly to CosmosDb --
  */
-use crate::log_return_err;
-use crate::middleware::environment_mw::RequestEnvironmentContext;
-use crate::shared::models::PersistUser;
+use crate::{log_return_err, shared::models::ServiceResponse};
 use azure_core::error::{ErrorKind, Result as AzureResult};
 use azure_data_cosmos::prelude::{
     AuthorizationToken, CollectionClient, CosmosClient, DatabaseClient, Query, QueryCrossPartition,
@@ -235,20 +235,34 @@ impl UserDb {
     /**
      *  an api that finds a user by the id in the cosmosdb users collection.
      */
-    pub async fn find_user_by_id(&self, val: &str) -> Result<PersistUser, azure_core::Error> {
+    pub async fn find_user_by_id(&self, val: &str) -> Result<PersistUser, ServiceResponse> {
         let query = format!(r#"SELECT * FROM c WHERE c.id = '{}'"#, val);
         match self.execute_query(CosmosCollectionName::User, &query).await {
             Ok(users) => {
                 if !users.is_empty() {
                     Ok(users.first().unwrap().clone()) // clone is necessary because `first()` returns a reference
                 } else {
-                    Err(azure_core::Error::new(ErrorKind::Other, "User not found"))
+                    Err(ServiceResponse::new(
+                        "",
+                        reqwest::StatusCode::NOT_FOUND,
+                        ResponseType::NoData,
+                        GameError::BadId(val.to_owned()),
+                    ))
                 }
             }
-            Err(e) => log_return_err!(e),
+            Err(e) => Err(ServiceResponse::new(
+                "",
+                reqwest::StatusCode::NOT_FOUND,
+                ResponseType::ErrorInfo(format!("{:#?}", e)),
+                GameError::BadId(val.to_owned()),
+            )),
         }
     }
-    pub async fn find_user_by_profile(&self, prop: &str, val: &str) -> Result<PersistUser, azure_core::Error> {
+    pub async fn find_user_by_profile(
+        &self,
+        prop: &str,
+        val: &str,
+    ) -> Result<PersistUser, ServiceResponse> {
         let query = format!(
             r#"SELECT * FROM c WHERE c.userProfile.{} = '{}'"#,
             prop, val
@@ -258,18 +272,28 @@ impl UserDb {
                 if !users.is_empty() {
                     Ok(users.first().unwrap().clone()) // clone is necessary because `first()` returns a reference
                 } else {
-                    Err(azure_core::Error::new(ErrorKind::Other, "User not found"))
+                    Err(ServiceResponse::new(
+                        "",
+                        reqwest::StatusCode::NOT_FOUND,
+                        ResponseType::NoData,
+                        GameError::BadId(val.to_owned()),
+                    ))
                 }
             }
-            Err(e) => log_return_err!(e),
+            Err(e) => Err(ServiceResponse::new(
+                "",
+                reqwest::StatusCode::NOT_FOUND,
+                ResponseType::ErrorInfo(format!("{:#?}", e)),
+                GameError::BadId(val.to_owned()),
+            )),
         }
     }
 }
+
 #[cfg(test)]
 mod tests {
 
     use crate::{
-
         init_env_logger,
         shared::{models::UserProfile, utility::get_id},
     };
@@ -280,10 +304,9 @@ mod tests {
     #[tokio::test]
 
     async fn test_e2e() {
-         let context = RequestEnvironmentContext::create(true);
+        let context = RequestEnvironmentContext::create(true);
 
-         let user_db = UserDb::new(&context).await;
-       
+        let user_db = UserDb::new(&context).await;
 
         init_env_logger().await;
 
@@ -322,7 +345,7 @@ mod tests {
                 Ok(found_user) => {
                     trace!("found user with email: {}", found_user.user_profile.email)
                 }
-                Err(e) => panic!("failed to find user that we just inserted. error: {}", e),
+                Err(e) => panic!("failed to find user that we just inserted. error: {:#?}", e),
             }
         } else {
             panic!("the list should not be empty since we just filled it up!")

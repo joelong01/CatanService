@@ -13,7 +13,7 @@ pub struct GameData {
     pub id: String,
     pub players: Vec<ClientUser>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SupportedGames {
     pub catan_games: Vec<CatanGames>,
 }

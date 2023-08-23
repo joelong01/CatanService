@@ -46,15 +46,18 @@ impl FromRequest for HeadersExtractor {
 #[macro_export]
 macro_rules! get_header_value {
     ($header:ident, $headers:expr) => {{
-
+        use crate::shared::models::{GameError, ResponseType, ServiceResponse};
         match $headers.$header {
             Some(v) => v,
             None => {
-                return create_http_response(
+                let msg = format!("{} header not found", stringify!($header));
+                let response = ServiceResponse::new(
+                    &msg,
                     reqwest::StatusCode::BAD_REQUEST,
-                    &format!("{} header not found or not parseable", stringify!($header)),
-                    "",
-                )
+                    ResponseType::NoData,
+                    GameError::HttpError,
+                );
+                return HttpResponse::BadRequest().json(response);
             }
         }
     }};
