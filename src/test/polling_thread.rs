@@ -8,13 +8,15 @@ use crate::{
 pub async fn game_poller(username: &str, tx: tokio::sync::mpsc::Sender<CatanMessage>) {
     let proxy = ServiceProxy::new(true, HOST_URL);
     let auth_token = &proxy
-        .get_authtoken(username, "password")
+        .login(username, "password")
         .await
+        .get_authtoken()
         .expect("Login should work!");
 
     let client_user: ClientUser = proxy
         .get_profile(&auth_token)
         .await
+        .get_client_user()
         .expect("Client User should deserialize");
     // Create the client inside the spawned task
     let name = &client_user.user_profile.display_name;
@@ -29,14 +31,12 @@ pub async fn game_poller(username: &str, tx: tokio::sync::mpsc::Sender<CatanMess
     loop {
         trace_thread_info!(name, "Begin poll. GameId: {}", game_id);
 
-        let response = proxy.long_poll(&game_id, auth_token, index).await.unwrap();
-        assert!(
-            response.status().is_success(),
-            "error coming back from long_poll {:#?}",
-            response
-        );
+        let message = proxy
+            .long_poll(&game_id, auth_token, index)
+            .await
+            .get_service_message()
+            .expect("long_poll should have a message in the body");
 
-        let message: CatanMessage = response.json().await.unwrap();
         trace_thread_info!(name, "long_poll returned: {:?}", message);
         if let CatanMessage::GameCreated(data) = message.clone() {
             game_id = data.game_id.clone()
@@ -53,4 +53,3 @@ pub async fn game_poller(username: &str, tx: tokio::sync::mpsc::Sender<CatanMess
         }
     }
 }
-

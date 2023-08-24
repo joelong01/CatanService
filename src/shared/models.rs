@@ -36,6 +36,7 @@ pub enum GameError {
     ReqwestError(String),
     NoError,
     HttpError,
+
 }
 impl From<reqwest::Error> for GameError {
     fn from(err: reqwest::Error) -> Self {
@@ -244,7 +245,8 @@ pub enum ResponseType {
     ValidActions(Vec<GameAction>),
     Game(RegularGame),
     SupportedGames(Vec<CatanGames>),
-    SendMessageError(Vec<(String, GameError)>)
+    SendMessageError(Vec<(String, GameError)>),
+    ServiceMessage(CatanMessage)
 }
 
 /**
@@ -282,6 +284,14 @@ impl ServiceResponse {
             response_type: ResponseType::NoData,
             game_error: GameError::NoError
         }
+    }
+
+    pub fn assert_success(&self, msg: &str) -> &Self {
+        if !self.status.is_success(){
+            panic!("{}", msg.to_string());
+        }
+
+        self
     }
 
     pub fn new_bad_id(msg: &str, id: &str) -> Self {
@@ -328,13 +338,48 @@ impl ServiceResponse {
         }
     }
 
-    pub fn to_token(json: &str) -> Option<(ServiceResponse, String)> {
+    pub fn json_to_token(json: &str) -> Option<(ServiceResponse, String)> {
         let service_response: ServiceResponse = match serde_json::from_str(json) {
             Ok(sr) => sr,
             Err(_) => return None,
         };
-        match service_response.response_type.clone() {
-            ResponseType::Token(token) => Some((service_response, token)),
+        match service_response.get_authtoken(){
+            Some(token) => Some((service_response, token)),
+            None => None,
+        }
+
+     
+    }
+    pub fn get_authtoken(&self) -> Option<String> {
+        // Extract auth token from response
+        match &self.response_type {
+            ResponseType::Token(token) => Some(token.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn get_game(&self) -> Option<RegularGame> {
+        match &self.response_type {
+            ResponseType::Game(game) => Some(game.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn get_client_users(&self) -> Option<Vec<ClientUser>> {
+        match &self.response_type {
+            ResponseType::ClientUsers(users) => Some(users.clone()),
+            _ => None,
+        }
+    }
+    pub fn get_actions(&self) -> Option<Vec<GameAction>> {
+        match &self.response_type {
+            ResponseType::ValidActions(actions) => Some(actions.clone()),
+            _ => None,
+        }
+    }
+    pub fn get_service_message(&self) -> Option<CatanMessage> {
+        match &self.response_type {
+            ResponseType::ServiceMessage(msg) => Some(msg.clone()),
             _ => None,
         }
     }

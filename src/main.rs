@@ -376,7 +376,7 @@ mod tests {
         assert!(resp.status().is_success());
 
         let body = test::read_body(resp).await;
-        let auth_token = ServiceResponse::to_token(std::str::from_utf8(&body).unwrap())
+        let auth_token = ServiceResponse::json_to_token(std::str::from_utf8(&body).unwrap())
             .expect("should be jwt")
             .1;
 

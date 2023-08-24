@@ -6,10 +6,10 @@
 use std::time::Duration;
 
 use crate::games_service::game_container::game_messages::InvitationResponseData;
-use crate::{wait_for_message, crack_game_update};
+use crate::{crack_game_update, wait_for_message};
 use crate::{
-    games_service::game_container::game_messages::CatanMessage, shared::models::ClientUser,
-    trace_thread_info, log_thread_info
+    games_service::game_container::game_messages::CatanMessage, log_thread_info,
+    shared::models::ClientUser, trace_thread_info,
 };
 use crate::{shared::proxy::ServiceProxy, test::test_structs::HOST_URL};
 
@@ -28,15 +28,18 @@ impl ClientThreadHandler for Handler1 {
 pub(crate) async fn client1_thread(mut rx: Receiver<CatanMessage>) {
     let proxy = ServiceProxy::new(true, HOST_URL);
     let auth_token = proxy
-        .get_authtoken("james@longshotdev.com", "password")
+        .login("james@longshotdev.com", "password")
         .await
-        .expect("login should work");
+        .get_authtoken()
+        .expect("successful login should have a JWT token in the ServiceResponse");
 
     let name = "James";
 
     let my_info: ClientUser = proxy
         .get_profile(&auth_token)
-        .await.expect("get_profile should return a ClientUser");
+        .await
+        .get_client_user()
+        .expect("Successful call to get_profile should have a ClientUser in the body");
     trace_thread_info!(name, "Waiting for 500ms");
     tokio::time::sleep(Duration::from_millis(500)).await;
     trace_thread_info!(
@@ -57,11 +60,11 @@ pub(crate) async fn client1_thread(mut rx: Receiver<CatanMessage>) {
 
     let message = wait_for_message!(name, rx);
     if let CatanMessage::Invite(invite) = message.clone() {
-        let response = InvitationResponseData::from_invitation(true,  &invite);
+        let response = InvitationResponseData::from_invitation(true, &invite);
         proxy
             .invitation_response(&response, &auth_token)
             .await
-            .expect("accept invite should succeed)");
+            .assert_success("accept invite should succeed)");
         game_id = invite.game_id.clone();
     } else {
         trace_thread_info!(name, "Wrong message received: {:?}", message);
@@ -69,7 +72,11 @@ pub(crate) async fn client1_thread(mut rx: Receiver<CatanMessage>) {
 
     let message = wait_for_message!(name, rx);
 
-    assert!(matches!(message, CatanMessage::GameUpdate(_)), "Expected GameUpdate variant, got {:?}", message);
+    assert!(
+        matches!(message, CatanMessage::GameUpdate(_)),
+        "Expected GameUpdate variant, got {:?}",
+        message
+    );
 
     let game = crack_game_update!(message).expect("Should be a GameUpdate!");
     assert_eq!(game.players.len(), 3);

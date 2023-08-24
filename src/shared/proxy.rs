@@ -1,25 +1,25 @@
 #![allow(dead_code)]
 use std::collections::HashMap;
 
-use futures::Future;
+
 use reqwest::{
     header::{self, HeaderName, HeaderValue},
-    Client, ClientBuilder, Response,
+    Client, ClientBuilder, StatusCode,
 };
 use serde::Serialize;
 use url::Url;
 
 use crate::{
-    full_info,
+
     games_service::{
         catan_games::games::regular::regular_game::RegularGame,
         game_container::game_messages::{GameHeader, Invitation, InvitationResponseData},
-        shared::game_enums::{CatanGames, GameAction},
+        shared::game_enums::CatanGames,
     },
     shared::models::GameError,
 };
 
-use super::models::{ClientUser, UserProfile, ResponseType};
+use super::models::{ResponseType, ServiceResponse, UserProfile};
 
 pub struct ServiceProxy {
     pub client: Client,
@@ -42,12 +42,12 @@ impl ServiceProxy {
     }
 
     /// Makes a POST request to the specified URL with optional headers and JSON body
-    pub fn post<B: Serialize>(
+    pub async fn post<B: Serialize>(
         &self,
         url: &str,
         headers: impl IntoIterator<Item = (HeaderName, HeaderValue)>,
         body: Option<B>,
-    ) -> impl Future<Output = Result<Response, reqwest::Error>> {
+    ) -> ServiceResponse {
         let url = match self.host.join(url) {
             Ok(url) => url,
             Err(_) => {
@@ -67,16 +67,41 @@ impl ServiceProxy {
             request_builder = request_builder.json(&body_content);
         }
 
-        let response = request_builder.send();
-        response
+        let result = request_builder.send().await;
+
+        match result {
+            Ok(response) => {
+                let service_response: ServiceResponse =
+                    response.json().await.unwrap_or_else(|_| {
+                        // Fallback error response in case JSON parsing fails
+                        ServiceResponse::new(
+                            "unknown error",
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            ResponseType::NoData,
+                            GameError::HttpError,
+                        )
+                    });
+
+                service_response
+            }
+            Err(reqwest_error) => {
+                let error_response = ServiceResponse::new(
+                    "reqwest error",
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    ResponseType::ErrorInfo(format!("{:#?}", reqwest_error)),
+                    GameError::HttpError,
+                );
+                error_response
+            }
+        }
     }
 
     /// Makes a GET request to the specified URL with optional headers
-    pub fn get(
+    pub async fn get(
         &self,
         url: &str,
         headers: impl IntoIterator<Item = (HeaderName, HeaderValue)>,
-    ) -> impl Future<Output = Result<Response, reqwest::Error>> {
+    ) -> ServiceResponse {
         let url = match self.host.join(url) {
             Ok(url) => url,
             Err(_) => {
@@ -87,21 +112,47 @@ impl ServiceProxy {
         for (key, value) in headers {
             request_builder = request_builder.header(key, value);
         }
-        let response = request_builder.send();
-        response
+        let response = request_builder.send().await;
+
+        match response {
+            Ok(response) => {
+                let service_response: ServiceResponse =
+                    response.json().await.unwrap_or_else(|_| {
+                        // Fallback error response in case JSON parsing fails
+                        ServiceResponse::new(
+                            "unknown error",
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            ResponseType::NoData,
+                            GameError::HttpError,
+                        )
+                    });
+
+                service_response
+            }
+            Err(reqwest_error) => {
+                let error_response = ServiceResponse::new(
+                    "reqwest error",
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    ResponseType::ErrorInfo(format!("{:#?}", reqwest_error)),
+                    GameError::HttpError,
+                );
+                error_response
+            }
+        }
     }
 
-    pub fn setup(&self) -> impl Future<Output = Result<Response, reqwest::Error>> {
+    pub async fn setup(&self) -> ServiceResponse {
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
         headers.insert(
             HeaderName::from_static(GameHeader::IS_TEST),
             HeaderValue::from_static("true"),
         );
         let url = "/api/v1/test/setup";
-        self.post::<()>(url, headers, None)
+        let sr = self.post::<()>(url, headers, None).await;
+        sr
     }
 
-    pub async fn register(&self, profile: &UserProfile, password: &str) -> ClientUser {
+    pub async fn register(&self, profile: &UserProfile, password: &str) -> ServiceResponse {
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
         if self.is_test {
             headers.insert(
@@ -115,22 +166,10 @@ impl ServiceProxy {
         );
 
         let url = "/api/v1/users/register";
-        let client_user: ClientUser = self
-            .post::<&UserProfile>(url, headers, Some(profile))
-            .await
-            .expect("test users always have profiles")
-            .json()
-            .await
-            .expect("ClientUsers should deserialize");
-
-        client_user
+        self.post::<&UserProfile>(url, headers, Some(profile)).await
     }
 
-    pub fn login(
-        &self,
-        username: &str,
-        password: &str,
-    ) -> impl Future<Output = Result<Response, reqwest::Error>> {
+    pub async fn login(&self, username: &str, password: &str) -> ServiceResponse {
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
         if self.is_test {
             headers.insert(
@@ -147,78 +186,34 @@ impl ServiceProxy {
             HeaderValue::from_str(username).expect("Invalid header value"),
         );
         let url = "/api/v1/users/login";
-        self.post::<()>(url, headers, None)
+        self.post::<()>(url, headers, None).await
     }
 
-    pub async fn get_authtoken(
-        &self,
-        username: &str,
-        password: &str,
-    ) -> Result<String, reqwest::Error> {
-        let response = self.login(username, password).await;
-
-        let response = match response {
-            Ok(r) => r,
-            Err(e) => {
-                panic!("error loggin in user: {}, err: {:#?}", username, e)
-            }
-        };
-
-        let result = response.text().await;
-        let body = match result {
-            Ok(s) => s,
-            Err(e) => {
-                full_info!("Error: {:#?}", e);
-                return Err(e);
-            }
-        };
-        let service_response: super::models::ServiceResponse = serde_json::from_str(&body).unwrap();
-
-        // Extract auth token from response
-        let auth_token: String = match service_response.response_type {
-            ResponseType::Token(token) => token,
-            _ => panic!("Expected Token response type"),
-        };
-        
-        
-        Ok(auth_token)
-    }
-
-    pub async fn get_profile(&self, auth_token: &str) -> Result<ClientUser, GameError> {
+    pub async fn get_profile(&self, auth_token: &str) -> ServiceResponse {
         let url = "/auth/api/v1/profile";
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
-    
+
         if self.is_test {
             headers.insert(
                 HeaderName::from_static(GameHeader::IS_TEST),
                 HeaderValue::from_static("true"),
             );
         }
-        
-    
+
         headers.insert(
             reqwest::header::AUTHORIZATION,
             HeaderValue::from_str(auth_token).expect("Invalid header value"),
         );
-    
-        let response = self.get(url, headers).await?; // If error occurs, it will return GameError::ReqwestError
-    
-        full_info!("get_profile: {:#?}", response);
-    
-        if !response.status().is_success() {
-             return Err(GameError::ReqwestError(format!("Unexpected status: {}", response.status())));
-        }
-    
-        response.json::<ClientUser>().await.map_err(GameError::from)
+
+        self.get(url, headers).await
     }
-    
 
     pub async fn new_game(
         &self,
         game_type: CatanGames,
         auth_token: &str,
         game: Option<&RegularGame>,
-    ) -> Result<RegularGame, reqwest::Error> {
+    ) -> ServiceResponse {
         let url = format!("auth/api/v1/games/{:?}", game_type);
 
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
@@ -233,24 +228,15 @@ impl ServiceProxy {
             HeaderValue::from_str(auth_token).expect("Invalid header value"),
         );
 
-        let result = match game {
+        let service_response = match game {
             Some(g) => self.post::<&RegularGame>(&url, headers, Some(g)).await,
             None => self.post::<()>(&url, headers, None).await,
         };
 
-        match result {
-            Ok(g) => {
-                let game: RegularGame = g.json().await.expect("This should be a game");
-                Ok(game)
-            }
-            Err(e) => Err(e),
-        }
+        service_response
     }
 
-    pub fn get_lobby(
-        &self,
-        auth_token: &str,
-    ) -> impl Future<Output = Result<Response, reqwest::Error>> {
+    pub async fn get_lobby(&self, auth_token: &str) -> ServiceResponse {
         let url = "/auth/api/v1/lobby";
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
         if self.is_test {
@@ -264,14 +250,10 @@ impl ServiceProxy {
             HeaderValue::from_str(auth_token).expect("Invalid header value"),
         );
 
-        self.get(url, headers)
+        self.get(url, headers).await
     }
 
-    pub async fn get_actions(
-        &self,
-        game_id: &str,
-        auth_token: &str,
-    ) -> Result<Vec<GameAction>, reqwest::Error> {
+    pub async fn get_actions(&self, game_id: &str, auth_token: &str) -> ServiceResponse {
         let url = format!("/auth/api/v1/action/actions/{}", game_id);
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
         if self.is_test {
@@ -289,20 +271,10 @@ impl ServiceProxy {
             HeaderValue::from_str(game_id).expect("Invalid header value"),
         );
 
-        let response = self.get(&url, headers).await.expect("GET should not fail");
-        let ret: Vec<GameAction> = response
-            .json()
-            .await
-            .expect("Vec<GameAction> should deserialize");
-        Ok(ret)
+        self.get(&url, headers).await
     }
 
-    pub fn long_poll(
-        &self,
-        game_id: &str,
-        auth_token: &str,
-        index: u32,
-    ) -> impl Future<Output = Result<Response, reqwest::Error>> {
+    pub async fn long_poll(&self, game_id: &str, auth_token: &str, index: u32) -> ServiceResponse {
         let url = format!("/auth/api/v1/longpoll/{}", index);
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
         if self.is_test {
@@ -320,14 +292,14 @@ impl ServiceProxy {
             HeaderValue::from_str(game_id).expect("Invalid header value"),
         );
 
-        self.get(&url, headers)
+        self.get(&url, headers).await
     }
 
-    pub fn send_invite<'a>(
+    pub async fn send_invite<'a>(
         &self,
         invite: &'a Invitation,
         auth_token: &'a str,
-    ) -> impl Future<Output = Result<Response, reqwest::Error>> + 'a {
+    ) -> ServiceResponse {
         let url = "/auth/api/v1/lobby/invite";
 
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
@@ -346,13 +318,13 @@ impl ServiceProxy {
             HeaderValue::from_str("application/json").expect("that should be non-controversial"),
         );
 
-        self.post::<&Invitation>(&url, headers, Some(invite))
+        self.post::<&Invitation>(&url, headers, Some(invite)).await
     }
-    pub fn invitation_response<'a>(
+    pub async fn invitation_response<'a>(
         &self,
         invite: &'a InvitationResponseData,
         auth_token: &'a str,
-    ) -> impl Future<Output = Result<Response, reqwest::Error>> + 'a {
+    ) -> ServiceResponse {
         let url = "/auth/api/v1/lobby/acceptinvite";
 
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
@@ -372,13 +344,10 @@ impl ServiceProxy {
         );
 
         self.post::<&InvitationResponseData>(&url, headers, Some(invite))
+            .await
     }
 
-    pub fn start_game(
-        &self,
-        game_id: &str,
-        auth_token: &str,
-    ) -> impl Future<Output = Result<Response, reqwest::Error>> {
+    pub async fn start_game(&self, game_id: &str, auth_token: &str) -> ServiceResponse {
         let url = format!("/auth/api/v1/action/start/{}", game_id);
 
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
@@ -397,14 +366,10 @@ impl ServiceProxy {
             HeaderValue::from_str("application/json").expect("that should be non-controversial"),
         );
 
-        self.post::<()>(&url, headers, None)
+        self.post::<()>(&url, headers, None).await
     }
 
-    pub async fn next<'a>(
-        &self,
-        game_id: &str,
-        auth_token: &'a str,
-    ) -> Result<Vec<GameAction>, reqwest::Error> {
+    pub async fn next<'a>(&self, game_id: &str, auth_token: &'a str) -> ServiceResponse {
         let url = format!("/auth/api/v1/action/next/{}", game_id);
 
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
@@ -423,13 +388,6 @@ impl ServiceProxy {
             HeaderValue::from_str("application/json").expect("that should be non-controversial"),
         );
 
-        let result = self.post::<&Invitation>(&url, headers, None).await;
-        match result {
-            Ok(resp) => Ok(resp
-                .json()
-                .await
-                .expect("deserialize of vec should not fail.")),
-            Err(e) => Err(e),
-        }
+        self.post::<&Invitation>(&url, headers, None).await
     }
 }

@@ -5,7 +5,8 @@ use crate::{
     crack_game_created, crack_game_update,
     games_service::{
         catan_games::games::regular::regular_game::RegularGame,
-        game_container::game_messages::{CatanMessage, Invitation}, shared::game_enums::GameAction,
+        game_container::game_messages::{CatanMessage, Invitation},
+        shared::game_enums::GameAction,
     },
     log_thread_info,
     shared::models::ClientUser,
@@ -37,15 +38,18 @@ impl ClientThreadHandler for Handler0 {
 pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
     let proxy = ServiceProxy::new(true, HOST_URL);
     let auth_token = proxy
-        .get_authtoken("joe@longshotdev.com", "password")
+        .login("joe@longshotdev.com", "password")
         .await
-        .expect("login should work");
+        .get_authtoken()
+        .expect("successful login should have a JWT token in the ServiceResponse");
 
     let name = "Main(Joe)";
 
     let my_info: ClientUser = proxy
         .get_profile(&auth_token)
-        .await.expect("get_profile should return a ClientUser");
+        .await
+        .get_client_user()
+        .expect("Successful call to get_profile should have a ClientUser in the body");
 
     trace_thread_info!(name, "Waiting for 500ms");
     tokio::time::sleep(Duration::from_millis(500)).await;
@@ -61,12 +65,12 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
     sleep(Duration::from_secs(1)).await;
     trace_thread_info!(name, "Game Thread Woke up!");
 
-
     let test_game = load_game().expect(&format!("Test game should be in {}", TEST_GAME_LOC));
     let returned_game = proxy
         .new_game(CatanGames::Regular, &auth_token, Some(&test_game))
         .await
-        .unwrap();
+        .get_game()
+        .expect("Should have a RegularGame returned in the body");
 
     let message = wait_for_message!(name, rx);
     let game_created = crack_game_created!(message).expect("should be a game!");
@@ -76,16 +80,13 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
     //
     // get the lobby
     trace_thread_info!(name, "Getting Lobby.");
-    let res = proxy.get_lobby(&auth_token).await;
+    let lobby = proxy
+        .get_lobby(&auth_token)
+        .await
+        .get_client_users()
+        .expect("Vec<> should be in body");
 
-    let lobby = match res {
-        Ok(response) => response
-            .json::<Vec<ClientUser>>()
-            .await
-            .expect("should deserialize"),
-        Err(e) => panic!("Error from get_lobby: {:?}", e),
-    };
-
+  
     trace_thread_info!(name, "get_lobby returned: {:#?}", lobby);
 
     for lobby_user in lobby {
@@ -108,7 +109,7 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
         let response = proxy
             .send_invite(&invitation, &auth_token)
             .await
-            .expect("send_invite should not fail");
+            .assert_success("send_invite should not fail");
     }
 
     let mut invited_players = Vec::new();
@@ -128,7 +129,9 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
         let actions = proxy
             .get_actions(&game_id, &auth_token)
             .await
-            .expect("get actdions to succeed");
+            .assert_success("get actions to succeed")
+            .get_actions()
+            .expect("get actions should have a Vec of valid actions in the body");
         assert!(actions.len() == 3);
         assert!(actions.contains(&GameAction::AddPlayer));
 
@@ -139,7 +142,7 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
     proxy
         .start_game(&game_id, &auth_token)
         .await
-        .expect("start should not fail");
+        .assert_success("start should not fail");
     let message = wait_for_message!(name, rx);
 
     assert!(
@@ -156,7 +159,10 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
     let actions = proxy
         .get_actions(&game_id, &auth_token)
         .await
-        .expect("get actdions to succeed");
+        .assert_success("get actions to succeed")
+        .get_actions()
+        .expect("get_actions to have a Vec<GameAction> in the body");
+    
     assert!(actions.len() == 2);
 
     log_thread_info!(name, "end of test");

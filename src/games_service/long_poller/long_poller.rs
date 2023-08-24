@@ -22,8 +22,8 @@ lazy_static::lazy_static! {
 pub struct LongPoller {
     user_id: String, // can be any kind of id
     user_profile: UserProfile,
-    pub tx: mpsc::Sender<CatanMessage>,
-    pub rx: Arc<Mutex<mpsc::Receiver<CatanMessage>>>,
+    pub tx: mpsc::Sender<ServiceResponse>,
+    pub rx: Arc<Mutex<mpsc::Receiver<ServiceResponse>>>,
     pub status: GameStatus,
 }
 
@@ -104,6 +104,13 @@ impl LongPoller {
 
         let users_map = ALL_USERS_MAP.read().await; // Acquire read lock
 
+        let service_response = ServiceResponse::new(
+            "",
+            StatusCode::OK,
+            ResponseType::ServiceMessage(message.clone()),
+            GameError::NoError,
+        );
+
         // Collect the senders and check for missing users
         let mut senders = Vec::new();
         let mut errors = Vec::new();
@@ -125,7 +132,7 @@ impl LongPoller {
 
         // Send the messages
         for (tx, to) in senders.into_iter().zip(to_users.iter()) {
-            if tx.send(message.clone()).await.is_err() {
+            if tx.send(service_response.clone()).await.is_err() {
                 errors.push((
                     to.clone(),
                     GameError::ChannelError(format!("error in tx.send for {}", to)),
@@ -166,7 +173,7 @@ impl LongPoller {
     /// It is designed to be used with a model that allows only one reader at a time for the
     /// specified user ID.
 
-    pub async fn wait(user_id: &str) -> Result<CatanMessage, ServiceResponse> {
+    pub async fn wait(user_id: &str) -> Result<ServiceResponse, ServiceResponse> {
         let user_rx = {
             let users_map = ALL_USERS_MAP.read().await;
             match users_map.get(user_id) {
@@ -269,9 +276,8 @@ mod tests {
                 .unwrap(); // Use the cloned message
         });
 
-        assert_eq!(LongPoller::wait("user5").await, Ok(message));
+        assert_eq!(LongPoller::wait("user5").await.unwrap().get_service_message().unwrap(), message);
         assert!(LongPoller::wait("user6").await.is_err());
-
     }
     #[tokio::test]
     async fn test_get_available_and_set_status() {

@@ -9,10 +9,10 @@ pub mod test {
             client0::Handler0,
             client1::Handler1,
             client2::Handler2,
-            test_structs::{ClientThreadHandler, HOST_URL, init_test_logger},
+            test_structs::{init_test_logger, ClientThreadHandler, HOST_URL},
         },
     };
- 
+
     use std::{
         os::unix::thread,
         sync::Arc,
@@ -44,7 +44,7 @@ pub mod test {
     use std::io;
     use tokio::{
         sync::{
-            mpsc::{Receiver, Sender, self},
+            mpsc::{self, Receiver, Sender},
             Barrier, RwLock,
         },
         time::sleep,
@@ -67,8 +67,9 @@ pub mod test {
         //  setup the test database
         trace_thread_info!("test_thread", "setting up service");
         let proxy = ServiceProxy::new(true, HOST_URL);
-        let response = proxy.setup().await.unwrap();
-        assert!(response.status().is_success(), "error: {:#?}", response);
+        let response = proxy.setup().await;
+        response.assert_success("setup should not fail");
+        assert!(response.status.is_success(), "error: {:#?}", response);
 
         //
         //  create new users to play our game
@@ -81,7 +82,7 @@ pub mod test {
         let handlers: Vec<Box<dyn ClientThreadHandler + Send + Sync>> =
             vec![Box::new(Handler0), Box::new(Handler1), Box::new(Handler2)];
 
-        // the handles to the client threads we are creating -- when all the client threads 
+        // the handles to the client threads we are creating -- when all the client threads
         // return, this main test thread will complete and we'll see if we passed or not
         let mut handles = Vec::new();
 
@@ -89,10 +90,14 @@ pub mod test {
         //  create the client
         for (i, handler) in handlers.into_iter().enumerate() {
             trace_thread_info!("test_thread", "creating clients: {}", i);
- 
+
             let (tx, rx) = mpsc::channel::<CatanMessage>(32);
             let username = test_users[i].user_profile.email.clone();
-            trace_thread_info!("test_thread", "starting polling thread for {}", username.clone());
+            trace_thread_info!(
+                "test_thread",
+                "starting polling thread for {}",
+                username.clone()
+            );
             let _ = tokio::spawn(async move {
                 crate::test::polling_thread::game_poller(&username, tx).await;
             });
@@ -202,12 +207,16 @@ pub mod test {
                 games_played: Some(0),
                 games_won: Some(0),
             };
-          
-            let client_user = proxy.register(&user_profile, "password").await;
+
+            let client_user = proxy
+                .register(&user_profile, "password")
+                .await
+                .assert_success("Register should succeed")
+                .get_client_user()
+                .expect("Register should have a ClientUser in the body");
             test_users.push(client_user);
         }
 
         test_users
     }
-
 }
