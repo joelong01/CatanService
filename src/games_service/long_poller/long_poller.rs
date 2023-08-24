@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+use reqwest::StatusCode;
 use scopeguard::defer;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -7,7 +8,7 @@ use tokio::sync::{mpsc, Mutex, RwLock};
 use crate::{
     games_service::game_container::game_messages::{CatanMessage, GameStatus},
     log_thread_info,
-    shared::models::{GameError, UserProfile, ClientUser},
+    shared::models::{ClientUser, GameError, ResponseType, ServiceResponse, UserProfile},
 };
 //
 //  this is a map of "waiters" - holding all the state necessary for a Long Poller to wait on a thread
@@ -34,7 +35,7 @@ impl LongPoller {
             tx,
             rx: Arc::new(Mutex::new(rx)),
             status: GameStatus::Available,
-            user_profile: profile.clone()
+            user_profile: profile.clone(),
         }
     }
     /// Add the user to the hashmap by putting them in a LongPoller struct.
@@ -92,7 +93,7 @@ impl LongPoller {
     pub async fn send_message(
         to_users: Vec<String>,
         message: &CatanMessage,
-    ) -> Result<(), Vec<(String, GameError)>> {
+    ) -> Result<ServiceResponse, ServiceResponse> {
         log_thread_info!(
             "send_message",
             "enter [to:{:#?}] [message={:?}]",
@@ -133,9 +134,19 @@ impl LongPoller {
         }
 
         if errors.is_empty() {
-            Ok(())
+            Ok(ServiceResponse::new(
+                "",
+                StatusCode::OK,
+                ResponseType::NoData,
+                GameError::NoError,
+            ))
         } else {
-            Err(errors)
+            Err(ServiceResponse::new(
+                "",
+                StatusCode::INTERNAL_SERVER_ERROR,
+                ResponseType::SendMessageError(errors),
+                GameError::ChannelError(String::default()),
+            ))
         }
     }
 
@@ -190,7 +201,7 @@ impl LongPoller {
         for u in users.values() {
             let lp = u.read().await;
             if lp.status == GameStatus::Available {
-                available.push(ClientUser{
+                available.push(ClientUser {
                     id: lp.user_id.clone(),
                     user_profile: lp.user_profile.clone(),
                 });
@@ -217,7 +228,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_add_user() {
-        assert_eq!(LongPoller::add_user("user1", &UserProfile::default()).await, Ok(()));
+        assert_eq!(
+            LongPoller::add_user("user1", &UserProfile::default()).await,
+            Ok(())
+        );
         assert_eq!(
             LongPoller::add_user("user1", &UserProfile::default()).await,
             Err(GameError::BadId(String::from("user1 already exists")))
@@ -226,7 +240,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_remove_user() {
-        assert_eq!(LongPoller::add_user("user2", &UserProfile::default()).await, Ok(()));
+        assert_eq!(
+            LongPoller::add_user("user2", &UserProfile::default()).await,
+            Ok(())
+        );
         assert_eq!(LongPoller::remove_user("user2").await, Ok(()));
         assert_eq!(
             LongPoller::remove_user("user2").await,
@@ -236,7 +253,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_wait() {
-        assert_eq!(LongPoller::add_user("user5", &UserProfile::default()).await, Ok(()));
+        assert_eq!(
+            LongPoller::add_user("user5", &UserProfile::default()).await,
+            Ok(())
+        );
         let message = CatanMessage::Started("".to_string());
         let message_clone = message.clone(); // Clone the message
 
@@ -258,9 +278,18 @@ mod tests {
     #[tokio::test]
     async fn test_get_available_and_set_status() {
         // Add users
-        assert_eq!(LongPoller::add_user("user1", &UserProfile::default()).await, Ok(()));
-        assert_eq!(LongPoller::add_user("user2", &UserProfile::default()).await, Ok(()));
-        assert_eq!(LongPoller::add_user("user3", &UserProfile::default()).await, Ok(()));
+        assert_eq!(
+            LongPoller::add_user("user1", &UserProfile::default()).await,
+            Ok(())
+        );
+        assert_eq!(
+            LongPoller::add_user("user2", &UserProfile::default()).await,
+            Ok(())
+        );
+        assert_eq!(
+            LongPoller::add_user("user3", &UserProfile::default()).await,
+            Ok(())
+        );
 
         // Set status
         assert_eq!(
@@ -279,6 +308,5 @@ mod tests {
         // Test get_available
         let available_users = LongPoller::get_available().await;
         assert_eq!(available_users.len(), 2);
-       
     }
 }

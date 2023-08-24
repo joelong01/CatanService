@@ -1,18 +1,14 @@
 use crate::{
-
     games_service::{
         game_container::game_messages::{CatanMessage, GameCreatedData},
         long_poller::long_poller::LongPoller,
     },
     middleware::environment_mw::ServiceEnvironmentContext,
     shared::models::{ClientUser, GameError, ResponseType, ServiceResponse},
-
     user_service::users::internal_find_user,
 };
 use actix_web::web::Data;
 use reqwest::StatusCode;
-
-
 
 use crate::games_service::shared::game_enums::CatanGames;
 
@@ -26,36 +22,28 @@ use super::{
 /// randomize the board and the harbors
 /// post the response to websocket
 pub async fn shuffle_game(game_id: &str) -> Result<ServiceResponse, ServiceResponse> {
-    match GameContainer::current_game(&game_id.to_owned()).await {
-        Ok((game, _)) => {
-            let mut new_game = game.clone();
-            new_game.shuffle_count = new_game.shuffle_count + 1;
-            new_game.shuffle();
-            let result = GameContainer::push_game(&game_id.to_owned(), &new_game).await;
-            match result {
-                Ok(_) => Ok(ServiceResponse::new(
-                    "shuffled",
-                    StatusCode::OK,
-                    ResponseType::Game(new_game),
-                    GameError::NoError,
-                )),
-                Err(e) => {
-                    let err_message = format!("GameContainer::push_game error: {:#?}", e);
-                    return Err(ServiceResponse::new(
-                        "Error Hashing Password",
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        ResponseType::ErrorInfo(err_message.to_owned()),
-                        GameError::HttpError,
-                    ));
-                }
-            }
-        }
-        Err(e) => Err(ServiceResponse::new(
-            &format!("Only the creator can shuffle the board, and you are not the creator."),
-            StatusCode::BAD_REQUEST,
-            ResponseType::NoData,
-            e,
+    let (game, _) = GameContainer::current_game(&game_id.to_owned()).await?;
+
+    let mut new_game = game.clone();
+    new_game.shuffle_count = new_game.shuffle_count + 1;
+    new_game.shuffle();
+    let result = GameContainer::push_game(&game_id.to_owned(), &new_game).await;
+    match result {
+        Ok(_) => Ok(ServiceResponse::new(
+            "shuffled",
+            StatusCode::OK,
+            ResponseType::Game(new_game),
+            GameError::NoError,
         )),
+        Err(e) => {
+            let err_message = format!("GameContainer::push_game error: {:#?}", e);
+            return Err(ServiceResponse::new(
+                "Error Hashing Password",
+                StatusCode::INTERNAL_SERVER_ERROR,
+                ResponseType::ErrorInfo(err_message.to_owned()),
+                GameError::HttpError,
+            ));
+        }
     }
 }
 
@@ -143,7 +131,6 @@ pub async fn new_game(
 }
 
 pub async fn supported_games() -> Result<ServiceResponse, ServiceResponse> {
-    
     Ok(ServiceResponse::new(
         "shuffled",
         StatusCode::OK,

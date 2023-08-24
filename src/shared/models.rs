@@ -244,6 +244,7 @@ pub enum ResponseType {
     ValidActions(Vec<GameAction>),
     Game(RegularGame),
     SupportedGames(Vec<CatanGames>),
+    SendMessageError(Vec<(String, GameError)>)
 }
 
 /**
@@ -273,6 +274,25 @@ impl ServiceResponse {
             game_error: error,
         }
     }
+
+    pub fn new_generic_ok(msg: &str) -> Self {
+        ServiceResponse{
+            message: msg.to_owned(),
+            status: StatusCode::OK,
+            response_type: ResponseType::NoData,
+            game_error: GameError::NoError
+        }
+    }
+
+    pub fn new_bad_id(msg: &str, id: &str) -> Self {
+        ServiceResponse{
+            message: msg.to_owned(),
+            status: StatusCode::BAD_REQUEST,
+            response_type: ResponseType::NoData,
+            game_error: GameError::BadId(id.to_owned())
+        }
+    }
+
     pub fn to_http_response(&self) -> HttpResponse {
         let status_code = self.status;
         let response = HttpResponse::build(status_code).json(self);

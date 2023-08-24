@@ -20,7 +20,7 @@ use crate::games_service::{
     tiles::{self, tile::Tile, tile_enums::TileResource, tile_key::TileKey},
 };
 
-use crate::shared::models::{ClientUser, GameError};
+use crate::shared::models::{ClientUser, GameError, ServiceResponse};
 use crate::shared::{models::PersistUser, utility::get_id};
 
 use actix_web::Resource;
@@ -128,12 +128,9 @@ impl RegularGame {
      *  so that the operation can be undone by simply going to the previous game struct
      */
 
-    pub fn add_user(&self, profile: &ClientUser) -> Result<Self, GameError> {
+    pub fn add_user(&self, profile: &ClientUser) -> Result<Self, ServiceResponse> {
         if self.players.contains_key(&profile.id) {
-            return Err(GameError::BadId(format!(
-                "{} is already in the game",
-                profile.id
-            )));
+            return Err(ServiceResponse::new_bad_id("user_id already exists", &profile.id));
         }
 
         let mut clone = self.clone();

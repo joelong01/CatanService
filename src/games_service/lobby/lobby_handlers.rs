@@ -3,49 +3,29 @@ use actix_web::{
     web::{self, Data},
     HttpRequest, HttpResponse,
 };
-use reqwest::StatusCode;
 
 use crate::{
-    games_service::{
-        game_container::{
-            game_container::GameContainer,
-            game_messages::{CatanMessage, GameHeader, Invitation, InvitationResponseData},
-        },
-        long_poller::long_poller::LongPoller,
-    },
+    games_service::game_container::
+            game_messages::{Invitation, InvitationResponseData},
+    get_header_value,
     middleware::environment_mw::ServiceEnvironmentContext,
-    shared::models::ClientUser,
-    trace_function,
-    user_service::{users:: internal_find_user, user_handlers::create_http_response},
+    shared::header_extractor::HeadersExtractor
 };
 
 pub async fn get_lobby(_req: HttpRequest) -> HttpResponse {
-    return HttpResponse::Ok()
-        .content_type("application/json")
-        .json(LongPoller::get_available().await);
+    super::lobby::get_lobby()
+        .await
+        .map(|sr| sr.to_http_response())
+        .unwrap_or_else(|sr| sr.to_http_response())
 }
-pub async fn post_invite(req: HttpRequest, invite: web::Json<Invitation>) -> HttpResponse {
-    let from_id = req
-        .headers()
-        .get(GameHeader::USER_ID)
-        .unwrap()
-        .to_str()
-        .unwrap();
+pub async fn post_invite(headers: HeadersExtractor, invite: web::Json<Invitation>) -> HttpResponse {
+    let from_id = get_header_value!(user_id, headers);
     let invite: &Invitation = &invite;
 
-    match LongPoller::send_message(
-        vec![invite.to_id.clone()],
-        &CatanMessage::Invite(invite.clone()),
-    )
-    .await
-    {
-        Ok(_) => create_http_response(StatusCode::OK, "", ""),
-        Err(e) => create_http_response(
-            StatusCode::BAD_REQUEST,
-            &format!("Error posting invite: {:?}", e),
-            "",
-        ),
-    }
+    super::lobby::post_invite(&from_id, invite)
+        .await
+        .map(|sr| sr.to_http_response())
+        .unwrap_or_else(|sr| sr.to_http_response())
 }
 /**
  * pass this on to the client.  the long_poll will pass it to the client, which will update the UI to indicate this
@@ -56,51 +36,14 @@ pub async fn post_invite(req: HttpRequest, invite: web::Json<Invitation>) -> Htt
  *     loop and end up waiting on the right thing
  */
 pub async fn respond_to_invite(
-    req: HttpRequest,
+    headers: HeadersExtractor,
     invite_response: web::Json<InvitationResponseData>,
     data: Data<ServiceEnvironmentContext>,
 ) -> HttpResponse {
     let invite_response = invite_response.into_inner();
-
-    trace_function!("respond_to_invite", "invitation: {:?}", invite_response);
-    if invite_response.accepted {
-        // add the user to the Container -- now they are in both the lobby and the game
-        // this will release any threads waiting for updates on the game
-        let is_test = req.headers().contains_key(GameHeader::IS_TEST);
-        let persist_user = internal_find_user("id", &invite_response.from_id, is_test, &data).await;
-        if persist_user.is_err() {
-            return create_http_response(
-                StatusCode::NOT_FOUND,
-                &format!("could not find user with id {}", invite_response.from_id),
-                "",
-            );
-        }
-        let persist_user = persist_user.unwrap();
-        GameContainer::add_player(
-            &invite_response.game_id,
-            &ClientUser::from_persist_user(persist_user),
-        )
+    let is_test = headers.is_test;
+    super::lobby::respond_to_invite(is_test, &invite_response, &data)
         .await
-        .expect("add_player shouldn't fail.  TODO: handle failure");
-    }
-
-    // tell the reciever the result of the invitation
-
-    if let Err(e) = LongPoller::send_message(
-        vec![invite_response.to_id.clone()],
-        &CatanMessage::InvitationResponse(invite_response.clone()),
-    )
-    .await
-    {
-        return create_http_response(
-            StatusCode::BAD_REQUEST,
-            &format!("Error in sending message to lobby, {:#?}", e),
-            "",
-        );
-    }
-
-    // 
-    //  don't tell the sender as they know they accepted it
-
-    create_http_response(StatusCode::ACCEPTED, "accepted", "")
+        .map(|sr| sr.to_http_response())
+        .unwrap_or_else(|sr| sr.to_http_response())
 }
