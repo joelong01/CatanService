@@ -166,14 +166,12 @@ impl LongPoller {
     /// It is designed to be used with a model that allows only one reader at a time for the
     /// specified user ID.
 
-    pub async fn wait(user_id: &str) -> Result<CatanMessage, GameError> {
-        log_thread_info!("wait", "enter [to:{:#?}]", user_id);
-        defer! {log_thread_info!("wait","leave [to:{:#?}]", user_id )};
+    pub async fn wait(user_id: &str) -> Result<CatanMessage, ServiceResponse> {
         let user_rx = {
             let users_map = ALL_USERS_MAP.read().await;
             match users_map.get(user_id) {
                 Some(lp) => lp.read().await.rx.clone(),
-                None => return Err(GameError::BadId(format!("{} does not exist", user_id))),
+                None => return Err(ServiceResponse::new_bad_id("in long poller", user_id)),
             }
         };
 
@@ -183,10 +181,12 @@ impl LongPoller {
         let mut rx = user_rx.lock().await;
         match rx.recv().await {
             Some(msg) => Ok(msg),
-            None => Err(GameError::ChannelError(format!(
-                "error writing channel. [user_id={}]",
-                user_id
-            ))),
+            None => Err(ServiceResponse::new(
+                &format!("error writing channel. [user_id={}]", user_id),
+                reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+                ResponseType::NoData,
+                GameError::ChannelError(String::default()),
+            )),
         }
     }
     /// returns all logged in users marked as "Available"
@@ -270,10 +270,8 @@ mod tests {
         });
 
         assert_eq!(LongPoller::wait("user5").await, Ok(message));
-        assert_eq!(
-            LongPoller::wait("user6").await,
-            Err(GameError::BadId(String::from("user6 does not exist")))
-        );
+        assert!(LongPoller::wait("user6").await.is_err());
+
     }
     #[tokio::test]
     async fn test_get_available_and_set_status() {

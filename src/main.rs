@@ -11,7 +11,7 @@ mod user_service;
 
 use actix_web::{web, HttpResponse, HttpServer, Scope};
 use games_service::actions::action_handlers;
-use games_service::long_poller::handler::long_poll_handler;
+use games_service::long_poller::long_poller_handler::long_poll_handler;
 
 use crate::games_service::lobby::lobby_handlers;
 use games_service::game_handlers;
