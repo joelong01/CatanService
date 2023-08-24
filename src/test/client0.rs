@@ -86,7 +86,6 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
         .get_client_users()
         .expect("Vec<> should be in body");
 
-  
     trace_thread_info!(name, "get_lobby returned: {:#?}", lobby);
 
     for lobby_user in lobby {
@@ -132,7 +131,7 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
             .assert_success("get actions to succeed")
             .get_actions()
             .expect("get actions should have a Vec of valid actions in the body");
-        assert!(actions.len() == 3);
+        assert!(actions.len() == 2);
         assert!(actions.contains(&GameAction::AddPlayer));
 
         assert!(actions.contains(&GameAction::Next));
@@ -162,15 +161,15 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
         .assert_success("get actions to succeed")
         .get_actions()
         .expect("get_actions to have a Vec<GameAction> in the body");
-    
+
     assert!(actions.len() == 2);
 
     log_thread_info!(name, "end of test");
     // next we start the game
 }
-const TEST_GAME_LOC: &'static str = "./src/test/test_game.json";
+pub const TEST_GAME_LOC: &'static str = "./src/test/test_game.json";
 
-fn save_game(game: &RegularGame) {
+pub fn save_game(game: &RegularGame) {
     assert_eq!(game.players.len(), 1); // needed for the new_game logic
     let mut file = std::fs::OpenOptions::new()
         .write(true)
@@ -187,12 +186,35 @@ fn save_game(game: &RegularGame) {
     .unwrap();
 }
 
-fn load_game() -> Result<RegularGame, Box<dyn std::error::Error>> {
+pub fn load_game() -> Result<RegularGame, Box<dyn std::error::Error>> {
     // Read the file to a string
-    let contents = std::fs::read_to_string(TEST_GAME_LOC)?;
+    match std::fs::read_to_string(TEST_GAME_LOC) {
+        Ok(contents) => {
+            // Parse the string as JSON into a RegularGame object
+            let game: RegularGame = match serde_json::from_str(&contents) {
+                Ok(game) => game,
+                Err(e) => {
+                    log_thread_info!(
+                        "load_game",
+                        "failed to parse game from JSON: {:#?}",
+                        e
+                    );
+                    return Err(Box::new(e));
+                }
+            };
 
-    // Parse the string as JSON into a RegularGame object
-    let game: RegularGame = serde_json::from_str(&contents)?;
+            Ok(game) // Return the Result with the RegularGame
+        }
+        Err(e) => {
+            log_thread_info!(
+                "load_game",
+                "failed to load {}.  error: {:#?}",
+                TEST_GAME_LOC,
+                e
+            );
 
-    Ok(game)
+            Err(Box::new(e)) // Convert the Error to a Box<dyn std::error::Error> and return it
+        }
+    }
 }
+

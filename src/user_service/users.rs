@@ -281,7 +281,6 @@ pub fn validate_jwt_token(token: &str) -> Option<TokenData<Claims>> {
         &validation,
     ) {
         Ok(c) => {
-            full_info!("token VALID");
             Some(c) // or however you want to handle a valid token
         }
         Err(e) => {

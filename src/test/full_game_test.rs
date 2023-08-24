@@ -4,9 +4,10 @@ pub mod test {
     #![allow(dead_code)]
     #![allow(unused_variables)]
     use crate::{
+        games_service::shared::game_enums::CatanGames,
         shared::proxy::ServiceProxy,
         test::{
-            client0::Handler0,
+            client0::{Handler0, save_game, load_game, TEST_GAME_LOC},
             client1::Handler1,
             client2::Handler2,
             test_structs::{init_test_logger, ClientThreadHandler, HOST_URL},
@@ -50,6 +51,57 @@ pub mod test {
         time::sleep,
     };
     use url::Url;
+/**
+ * if you ever change the game structure, you are going to need a new copy of it. this will 
+ * start a game and get a new board.  be careful because if you have specific logic around
+ * the layout, that will all break...you might instead just merge the old with the new, preserving
+ * the tile layout.
+ */
+    async fn save_game_test() {
+        start_server().await.unwrap();
+        trace_thread_info!("test_thread", "created server");
+        let client = Client::new();
+        wait_for_server_to_start(&client, Duration::from_secs(10))
+            .await
+            .expect("Server not started");
+        trace_thread_info!("test_thread", "starting test_lobby_invite_flow");
+
+        //
+        //  setup the test database
+        trace_thread_info!("test_thread", "setting up service");
+        let proxy = ServiceProxy::new(true, HOST_URL);
+        let response = proxy.setup().await;
+        response.assert_success("setup should not fail");
+        assert!(response.status.is_success(), "error: {:#?}", response);
+
+        //
+        //  create new users to play our game
+        const CLIENT_COUNT: &'static usize = &1;
+        trace_thread_info!("test_thread", "creating users");
+        let test_users: Vec<ClientUser> = register_test_users(*CLIENT_COUNT).await;
+        assert_eq!(test_users.len(), *CLIENT_COUNT);
+
+        // login and get auth_token
+        let auth_token = proxy
+            .login("joe@longshotdev.com", "password")
+            .await
+            .get_authtoken()
+            .expect("successful login should have a JWT token in the ServiceResponse");
+
+        // start a game
+        let returned_game = proxy
+            .new_game(CatanGames::Regular, &auth_token, None)
+            .await
+            .get_game()
+            .expect("Should have a RegularGame returned in the body");
+
+        // save the game
+        save_game(&returned_game);
+
+        let test_game = load_game().expect(&format!("Test game should be in {}", TEST_GAME_LOC));
+        assert_eq!(test_game, returned_game);
+
+    }
 
     #[actix_rt::test]
     async fn full_game_test() {

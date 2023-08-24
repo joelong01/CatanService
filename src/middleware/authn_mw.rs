@@ -4,14 +4,16 @@ use actix::fut::err;
 use actix_service::{Service, Transform};
 use actix_web::{dev::ServiceRequest, dev::ServiceResponse, error::ErrorUnauthorized, Error};
 
-use crate::{games_service::game_container::game_messages::GameHeader,user_service::users::validate_jwt_token};
+use crate::{
+    games_service::game_container::game_messages::GameHeader, log_thread_info,
+    user_service::users::validate_jwt_token,
+};
 use futures::{
     future::{ok, Ready},
     Future,
 };
 
 use reqwest::header::{HeaderName, HeaderValue};
-
 
 // AuthenticationMiddlewareFactory serves as a factory to create instances of AuthenticationMiddleware
 // which is the actual middleware component. It implements the Transform trait required by
@@ -88,6 +90,7 @@ where
                         HeaderValue::from_str(sub).unwrap(),
                     );
                 } else {
+                    log_thread_info!("auth_mw", "rejected call: {:#?}", req.request());
                     let fut = err(ErrorUnauthorized("Unauthorized"));
                     return Box::pin(fut);
                 }
@@ -104,5 +107,3 @@ where
         Box::pin(fut)
     }
 }
-
-
