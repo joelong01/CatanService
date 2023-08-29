@@ -1,21 +1,21 @@
 #![allow(dead_code)]
 use std::collections::HashMap;
 
-
 use reqwest::{
     header::{self, HeaderName, HeaderValue},
     Client, ClientBuilder, StatusCode,
 };
 use serde::Serialize;
+
 use url::Url;
 
 use crate::{
-
     games_service::{
         catan_games::games::regular::regular_game::RegularGame,
         game_container::game_messages::{GameHeader, Invitation, InvitationResponseData},
         shared::game_enums::CatanGames,
     },
+    middleware::environment_mw::TestContext,
     shared::models::GameError,
 };
 
@@ -24,12 +24,12 @@ use super::models::{ResponseType, ServiceResponse, UserProfile};
 pub struct ServiceProxy {
     pub client: Client,
     pub host: Url,
-    pub is_test: bool,
+    pub test_context: Option<TestContext>,
 }
 
 impl ServiceProxy {
     /// Creates a new Proxy with the specified host
-    pub fn new(is_test: bool, host: &str) -> Self {
+    pub fn new(test_context: Option<TestContext>, host: &str) -> Self {
         let client = ClientBuilder::new()
             .pool_max_idle_per_host(0)
             .build()
@@ -37,7 +37,7 @@ impl ServiceProxy {
         Self {
             client,
             host: Url::parse(host).expect(r#"Invalid base URL"#),
-            is_test,
+            test_context,
         }
     }
 
@@ -63,8 +63,19 @@ impl ServiceProxy {
         for (key, value) in headers {
             request_builder = request_builder.header(key, value);
         }
+
         if let Some(body_content) = body {
             request_builder = request_builder.json(&body_content);
+        }
+
+        //
+        //  add the test header
+        if let Some(test_context) = &self.test_context {
+            let json = serde_json::to_string(test_context).unwrap();
+            request_builder = request_builder.header(
+                HeaderName::from_static(GameHeader::TEST),
+                HeaderValue::from_str(&json).expect("valid header value"),
+            );
         }
 
         let result = request_builder.send().await;
@@ -112,6 +123,15 @@ impl ServiceProxy {
         for (key, value) in headers {
             request_builder = request_builder.header(key, value);
         }
+        //
+        //  add the test header
+        if let Some(test_context) = &self.test_context {
+            let json = serde_json::to_string(test_context).unwrap();
+            request_builder = request_builder.header(
+                HeaderName::from_static(GameHeader::TEST),
+                HeaderValue::from_str(&json).expect("valid header value"),
+            );
+        }
         let response = request_builder.send().await;
 
         match response {
@@ -142,11 +162,7 @@ impl ServiceProxy {
     }
 
     pub async fn setup(&self) -> ServiceResponse {
-        let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
-        headers.insert(
-            HeaderName::from_static(GameHeader::IS_TEST),
-            HeaderValue::from_static("true"),
-        );
+        let headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
         let url = "/api/v1/test/setup";
         let sr = self.post::<()>(url, headers, None).await;
         sr
@@ -154,12 +170,7 @@ impl ServiceProxy {
 
     pub async fn register(&self, profile: &UserProfile, password: &str) -> ServiceResponse {
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
-        if self.is_test {
-            headers.insert(
-                HeaderName::from_static(GameHeader::IS_TEST),
-                HeaderValue::from_static("true"),
-            );
-        }
+
         headers.insert(
             HeaderName::from_static(GameHeader::PASSWORD),
             HeaderValue::from_str(password).expect("Invalid header value"),
@@ -171,12 +182,7 @@ impl ServiceProxy {
 
     pub async fn login(&self, username: &str, password: &str) -> ServiceResponse {
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
-        if self.is_test {
-            headers.insert(
-                HeaderName::from_static(GameHeader::IS_TEST),
-                HeaderValue::from_static("true"),
-            );
-        }
+
         headers.insert(
             HeaderName::from_static(GameHeader::PASSWORD),
             HeaderValue::from_str(password).expect("Invalid header value"),
@@ -192,13 +198,6 @@ impl ServiceProxy {
     pub async fn get_profile(&self, auth_token: &str) -> ServiceResponse {
         let url = "/auth/api/v1/profile";
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
-
-        if self.is_test {
-            headers.insert(
-                HeaderName::from_static(GameHeader::IS_TEST),
-                HeaderValue::from_static("true"),
-            );
-        }
 
         headers.insert(
             reqwest::header::AUTHORIZATION,
@@ -217,12 +216,6 @@ impl ServiceProxy {
         let url = format!("auth/api/v1/games/{:?}", game_type);
 
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
-        if self.is_test {
-            headers.insert(
-                HeaderName::from_static(GameHeader::IS_TEST),
-                HeaderValue::from_static("true"),
-            );
-        }
         headers.insert(
             reqwest::header::AUTHORIZATION,
             HeaderValue::from_str(auth_token).expect("Invalid header value"),
@@ -239,12 +232,6 @@ impl ServiceProxy {
     pub async fn get_lobby(&self, auth_token: &str) -> ServiceResponse {
         let url = "/auth/api/v1/lobby";
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
-        if self.is_test {
-            headers.insert(
-                HeaderName::from_static(GameHeader::IS_TEST),
-                HeaderValue::from_static("true"),
-            );
-        }
         headers.insert(
             reqwest::header::AUTHORIZATION,
             HeaderValue::from_str(auth_token).expect("Invalid header value"),
@@ -256,12 +243,6 @@ impl ServiceProxy {
     pub async fn get_actions(&self, game_id: &str, auth_token: &str) -> ServiceResponse {
         let url = format!("/auth/api/v1/action/actions/{}", game_id);
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
-        if self.is_test {
-            headers.insert(
-                HeaderName::from_static(GameHeader::IS_TEST),
-                HeaderValue::from_static("true"),
-            );
-        }
         headers.insert(
             reqwest::header::AUTHORIZATION,
             HeaderValue::from_str(auth_token).expect("Invalid header value"),
@@ -277,12 +258,6 @@ impl ServiceProxy {
     pub async fn long_poll(&self, game_id: &str, auth_token: &str, index: u32) -> ServiceResponse {
         let url = format!("/auth/api/v1/longpoll/{}", index);
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
-        if self.is_test {
-            headers.insert(
-                HeaderName::from_static(GameHeader::IS_TEST),
-                HeaderValue::from_static("true"),
-            );
-        }
         headers.insert(
             reqwest::header::AUTHORIZATION,
             HeaderValue::from_str(auth_token).expect("Invalid header value"),
@@ -303,12 +278,6 @@ impl ServiceProxy {
         let url = "/auth/api/v1/lobby/invite";
 
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
-        if self.is_test {
-            headers.insert(
-                HeaderName::from_static(GameHeader::IS_TEST),
-                HeaderValue::from_static("true"),
-            );
-        }
         headers.insert(
             reqwest::header::AUTHORIZATION,
             HeaderValue::from_str(auth_token).expect("Invalid header value"),
@@ -328,12 +297,6 @@ impl ServiceProxy {
         let url = "/auth/api/v1/lobby/acceptinvite";
 
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
-        if self.is_test {
-            headers.insert(
-                HeaderName::from_static(GameHeader::IS_TEST),
-                HeaderValue::from_static("true"),
-            );
-        }
         headers.insert(
             reqwest::header::AUTHORIZATION,
             HeaderValue::from_str(auth_token).expect("Invalid header value"),
@@ -351,12 +314,6 @@ impl ServiceProxy {
         let url = format!("/auth/api/v1/action/start/{}", game_id);
 
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
-        if self.is_test {
-            headers.insert(
-                HeaderName::from_static(GameHeader::IS_TEST),
-                HeaderValue::from_static("true"),
-            );
-        }
         headers.insert(
             reqwest::header::AUTHORIZATION,
             HeaderValue::from_str(auth_token).expect("Invalid header value"),
@@ -373,12 +330,6 @@ impl ServiceProxy {
         let url = format!("/auth/api/v1/action/next/{}", game_id);
 
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
-        if self.is_test {
-            headers.insert(
-                HeaderName::from_static(GameHeader::IS_TEST),
-                HeaderValue::from_static("true"),
-            );
-        }
         headers.insert(
             reqwest::header::AUTHORIZATION,
             HeaderValue::from_str(auth_token).expect("Invalid header value"),

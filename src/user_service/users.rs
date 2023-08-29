@@ -13,11 +13,11 @@ use crate::full_info;
 
 use crate::games_service::long_poller::long_poller::LongPoller;
 
-use crate::middleware::environment_mw::{ServiceEnvironmentContext, CATAN_ENV};
+use crate::middleware::environment_mw::RequestContext;
 use crate::shared::models::{
     Claims, ClientUser, GameError, PersistUser, ResponseType, ServiceResponse, UserProfile,
 };
-use actix_web::web::Data;
+
 use bcrypt::{hash, verify};
 use jsonwebtoken::{
     decode, encode, Algorithm, DecodingKey, EncodingKey, Header, TokenData, Validation,
@@ -38,19 +38,28 @@ lazy_static! {
  * the users database will be created out of band and this path is just for test users.
  */
 
-pub async fn setup(
-    is_test: bool,
-    database_name: &str,
-    container_name: &str,
-) -> Result<ServiceResponse, ServiceResponse> {
-    if !is_test {
-        return Err(ServiceResponse::new(
-            "Test Header must be set",
-            StatusCode::UNAUTHORIZED,
+pub async fn setup(context: &RequestContext) -> Result<ServiceResponse, ServiceResponse> {
+    let use_cosmos_db = match &context.test_context {
+        Some(tc) => tc.use_cosmos_db,
+        None => {
+            return Err(ServiceResponse::new(
+                "Test Header must be set",
+                StatusCode::UNAUTHORIZED,
+                ResponseType::NoData,
+                GameError::HttpError,
+            ))
+        }
+    };
+
+    if use_cosmos_db {
+        return Ok(ServiceResponse::new(
+            "already exists",
+            StatusCode::ACCEPTED,
             ResponseType::NoData,
-            GameError::HttpError,
+            GameError::NoError,
         ));
     }
+
     if DB_SETUP.load(Ordering::Relaxed) {
         return Ok(ServiceResponse::new(
             "already exists",
@@ -103,12 +112,11 @@ pub async fn setup(
 /// Body contains a ClientUser (an id + profile)
 /// Returns an ServiceResponse indicating the success or failure of the registration process.
 pub async fn register(
-    is_test: bool,
     password: &str,
     profile_in: &UserProfile,
-    data: &Data<ServiceEnvironmentContext>,
+    request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    if internal_find_user("email", &profile_in.email, is_test, data)
+    if internal_find_user("email", &profile_in.email, request_context)
         .await
         .is_ok()
     {
@@ -141,8 +149,7 @@ pub async fn register(
     persist_user.user_profile.games_played = Some(0);
     persist_user.user_profile.games_won = Some(0);
     // Create the database connection
-    if !is_test {
-        let request_context = data.context.lock().unwrap();
+    if !request_context.use_mock_db() {
         let userdb = UserDb::new(&request_context).await;
 
         // Save the user record to the database
@@ -190,10 +197,9 @@ pub async fn register(
 pub async fn login(
     username: &str,
     password: &str,
-    is_test: bool,
-    data: &Data<ServiceEnvironmentContext>,
+    request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    let user = internal_find_user("email", username, is_test, data).await?;
+    let user = internal_find_user("email", username, request_context).await?;
     let password_hash: String = match user.password_hash {
         Some(p) => p,
         None => {
@@ -219,7 +225,11 @@ pub async fn login(
     };
 
     if is_password_match {
-        let token_result = create_jwt_token(&user.id, &user.user_profile.email);
+        let token_result = create_jwt_token(
+            &user.id,
+            &user.user_profile.email,
+            &request_context.env.login_secret_key,
+        );
         match token_result {
             Ok(token) => {
                 let _ = LongPoller::add_user(&user.id, &user.user_profile).await;
@@ -249,7 +259,11 @@ pub async fn login(
     }
 }
 
-fn create_jwt_token(id: &str, email: &str) -> Result<String, Box<dyn std::error::Error>> {
+fn create_jwt_token(
+    id: &str,
+    email: &str,
+    secret_key: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
     let expire_duration = ((SystemTime::now() + Duration::from_secs(24 * 60 * 60))
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -261,8 +275,6 @@ fn create_jwt_token(id: &str, email: &str) -> Result<String, Box<dyn std::error:
         exp: expire_duration,
     };
 
-    let secret_key = CATAN_ENV.login_secret_key.clone();
-
     let token_result = encode(
         &Header::new(Algorithm::HS512),
         &claims,
@@ -271,9 +283,8 @@ fn create_jwt_token(id: &str, email: &str) -> Result<String, Box<dyn std::error:
 
     token_result.map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
 }
-pub fn validate_jwt_token(token: &str) -> Option<TokenData<Claims>> {
+pub fn validate_jwt_token(token: &str, secret_key: &str) -> Option<TokenData<Claims>> {
     let validation = Validation::new(Algorithm::HS512);
-    let secret_key = CATAN_ENV.login_secret_key.clone();
 
     match decode::<Claims>(
         &token,
@@ -295,12 +306,9 @@ pub fn validate_jwt_token(token: &str) -> Option<TokenData<Claims>> {
  *  show in the sample
  */
 pub async fn list_users(
-    data: &Data<ServiceEnvironmentContext>,
-    is_test: bool,
+    request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    let request_context = data.context.lock().unwrap();
-
-    if !is_test {
+    if !request_context.use_mock_db() {
         let userdb = UserDb::new(&request_context).await;
 
         // Get list of users
@@ -345,10 +353,9 @@ pub async fn list_users(
 }
 pub async fn get_profile(
     user_id: &str,
-    is_test: bool,
-    data: &Data<ServiceEnvironmentContext>,
+    request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    let user = internal_find_user("id", user_id, is_test, &data).await?;
+    let user = internal_find_user("id", user_id, request_context).await?;
 
     Ok(ServiceResponse::new(
         "",
@@ -360,27 +367,25 @@ pub async fn get_profile(
 
 pub async fn find_user_by_id(
     id: &str,
-    is_test: bool,
-    data: &Data<ServiceEnvironmentContext>,
+    request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    get_profile(id, is_test, data).await
+    get_profile(id, request_context).await
 }
 
 pub async fn internal_find_user(
     prop: &str,
     id: &str,
-    is_test: bool,
-    data: &Data<ServiceEnvironmentContext>,
+    request_context: &RequestContext,
 ) -> Result<PersistUser, ServiceResponse> {
-    if is_test {
+    if request_context.use_mock_db() {
         if prop == "id" {
             return TestDb::find_user_by_id(id).await;
         } else {
             return TestDb::find_user_by_profile(&prop, id).await;
         }
     }
-    let request_context = data.context.lock().unwrap();
-    let userdb = UserDb::new(&request_context).await;
+
+    let userdb = UserDb::new(request_context).await;
     if prop == "id" {
         userdb.find_user_by_id(id).await
     } else {
@@ -391,8 +396,7 @@ pub async fn internal_find_user(
 pub async fn delete(
     id_path: &str,
     id_token: &str,
-    is_test: bool,
-    data: &Data<ServiceEnvironmentContext>,
+    request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
     //
     // unwrap is ok here because our middleware put it there.
@@ -407,8 +411,7 @@ pub async fn delete(
     }
 
     let result;
-    if !is_test {
-        let request_context = data.context.lock().unwrap();
+    if !request_context.use_mock_db() {
         let userdb = UserDb::new(&request_context).await;
         result = userdb.delete_user(&id_path).await
     } else {
@@ -434,30 +437,32 @@ pub async fn delete(
 
 #[cfg(test)]
 mod tests {
+    use crate::middleware::environment_mw::CATAN_ENV;
+
     use super::*;
 
     // Test the login function
     #[tokio::test]
     async fn test_login() {
         let profile = UserProfile::new_test_user();
-        let data = Data::new(ServiceEnvironmentContext::new()); // Customize with required fields
+        let request_context = RequestContext::test_default(true);
 
         // setup
-        let response = setup(true, "db_name", "container_name").await;
+        let response = setup(&request_context).await;
 
         // Register the user first
-        let sr = register(true, "password", &profile, &data)
+        let sr = register("password", &profile, &request_context)
             .await
             .expect("this should work");
         let client_user = sr.get_client_user().expect("This should be a client user");
 
         // Test login with correct credentials
-        let response = login(&profile.email, "password", true, &data)
+        let response = login(&profile.email, "password", &request_context)
             .await
             .expect("login should succeed");
 
         // Test login with incorrect credentials
-        let response = login(&profile.email, "wrong_password", true, &data).await;
+        let response = login(&profile.email, "wrong_password", &request_context).await;
         match response {
             Ok(_) => panic!("this hsould be an error!"),
             Err(e) => {
@@ -475,8 +480,9 @@ mod tests {
     // Test JWT token creation and validation
     #[test]
     fn test_jwt_token_creation_and_validation() {
-        let token = create_jwt_token("user_id", "user_email").unwrap();
-        assert!(validate_jwt_token(&token).is_some());
+     
+        let token = create_jwt_token("user_id", "user_email", &CATAN_ENV.login_secret_key).unwrap();
+        assert!(validate_jwt_token(&token, &CATAN_ENV.login_secret_key).is_some());
     }
 
     // Add more tests as needed

@@ -3,11 +3,10 @@ use crate::{
         game_container::game_messages::{CatanMessage, GameCreatedData},
         long_poller::long_poller::LongPoller,
     },
-    middleware::environment_mw::ServiceEnvironmentContext,
     shared::models::{ClientUser, GameError, ResponseType, ServiceResponse},
-    user_service::users::internal_find_user,
+    user_service::users::internal_find_user, middleware::environment_mw::RequestContext,
 };
-use actix_web::web::Data;
+
 use reqwest::StatusCode;
 
 use crate::games_service::shared::game_enums::CatanGames;
@@ -57,7 +56,7 @@ pub async fn new_game(
     user_id: &str,
     is_test: bool,
     test_game: Option<RegularGame>,
-    data: Data<ServiceEnvironmentContext>,
+    req_context: RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
     if game_type != CatanGames::Regular {
         return Err(ServiceResponse::new(
@@ -68,7 +67,7 @@ pub async fn new_game(
         ));
     }
 
-    let user = internal_find_user("id", user_id, is_test, &data).await?;
+    let user = internal_find_user("id", user_id, &req_context).await?;
 
     //
     //  "if it is a test game and the game has been passed in, use it.  otherwise create a new game and shuffle"

@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use std::{collections::HashMap, fmt};
 
-use crate::middleware::environment_mw::RequestEnvironmentContext;
+use crate::middleware::environment_mw::RequestContext;
 use crate::shared::models::{GameError, PersistUser, ResponseType};
 /**
  *  this is the class that calls directly to CosmosDb --
@@ -76,9 +76,9 @@ fn public_client(account: &str, token: &str) -> CosmosClient {
  */
 
 impl UserDb {
-    pub async fn new(context: &RequestEnvironmentContext) -> Self {
+    pub async fn new(context: &RequestContext) -> Self {
         let client = public_client(&context.env.cosmos_account, &context.env.cosmos_token);
-        let database_name = context.database_name.clone();
+        let database_name = context.database_name().clone();
         let collection_names = vec![
             CosmosCollectionName::User,
             CosmosCollectionName::Profile,
@@ -295,7 +295,7 @@ mod tests {
 
     use crate::{
         init_env_logger,
-        shared::{models::UserProfile, utility::get_id},
+        shared::{models::UserProfile, utility::get_id}, middleware::environment_mw::{CATAN_ENV, TestContext},
     };
 
     use super::*;
@@ -304,7 +304,7 @@ mod tests {
     #[tokio::test]
 
     async fn test_e2e() {
-        let context = RequestEnvironmentContext::create(true);
+        let context = RequestContext::new(Some(TestContext{use_cosmos_db: false}), &CATAN_ENV);
 
         let user_db = UserDb::new(&context).await;
 

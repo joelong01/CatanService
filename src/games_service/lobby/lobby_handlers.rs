@@ -1,15 +1,13 @@
 #![allow(unused_variables)]
 use actix_web::{
-    web::{self, Data},
-    HttpRequest, HttpResponse,
+    HttpRequest, HttpResponse, web,
 };
 
 use crate::{
-    games_service::game_container::
-            game_messages::{Invitation, InvitationResponseData},
+    games_service::game_container::game_messages::{Invitation, InvitationResponseData},
     get_header_value,
-    middleware::environment_mw::ServiceEnvironmentContext,
-    shared::header_extractor::HeadersExtractor
+    middleware::environment_mw::RequestContext,
+    shared::header_extractor::HeadersExtractor,
 };
 
 pub async fn get_lobby(_req: HttpRequest) -> HttpResponse {
@@ -38,11 +36,11 @@ pub async fn post_invite(headers: HeadersExtractor, invite: web::Json<Invitation
 pub async fn respond_to_invite(
     headers: HeadersExtractor,
     invite_response: web::Json<InvitationResponseData>,
-    data: Data<ServiceEnvironmentContext>,
+    request_context: RequestContext,
 ) -> HttpResponse {
     let invite_response = invite_response.into_inner();
     let is_test = headers.is_test;
-    super::lobby::respond_to_invite(is_test, &invite_response, &data)
+    super::lobby::respond_to_invite(is_test, &invite_response, &request_context)
         .await
         .map(|sr| sr.to_http_response())
         .unwrap_or_else(|sr| sr.to_http_response())

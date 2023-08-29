@@ -11,7 +11,7 @@ pub mod test {
             client1::Handler1,
             client2::Handler2,
             test_structs::{init_test_logger, ClientThreadHandler, HOST_URL},
-        },
+        }, middleware::environment_mw::TestContext,
     };
 
     use std::{
@@ -69,7 +69,7 @@ pub mod test {
         //
         //  setup the test database
         trace_thread_info!("test_thread", "setting up service");
-        let proxy = ServiceProxy::new(true, HOST_URL);
+        let proxy = ServiceProxy::new(Some(TestContext{use_cosmos_db: false}), HOST_URL);
         let response = proxy.setup().await;
         response.assert_success("setup should not fail");
         assert!(response.status.is_success(), "error: {:#?}", response);
@@ -118,7 +118,7 @@ pub mod test {
         //
         //  setup the test database
         trace_thread_info!("test_thread", "setting up service");
-        let proxy = ServiceProxy::new(true, HOST_URL);
+        let proxy = ServiceProxy::new(Some(TestContext{use_cosmos_db: false}), HOST_URL);
         let response = proxy.setup().await;
         response.assert_success("setup should not fail");
         assert!(response.status.is_success(), "error: {:#?}", response);
@@ -236,7 +236,7 @@ pub mod test {
 
     async fn register_test_users(count: usize) -> Vec<ClientUser> {
         let mut test_users: Vec<ClientUser> = Vec::new();
-        let proxy = ServiceProxy::new(true, HOST_URL);
+        let proxy = ServiceProxy::new(Some(TestContext{use_cosmos_db: false}), HOST_URL);
         let first_names = vec!["Joe", "James", "Doug"];
         let last_names = vec!["Winner", "Loser", "Longestroad"];
         let email_names = vec![

@@ -1,5 +1,4 @@
 #![allow(unused_variables)]
-use actix_web::web::Data;
 use reqwest::StatusCode;
 
 use crate::{
@@ -10,9 +9,8 @@ use crate::{
         },
         long_poller::long_poller::LongPoller,
     },
-    middleware::environment_mw::ServiceEnvironmentContext,
     shared::models::{ClientUser, GameError, ResponseType, ServiceResponse},
-    user_service::users::internal_find_user,
+    user_service::users::internal_find_user, middleware::environment_mw::RequestContext,
 };
 
 pub async fn get_lobby() -> Result<ServiceResponse, ServiceResponse> {
@@ -44,14 +42,14 @@ pub async fn post_invite(
 pub async fn respond_to_invite(
     is_test: bool,
     invite_response: &InvitationResponseData,
-    data: &Data<ServiceEnvironmentContext>,
+    request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
     if invite_response.accepted {
         // add the user to the Container -- now they are in both the lobby and the game
         // this will release any threads waiting for updates on the game
 
         let persist_user =
-            internal_find_user("id", &invite_response.from_id, is_test, &data).await?;
+            internal_find_user("id", &invite_response.from_id, &request_context).await?;
 
         GameContainer::add_player(
             &invite_response.game_id,

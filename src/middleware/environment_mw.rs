@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use crate::games_service::game_container::game_messages::GameHeader;
 use crate::shared::models::ConfigEnvironmentVariables;
 /**
@@ -7,28 +8,101 @@ use crate::shared::models::ConfigEnvironmentVariables;
  *
  */
 use actix_service::{Service, Transform};
-use actix_web::web::Data;
+use actix_web::dev::Payload;
+use actix_web::{HttpMessage, FromRequest, HttpRequest};
 use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error};
-use futures::future::{ok, Ready};
 use lazy_static::lazy_static;
-use std::sync::Mutex;
+use serde::{Deserialize, Serialize};
 use std::task::{Context, Poll};
+use futures::future::{ok, Ready};
+
+
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
+#[serde(rename_all = "PascalCase")]
+pub struct TestContext {
+    pub use_cosmos_db: bool,
+}
+
+
+impl TestContext {
+    pub fn new(use_cosmos_db: bool) -> Self {
+        Self {
+            use_cosmos_db,
+        }
+    }
+    pub fn as_json(use_cosmos: bool) -> String {
+        let tc = TestContext {
+            use_cosmos_db: use_cosmos,
+        };
+        serde_json::to_string(&tc).unwrap()
+    }
+}
+#[derive(Clone)]
+pub struct RequestContext {
+    pub env: ConfigEnvironmentVariables,
+    pub test_context: Option<TestContext>,
+}
+
+impl RequestContext {
+    pub fn new(
+        test_context: Option<TestContext>,
+        catan_env: &'static ConfigEnvironmentVariables,
+    ) -> Self {
+        RequestContext {
+            env: catan_env.clone(), // Clone the read-only environment data
+            test_context,
+        }
+    }
+
+    pub fn test_default(use_cosmos: bool) -> Self {
+        RequestContext::new(Some(TestContext::new(use_cosmos)), &CATAN_ENV)
+    }
+
+    pub fn is_test(&self) -> bool {
+        self.test_context.is_some()
+    }
+
+    pub fn use_mock_db(&self) -> bool {
+        match self.test_context.clone() {
+            Some(ctx) => !ctx.use_cosmos_db,
+            None => false
+        }
+    }
+
+    pub fn database_name(&self) -> String {
+        match self.test_context.clone() {
+            Some(_) => format!("{}-test", self.env.database_name),
+            None => self.env.database_name.clone()
+        }
+    }
+}
+impl FromRequest for RequestContext {
+    type Error = Error;
+    type Future = Ready<Result<Self, Self::Error>>;
+
+    fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
+        // Fetch the RequestContext from request extensions
+        if let Some(request_context) = req.extensions().get::<RequestContext>() {
+            ok(request_context.clone()) // Clone the RequestContext
+        } else {
+            // Handle case where RequestContext is not found  - assume no test
+            ok(RequestContext {
+                env: CATAN_ENV.clone(), // Clone the environment variables
+                test_context: None,
+            })
+        }
+    }
+}
+
 
 // load the environment variables once and only once the first time they are accessed (which is in main() in this case)
 lazy_static! {
     pub static ref CATAN_ENV: ConfigEnvironmentVariables =
         ConfigEnvironmentVariables::load_from_env().unwrap();
 }
-/**
- * EnvironmentMiddleWare: This is an implementation of the Transform trait which is required by Actix to define a
- * middleware component. The Transform trait is used to apply transformations to requests/responses as they pass
- * through the middleware. In this case, EnvironmentMiddleWare is used as a factory to create instances of
- * ServiceEnvironmentMiddleWare which is the actual middleware component.
- */
-pub struct EnvironmentMiddleWareFactory;
+pub struct RequestContextMiddleware;
 
-// This trait is required for middleware (*defined* what it means to be middleware)
-impl<S, B> Transform<S, ServiceRequest> for EnvironmentMiddleWareFactory
+impl<S, B> Transform<S, ServiceRequest> for RequestContextMiddleware
 where
     S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
     S::Future: 'static,
@@ -36,24 +110,20 @@ where
 {
     type Response = ServiceResponse<B>;
     type Error = Error;
-    type Transform = ServiceEnvironmentContextMiddleware<S>;
+    type Transform = RequestContextInjector<S>;
     type InitError = ();
     type Future = Ready<Result<Self::Transform, Self::InitError>>;
 
     fn new_transform(&self, service: S) -> Self::Future {
-        ok(ServiceEnvironmentContextMiddleware { service })
+        ok(RequestContextInjector { service })
     }
 }
-/**
- * ServiceEnvironmentContextMiddleware: This struct is the actual middleware component. It has a service field that represents
- * the next service in the middleware chain. This middleware intercepts each request, updates the ServiceEnvironmentContextMiddleware
- * associated with the request based on the is_test header value, and then passes the request to the next service.
- */
-pub struct ServiceEnvironmentContextMiddleware<S> {
+
+pub struct RequestContextInjector<S> {
     service: S,
 }
 
-impl<S, B> Service<ServiceRequest> for ServiceEnvironmentContextMiddleware<S>
+impl<S, B> Service<ServiceRequest> for RequestContextInjector<S>
 where
     S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
     S::Future: 'static,
@@ -68,68 +138,21 @@ where
     }
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
-        // fetch is_test flag from the header
-        let is_test = req.headers().contains_key(GameHeader::IS_TEST);
-
-        let app_state = req
-            .app_data::<Data<ServiceEnvironmentContext>>()
-            .unwrap()
-            .clone();
-        {
-            let mut request_info = app_state.context.lock().unwrap();
-            *request_info = RequestEnvironmentContext::create(is_test);
-        }
-
+        // Fetch test context from header
+        let test_context = req.headers().get(GameHeader::TEST).and_then(|test_header| {
+            test_header
+                .to_str()
+                .ok()
+                .and_then(|value| serde_json::from_str::<TestContext>(value).ok())
+        });
+    
+        // Create RequestContext by combining environment and test context
+        let request_context = RequestContext::new(test_context, &CATAN_ENV);
+    
+        // Attach the RequestContext to the request's extensions
+        req.extensions_mut().insert(request_context);
+    
         self.service.call(req)
     }
-}
-/**
- * RequestEnvironmentContext: This struct holds the information that your service needs to operate such as the database,
- * collection, and secrets. This information is stored in a Mutex in the ServiceEnvironmentContext so that it can be safely
- * updated by the middleware during request processing. The is_test flag is used to select between test and
- * production database/collection values.  database_name is stored in the RequestEnvironmentContext so that it can be changed,
- * keeping CatanSecrets read only.
- */
-#[derive(Clone)]
-pub struct RequestEnvironmentContext {
-    pub is_test: bool,
-    pub database_name: String,
-    pub env: &'static ConfigEnvironmentVariables,
-}
-
-impl RequestEnvironmentContext {
-    fn new(is_test: bool, catan_env: &'static ConfigEnvironmentVariables) -> Self {
-        let mut db_name: String = catan_env.database_name.clone();
-        if is_test {
-            db_name += "-test";
-        }
-        Self {
-            database_name: db_name,
-            is_test,
-            env: catan_env,
-        }
-    }
-    pub fn create(is_test: bool) -> Self {
-        return Self::new(is_test, &CATAN_ENV);
-    }
-}
-
-/**
- * ServiceEnvironmentContext: This struct contains a Mutex<RequestEnvironmentContext> which allows safe, mutable access
- * to the RequestEnvironmentContext from multiple threads. An instance of ServiceEnvironmentContext is created at the
- * start of the application and is stored as shared application data. This ServiceEnvironmentContext is then updated by
- * the ServiceEnvironmentContextMiddleware during each request. "env" is write once, so it is set outside the mutex
- */
-pub struct ServiceEnvironmentContext {
-    pub context: Mutex<RequestEnvironmentContext>,
-    pub env: &'static ConfigEnvironmentVariables,
-}
-
-impl ServiceEnvironmentContext {
-    pub fn new() -> Self {
-        Self {
-            context: Mutex::new(RequestEnvironmentContext::new(false, &CATAN_ENV)),
-            env: &*CATAN_ENV,
-        }
-    }
+    
 }

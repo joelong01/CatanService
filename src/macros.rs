@@ -62,14 +62,18 @@ macro_rules! serialize_as_array {
 
 #[macro_export]
 macro_rules! setup_test {
-    ($app:expr) => {{
+    ($app:expr, $use_cosmos_db:expr) => {{
         use actix_web::http::header;
         use actix_web::test;
 
+        let test_context = TestContext::new($use_cosmos_db);
         let request = test::TestRequest::post()
             .uri("/api/v1/test/setup")
             .append_header((header::CONTENT_TYPE, "application/json"))
-            .append_header((GameHeader::IS_TEST, "true"))
+            .append_header((
+                GameHeader::TEST,
+                serde_json::to_string(&test_context).expect("JSON should serialize!"),
+            ))
             .to_request();
 
         let response = test::call_service($app, request).await;
@@ -77,22 +81,23 @@ macro_rules! setup_test {
     }};
 }
 
+
 #[macro_export]
 macro_rules! create_app {
     () => {{
         use crate::create_unauthenticated_service;
         use crate::AuthenticationMiddlewareFactory;
-        use crate::EnvironmentMiddleWareFactory;
         use actix_cors::Cors;
         use actix_web::{middleware::Logger, web, App};
 
-        use crate::ServiceEnvironmentContext;
+
         use crate::{game_service, lobby_service, longpoll_service, profile_service, user_service, action_service};
-        use actix_web::web::Data;
+
+        use crate::middleware::environment_mw::RequestContextMiddleware;
+        
         App::new()
             .wrap(Logger::default())
-            .app_data(Data::new(ServiceEnvironmentContext::new()))
-            .wrap(EnvironmentMiddleWareFactory)
+            .wrap(RequestContextMiddleware)
             .wrap(Cors::permissive())
             .service(create_unauthenticated_service()) // Make sure this function is in scope
             .service(

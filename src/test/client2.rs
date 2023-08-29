@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use crate::games_service::game_container::game_messages::InvitationResponseData;
 
+use crate::middleware::environment_mw::TestContext;
 use crate::{crack_game_update, wait_for_message};
 use crate::{
     games_service::game_container::game_messages::CatanMessage, log_thread_info,
@@ -30,7 +31,7 @@ impl ClientThreadHandler for Handler2 {
 }
 
 pub(crate) async fn client2_thread(mut rx: Receiver<CatanMessage>) {
-    let proxy = ServiceProxy::new(true, HOST_URL);
+    let proxy = ServiceProxy::new(Some(TestContext{use_cosmos_db: false}), HOST_URL);
     let auth_token = proxy
         .login("doug@longshotdev.com", "password")
         .await

@@ -18,9 +18,7 @@ use games_service::game_handlers;
 use lazy_static::lazy_static;
 use log::error;
 use middleware::authn_mw::AuthenticationMiddlewareFactory;
-use middleware::environment_mw::{
-    EnvironmentMiddleWareFactory, ServiceEnvironmentContext, CATAN_ENV,
-};
+use middleware::environment_mw::CATAN_ENV;
 use once_cell::sync::OnceCell;
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
 use std::env;
@@ -283,7 +281,7 @@ mod tests {
         create_test_service,
         games_service::game_container::game_messages::GameHeader,
         init_env_logger, setup_test,
-        shared::models::{ClientUser, ServiceResponse, UserProfile},
+        shared::models::{ClientUser, ServiceResponse, UserProfile}, middleware::environment_mw::TestContext,
     };
 
     use actix_web::{http::header, test};
@@ -309,7 +307,7 @@ mod tests {
     #[actix_rt::test]
     async fn create_user_login_check_profile() {
         let mut app = create_test_service!();
-        setup_test!(&app);
+        setup_test!(&app, false);
 
         const USER_1_PASSWORD: &'static str = "password";
 
@@ -329,7 +327,7 @@ mod tests {
         let req = test::TestRequest::post()
             .uri("/api/v1/users/register")
             .append_header((header::CONTENT_TYPE, "application/json"))
-            .append_header((GameHeader::IS_TEST, "true"))
+            .append_header((GameHeader::TEST, TestContext::as_json(false)))
             .append_header((GameHeader::PASSWORD, USER_1_PASSWORD))
             .set_json(&user1_profile)
             .to_request();
@@ -367,7 +365,7 @@ mod tests {
 
         let req = test::TestRequest::post()
             .uri("/api/v1/users/login")
-            .append_header((GameHeader::IS_TEST, "true"))
+            .append_header((GameHeader::TEST, TestContext::as_json(false)))
             .append_header((GameHeader::PASSWORD, USER_1_PASSWORD))
             .append_header((GameHeader::EMAIL, user1_profile.email.clone()))
             .to_request();
@@ -386,7 +384,7 @@ mod tests {
         let req = test::TestRequest::get()
             .uri("/auth/api/v1/profile")
             .append_header((header::CONTENT_TYPE, "application/json"))
-            .append_header((GameHeader::IS_TEST, "true"))
+            .append_header((GameHeader::TEST, TestContext::as_json(false)))
             .append_header(("Authorization", auth_token))
             .to_request();
 
@@ -424,6 +422,6 @@ mod tests {
     #[actix_rt::test]
     pub async fn find_or_create_test_db() {
         let app = create_test_service!();
-        setup_test!(&app);
+        setup_test!(&app, false);
     }
 }

@@ -28,7 +28,7 @@ impl FromRequest for HeadersExtractor {
         let password = headers
             .get(GameHeader::PASSWORD)
             .and_then(|v| v.to_str().ok().map(String::from));
-        let is_test = headers.contains_key(GameHeader::IS_TEST);
+        let is_test = headers.contains_key(GameHeader::TEST);
         let email = headers
             .get(GameHeader::EMAIL)
             .and_then(|v| v.to_str().ok().map(String::from));

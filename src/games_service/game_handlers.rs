@@ -1,9 +1,9 @@
 use crate::{
-    get_header_value, middleware::environment_mw::ServiceEnvironmentContext,
-    shared::header_extractor::HeadersExtractor,
+    get_header_value,
+    shared::header_extractor::HeadersExtractor, middleware::environment_mw::RequestContext,
 };
 use actix_web::{
-    web::{self, Data, Path},
+    web::{self, Path},
     HttpResponse,
 };
 
@@ -29,14 +29,14 @@ pub async fn shuffle_game(game_id: web::Path<String>) -> HttpResponse {
 /// cames can be run at the same time.
 pub async fn new_game(
     game_type: Path<CatanGames>,
-    data: Data<ServiceEnvironmentContext>,
     headers: HeadersExtractor,
     test_game: Option<web::Json<RegularGame>>,
+    request_context: RequestContext
 ) -> HttpResponse {
     let game_type = game_type.into_inner();
     let user_id = get_header_value!(user_id, headers);
     let test_game: Option<RegularGame> = test_game.map(|json_game| json_game.into_inner());
-    super::game::new_game(game_type, &user_id, headers.is_test, test_game, data)
+    super::game::new_game(game_type, &user_id, headers.is_test, test_game, request_context)
         .await
         .map(|sr| sr.to_http_response())
         .unwrap_or_else(|sr| sr.to_http_response())

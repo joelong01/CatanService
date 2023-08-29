@@ -1,13 +1,13 @@
 use crate::{
     get_header_value,
-    middleware::environment_mw::ServiceEnvironmentContext,
+    middleware::environment_mw::RequestContext,
     shared::{
         header_extractor::HeadersExtractor,
         models::{ServiceResponse, UserProfile, GameError, ResponseType},
     },
 };
 use actix_web::{
-    web::{self, Data},
+    web::{self},
     HttpResponse, Responder,
 };
 use reqwest::StatusCode;
@@ -23,15 +23,10 @@ use super::users::{login, register, setup};
 
 // Set up the service
 pub async fn setup_handler(
-    headers: HeadersExtractor,
-    data: Data<ServiceEnvironmentContext>,
+    request_context: RequestContext,
 ) -> HttpResponse {
-    let request_context = data.context.lock().unwrap();
-    setup(
-        headers.is_test,
-        &request_context.database_name,
-        &request_context.env.container_name,
-    )
+   
+    setup(&request_context)
     .await
     .map(|sr| sr.to_http_response())
     .unwrap_or_else(|sr| sr.to_http_response())
@@ -40,44 +35,44 @@ pub async fn setup_handler(
 // Register a new user
 pub async fn register_handler(
     profile_in: web::Json<UserProfile>,
-    data: Data<ServiceEnvironmentContext>,
+    request_context: RequestContext,
     headers: HeadersExtractor,
 ) -> impl Responder {
     let password = get_header_value!(password, headers);
-    register(headers.is_test, &password, &profile_in, &data).await
+    register( &password, &profile_in, &request_context).await
     .map(|sr| sr.to_http_response())
     .unwrap_or_else(|sr| sr.to_http_response())
 }
 
 // User login
 pub async fn login_handler(
-    data: Data<ServiceEnvironmentContext>,
+    request_context: RequestContext,
     headers: HeadersExtractor,
 ) -> HttpResponse {
     let password = get_header_value!(password, headers);
     let username = get_header_value!(email, headers);
-    login(&username, &password, headers.is_test, &data).await
+    login(&username, &password, &request_context).await
     .map(|sr| sr.to_http_response())
     .unwrap_or_else(|sr| sr.to_http_response())
 }
 
 // List users
 pub async fn list_users_handler(
-    data: Data<ServiceEnvironmentContext>,
-    headers: HeadersExtractor,
+    request_context: RequestContext,
+
 ) -> HttpResponse {
-    super::users::list_users(&data, headers.is_test).await
+    super::users::list_users(&request_context).await
     .map(|sr| sr.to_http_response())
     .unwrap_or_else(|sr| sr.to_http_response())
 }
 
 // Get user profile
 pub async fn get_profile_handler(
-    data: Data<ServiceEnvironmentContext>,
+    request_context: RequestContext,
     headers: HeadersExtractor,
 ) -> HttpResponse {
     let user_id = get_header_value!(user_id, headers);
-    super::users::get_profile(&user_id, headers.is_test, &data).await
+    super::users::get_profile(&user_id,  &request_context).await
     .map(|sr| sr.to_http_response())
     .unwrap_or_else(|sr| sr.to_http_response())
 }
@@ -85,10 +80,9 @@ pub async fn get_profile_handler(
 // Find user by ID
 pub async fn find_user_by_id_handler(
     id: web::Path<String>,
-    data: Data<ServiceEnvironmentContext>,
-    headers: HeadersExtractor,
+    request_context: RequestContext,
 ) -> HttpResponse {
-    super::users::find_user_by_id(&id, headers.is_test, &data).await
+    super::users::find_user_by_id(&id, &request_context).await
     .map(|sr| sr.to_http_response())
     .unwrap_or_else(|sr| sr.to_http_response())
 }
@@ -96,11 +90,11 @@ pub async fn find_user_by_id_handler(
 // Delete user
 pub async fn delete_handler(
     id: web::Path<String>,
-    data: Data<ServiceEnvironmentContext>,
+    request_context: RequestContext,
     headers: HeadersExtractor,
 ) -> HttpResponse {
     let user_id = get_header_value!(user_id, headers);
-    super::users::delete(&id, &user_id, headers.is_test, &data).await
+    super::users::delete(&id, &user_id, &request_context).await
     .map(|sr| sr.to_http_response())
     .unwrap_or_else(|sr| sr.to_http_response())
 }

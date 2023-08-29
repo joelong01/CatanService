@@ -15,6 +15,8 @@ use futures::{
 
 use reqwest::header::{HeaderName, HeaderValue};
 
+use super::environment_mw::CATAN_ENV;
+
 // AuthenticationMiddlewareFactory serves as a factory to create instances of AuthenticationMiddleware
 // which is the actual middleware component. It implements the Transform trait required by
 // Actix to apply transformations to requests/responses as they pass through the middleware.
@@ -75,7 +77,7 @@ where
         match auth_header {
             Some(header_value) => {
                 let token_str = header_value.to_str().unwrap_or("").replace("Bearer ", "");
-                if let Some(claims) = validate_jwt_token(&token_str) {
+                if let Some(claims) = validate_jwt_token(&token_str, &CATAN_ENV.login_secret_key) {
                     // Extract the id and sub from the claims
                     let id = &claims.claims.id;
                     let sub = &claims.claims.sub;

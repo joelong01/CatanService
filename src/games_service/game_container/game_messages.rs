@@ -23,7 +23,7 @@ pub struct GameHeader {
     game_id: String,
     user_id: String,
     password: String,
-    is_test: String,
+    test: String,
     email: String,
 }
 
@@ -31,7 +31,7 @@ impl GameHeader {
     pub const GAME_ID: &'static str = "x-game-id";
     pub const USER_ID: &'static str = "x-user-id";
     pub const PASSWORD: &'static str = "x-password";
-    pub const IS_TEST: &'static str = "x-is-test";
+    pub const TEST: &'static str = "x-test";
     pub const EMAIL: &'static str = "x-email";
 }
 

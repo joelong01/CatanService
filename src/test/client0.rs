@@ -10,7 +10,7 @@ use crate::{
     },
     log_thread_info,
     shared::models::ClientUser,
-    trace_thread_info, wait_for_message,
+    trace_thread_info, wait_for_message, middleware::environment_mw::TestContext,
 };
 use crate::{
     games_service::shared::game_enums::CatanGames, shared::proxy::ServiceProxy,
@@ -36,7 +36,7 @@ impl ClientThreadHandler for Handler0 {
  *  thread
  */
 pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
-    let proxy = ServiceProxy::new(true, HOST_URL);
+    let proxy = ServiceProxy::new(Some(TestContext{use_cosmos_db: false}), HOST_URL);
     let auth_token = proxy
         .login("joe@longshotdev.com", "password")
         .await
