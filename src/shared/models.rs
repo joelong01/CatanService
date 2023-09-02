@@ -424,6 +424,7 @@ pub struct ConfigEnvironmentVariables {
     pub database_name: String,
     pub container_name: String,
     pub rust_log: String,
+    pub kv_name: String
 }
 
 impl ConfigEnvironmentVariables {
@@ -443,6 +444,7 @@ impl ConfigEnvironmentVariables {
         let container_name = env::var("USER_DATABASE_NAME")
             .context("USER_DATABASE_NAME not found in environment")?;
         let rust_log = env::var("RUST_LOG").context("RUST_LOG not found in environment")?;
+        let kv_name = env::var("KEV_VAULT_NAME").context("KEV_VAULT_NAME not found in environment")?;
 
         Ok(Self {
             cosmos_token,
@@ -453,6 +455,8 @@ impl ConfigEnvironmentVariables {
             database_name,
             container_name,
             rust_log,
+            kv_name
+
         })
     }
 
@@ -465,6 +469,7 @@ impl ConfigEnvironmentVariables {
         log::info!("database_name: {}", self.database_name);
         log::info!("container_name: {}", self.container_name);
         log::info!("rust_log: {}", self.rust_log);
+        log::info!("kv_name: {}", self.kv_name);
     }
 }
 impl Default for ConfigEnvironmentVariables {
@@ -478,6 +483,7 @@ impl Default for ConfigEnvironmentVariables {
             database_name: "Users-Database".to_owned(),
             container_name: "User-Container".to_owned(),
             rust_log: "actix_web=trace,actix_server=trace,rust=trace".to_owned(),
+            kv_name:String::new()
         }
     }
 }

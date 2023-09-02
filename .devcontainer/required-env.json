@@ -4,6 +4,12 @@
     },
     "secrets": [
         {
+            "environmentVariable": "KEV_VAULT_NAME",
+            "description": "the name of the keyvault used by the app",
+            "shellscript": "",
+            "default": ""
+        },
+        {
             "environmentVariable": "COSMOS_ACCOUNT_NAME",
             "description": "the Cosmosdb account name",
             "shellscript": "",

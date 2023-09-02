@@ -2,6 +2,7 @@
 #![allow(unused_variables)]
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use rand::RngCore;
 
 /**
  * this module implements the WebApi to create the database/collection, list all the users, and to create/find/delete
@@ -259,7 +260,15 @@ pub async fn login(
     }
 }
 
-fn create_jwt_token(
+pub fn generate_jwt_key() -> String {
+    let mut key = [0u8; 96];  // 96 bytes * 8 bits/byte = 768 bits.
+    rand::thread_rng().fill_bytes(&mut key);
+    openssl::base64::encode_block(&key)
+}
+
+
+
+pub fn create_jwt_token(
     id: &str,
     email: &str,
     secret_key: &str,
