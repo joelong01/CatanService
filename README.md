@@ -7,3 +7,8 @@ test/test.sh will test the WebAPI
 src/cosmos_db.rs has a test that directly tests the cosmos abstraction
 
 
+Dependencies (required executables that the service uses)
+
+- Azure CLI
+- Azure CLI Communications Services Extension
+- Python

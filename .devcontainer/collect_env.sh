@@ -44,7 +44,10 @@ function get_real_path() {
 }
 
 # a this is a config file in json format where we use jq to find/store settings
-REQUIRED_REPO_ENV_VARS=$(get_real_path "required-env.json")
+# we pushd to the directory that has the script -- so it needs to be in the same directory as $0 (collect_env.sh)
+REQUIRED_REPO_ENV_VARS="./required-env.json" 
+
+#this is where we put the environment variables to be loaded by the shell 
 LOCAL_REQUIRED_ENV_FILE="$HOME/.localDevEnv.sh"
 USE_GITHUB_USER_SECRETS=$(jq -r '.options.useGitHubUserSecrets' "$REQUIRED_REPO_ENV_VARS" 2>/dev/null)
 
@@ -376,8 +379,14 @@ help)
     ;;
 update)
     echo_info "running update"
+    devcontainer_dir="$(dirname "$0")"
+    echo_info "devcontainer_dir: $devcontainer_dir"
+    pushd "$devcontainer_dir" > /dev/null || 
+    { 
+        echo_error "Unable to change directory to $(dirname "$REQUIRED_REPO_ENV_VARS")"; exit 
+    }
     update_vars
-
+    popd > /dev/null || exit
     ;;
 setup)
     initial_setup

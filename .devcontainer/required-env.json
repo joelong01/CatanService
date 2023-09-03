@@ -63,5 +63,12 @@
             "shellscript": ".devcontainer/get_azure_email_info.sh",
             "default": ""
         }
+        ,
+        {
+            "environmentVariable": "TEST_PHONE_NUMBER",
+            "description": "the phone number to use in tests",
+            "shellscript": "",
+            "default": ""
+        }
     ]
 }
