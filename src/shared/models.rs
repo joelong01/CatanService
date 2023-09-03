@@ -36,7 +36,6 @@ pub enum GameError {
     ReqwestError(String),
     NoError,
     HttpError,
-
 }
 impl From<reqwest::Error> for GameError {
     fn from(err: reqwest::Error) -> Self {
@@ -136,6 +135,7 @@ pub struct UserProfile {
     pub first_name: String,
     pub last_name: String,
     pub display_name: String,
+    pub phone_number: String,
     pub picture_url: String,
     pub foreground_color: String,
     pub background_color: String,
@@ -149,6 +149,7 @@ impl Default for UserProfile {
             email: String::default(),
             first_name: String::default(),
             last_name: String::default(),
+            phone_number: String::default(),
             display_name: String::default(),
             picture_url: String::default(),
             foreground_color: String::default(),
@@ -166,6 +167,7 @@ impl UserProfile {
             && self.first_name == other.first_name
             && self.last_name == other.last_name
             && self.display_name == other.display_name
+            && self.phone_number == other.phone_number
             && self.picture_url == other.picture_url
             && self.foreground_color == other.foreground_color
             && self.background_color == other.background_color
@@ -192,6 +194,7 @@ impl UserProfile {
             last_name: random_name.clone(),
             display_name: random_name,
             picture_url: String::default(),
+            phone_number: String::default(),
             foreground_color: String::default(),
             background_color: String::default(),
             text_color: String::default(),
@@ -246,7 +249,7 @@ pub enum ResponseType {
     Game(RegularGame),
     SupportedGames(Vec<CatanGames>),
     SendMessageError(Vec<(String, GameError)>),
-    ServiceMessage(CatanMessage)
+    ServiceMessage(CatanMessage),
 }
 
 /**
@@ -278,16 +281,16 @@ impl ServiceResponse {
     }
 
     pub fn new_generic_ok(msg: &str) -> Self {
-        ServiceResponse{
+        ServiceResponse {
             message: msg.to_owned(),
             status: StatusCode::OK,
             response_type: ResponseType::NoData,
-            game_error: GameError::NoError
+            game_error: GameError::NoError,
         }
     }
 
     pub fn assert_success(&self, msg: &str) -> &Self {
-        if !self.status.is_success(){
+        if !self.status.is_success() {
             panic!("{}", msg.to_string());
         }
 
@@ -295,11 +298,11 @@ impl ServiceResponse {
     }
 
     pub fn new_bad_id(msg: &str, id: &str) -> Self {
-        ServiceResponse{
+        ServiceResponse {
             message: msg.to_owned(),
             status: StatusCode::BAD_REQUEST,
             response_type: ResponseType::NoData,
-            game_error: GameError::BadId(id.to_owned())
+            game_error: GameError::BadId(id.to_owned()),
         }
     }
 
@@ -343,12 +346,10 @@ impl ServiceResponse {
             Ok(sr) => sr,
             Err(_) => return None,
         };
-        match service_response.get_authtoken(){
+        match service_response.get_authtoken() {
             Some(token) => Some((service_response, token)),
             None => None,
         }
-
-     
     }
     pub fn get_authtoken(&self) -> Option<String> {
         // Extract auth token from response
@@ -418,17 +419,23 @@ where
 pub struct ConfigEnvironmentVariables {
     pub cosmos_token: String,
     pub cosmos_account: String,
+    pub user_database_name: String,
+    pub user_container_name: String,
+
     pub ssl_key_location: String,
     pub ssl_cert_location: String,
     pub login_secret_key: String,
-    pub database_name: String,
-    pub container_name: String,
+
     pub rust_log: String,
-    pub kv_name: String
+    pub kv_name: String,
+    pub test_phone_number: String,
+    pub resource_group: String,
 }
 
 impl ConfigEnvironmentVariables {
     pub fn load_from_env() -> Result<Self> {
+        let resource_group = env::var("AZURE_RESOURCE_GROUP")
+            .context("AZURE_RESOURCE_GROUP not found in environment")?;
         let cosmos_token =
             env::var("COSMOS_AUTH_TOKEN").context("COSMOS_AUTH_TOKEN not found in environment")?;
         let cosmos_account = env::var("COSMOS_ACCOUNT_NAME")
@@ -439,12 +446,15 @@ impl ConfigEnvironmentVariables {
             env::var("SSL_CERT_FILE").context("SSL_CERT_FILE not found in environment")?;
         let login_secret_key =
             env::var("LOGIN_SECRET_KEY").context("LOGIN_SECRET_KEY not found in environment")?;
-        let database_name = env::var("USER_DATABASE_NAME")
+        let user_database_name = env::var("USER_DATABASE_NAME")
             .context("USER_DATABASE_NAME not found in environment")?;
-        let container_name = env::var("USER_DATABASE_NAME")
-            .context("USER_DATABASE_NAME not found in environment")?;
+        let user_container_name = env::var("USER_CONTAINER_NAME")
+            .context("USER_CONTAINER_NAME not found in environment")?;
         let rust_log = env::var("RUST_LOG").context("RUST_LOG not found in environment")?;
-        let kv_name = env::var("KEV_VAULT_NAME").context("KEV_VAULT_NAME not found in environment")?;
+        let kv_name =
+            env::var("KEV_VAULT_NAME").context("KEV_VAULT_NAME not found in environment")?;
+        let test_phone_number =
+            env::var("TEST_PHONE_NUMBER").context("TEST_PHONE_NUMBER not found in environment")?;
 
         Ok(Self {
             cosmos_token,
@@ -452,11 +462,12 @@ impl ConfigEnvironmentVariables {
             ssl_key_location,
             ssl_cert_location,
             login_secret_key,
-            database_name,
-            container_name,
+            user_database_name,
+            user_container_name,
             rust_log,
-            kv_name
-
+            kv_name,
+            test_phone_number,
+            resource_group,
         })
     }
 
@@ -466,24 +477,27 @@ impl ConfigEnvironmentVariables {
         log::info!("ssl_key_location: {}", self.ssl_key_location);
         log::info!("ssl_cert_location: {}", self.ssl_cert_location);
         log::info!("login_secret_key: {}", self.login_secret_key);
-        log::info!("database_name: {}", self.database_name);
-        log::info!("container_name: {}", self.container_name);
+        log::info!("database_name: {}", self.user_database_name);
+        log::info!("container_name: {}", self.user_container_name);
         log::info!("rust_log: {}", self.rust_log);
         log::info!("kv_name: {}", self.kv_name);
+        log::info!("test_phone_number: {}", self.test_phone_number);
     }
 }
 impl Default for ConfigEnvironmentVariables {
     fn default() -> Self {
         Self {
-            cosmos_token: String::new(),
-            cosmos_account: String::new(),
-            ssl_key_location: String::new(),
-            ssl_cert_location: String::new(),
-            login_secret_key: String::new(),
-            database_name: "Users-Database".to_owned(),
-            container_name: "User-Container".to_owned(),
+            cosmos_token: String::default(),
+            cosmos_account: "user-cosmos-account".to_owned(),
+            ssl_key_location: String::default(),
+            ssl_cert_location: String::default(),
+            login_secret_key: String::default(),
+            user_database_name: "Users-Database".to_owned(),
+            user_container_name: "User-Container".to_owned(),
             rust_log: "actix_web=trace,actix_server=trace,rust=trace".to_owned(),
-            kv_name:String::new()
+            kv_name: String::default(),
+            test_phone_number: String::default(),
+            resource_group: "catan-rg".to_owned(),
         }
     }
 }

@@ -10,17 +10,31 @@
             "default": ""
         },
         {
+            "environmentVariable": "AZURE_RESOURCE_GROUP",
+            "description": "the Azure Resource Group for the app:",
+            "shellscript": "",
+            "default": "CosmosDb_test"
+        },
+
+        {
             "environmentVariable": "COSMOS_ACCOUNT_NAME",
             "description": "the Cosmosdb account name",
             "shellscript": "",
             "default": "players-account"
         },
         {
-            "environmentVariable": "AZURE_RESOURCE_GROUP",
-            "description": "the Azure Resource Group for the app:",
+            "environmentVariable": "USER_DATABASE_NAME",
+            "description": "the name of the User database",
             "shellscript": "",
-            "default": "CosmosDb_test"
+            "default": "Users-db"
         },
+        {
+            "environmentVariable": "USER_CONTAINER_NAME",
+            "description": "the name of the User Container",
+            "shellscript": "",
+            "default": "Users-db"
+        },
+     
         {
             "environmentVariable": "COSMOS_AUTH_TOKEN",
             "description": "the Cosmosdb authentication token (look for 'Keys' in the Azure Portal)",
@@ -51,12 +65,7 @@
             "shellscript": "",
             "default": "actix_web=trace,actix_server=trace,rust=trace"
         },
-        {
-            "environmentVariable": "USER_DATABASE_NAME",
-            "description": "the name of the User database",
-            "shellscript": "",
-            "default": "Users-db"
-        },
+      
         {
             "environmentVariable": "AZURE_COMMUNICATION_CONNECTION_STRING",
             "description": "the azure communication connection string",
@@ -66,7 +75,13 @@
         ,
         {
             "environmentVariable": "TEST_PHONE_NUMBER",
-            "description": "the phone number to use in tests",
+            "description": "the phone number to use in tests (*to*)",
+            "shellscript": "",
+            "default": ""
+        },
+        {
+            "environmentVariable": "SERVICE_PHONE_NUMBER",
+            "description": "the phone number that the service uses (*from*):",
             "shellscript": "",
             "default": ""
         }

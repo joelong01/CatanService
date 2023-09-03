@@ -92,7 +92,7 @@ mod tests {
 
     use crate::{
         init_env_logger,
-        shared::{models::UserProfile, utility::get_id},
+        shared::{models::UserProfile, utility::get_id}, middleware::environment_mw::CATAN_ENV,
     };
 
     use super::*;
@@ -185,6 +185,7 @@ mod tests {
                     first_name: format!("Test{}", i),
                     last_name: format!("User{}", i),
                     display_name: format!("Test User{}", i),
+                    phone_number: CATAN_ENV.test_phone_number.to_owned(),
                     picture_url: format!("https://example.com/pic{}.jpg", i),
                     foreground_color: format!("#00000{}", i),
                     background_color: format!("#FFFFFF{}", i),

@@ -318,6 +318,7 @@ mod tests {
             first_name: "Test".into(),
             last_name: "User".into(),
             display_name: "TestUser".into(),
+            phone_number: crate::middleware::environment_mw::CATAN_ENV.test_phone_number.to_owned(),
             picture_url: "https://example.com/photo.jpg".into(),
             foreground_color: "#000000".into(),
             background_color: "#FFFFFF".into(),

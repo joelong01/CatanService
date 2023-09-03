@@ -1,9 +1,12 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
+use rand::RngCore;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use rand::RngCore;
 
+use crate::azure_setup::azure_wrapper::{
+    cosmos_account_exists, cosmos_container_exists, cosmos_database_exists,
+};
 /**
  * this module implements the WebApi to create the database/collection, list all the users, and to create/find/delete
  * a User document in CosmosDb
@@ -53,6 +56,53 @@ pub async fn setup(context: &RequestContext) -> Result<ServiceResponse, ServiceR
     };
 
     if use_cosmos_db {
+        if cosmos_account_exists(&context.env.cosmos_account, &context.env.resource_group).is_err()
+        {
+            return Err(ServiceResponse::new(
+                &format!("account {} does not exist", context.env.cosmos_account),
+                StatusCode::NOT_FOUND,
+                ResponseType::NoData,
+                GameError::HttpError,
+            ));
+        }
+
+        if cosmos_database_exists(
+            &context.env.cosmos_account,
+            &context.env.user_container_name,
+            &context.env.resource_group,
+        )
+        .is_err()
+        {
+            return Err(ServiceResponse::new(
+                &format!(
+                    "account {} does exists, but database {} does not",
+                    context.env.cosmos_account, context.env.user_container_name
+                ),
+                StatusCode::NOT_FOUND,
+                ResponseType::NoData,
+                GameError::HttpError,
+            ));
+        }
+
+        if cosmos_container_exists(
+            &context.env.cosmos_account,
+            &context.env.user_database_name,
+            &context.env.user_container_name,
+            &context.env.resource_group,
+        )
+        .is_err()
+        {
+            return Err(ServiceResponse::new(
+                &format!(
+                    "account {} does exists, but database {} does not",
+                    context.env.cosmos_account, context.env.user_container_name
+                ),
+                StatusCode::NOT_FOUND,
+                ResponseType::NoData,
+                GameError::HttpError,
+            ));
+        }
+
         return Ok(ServiceResponse::new(
             "already exists",
             StatusCode::ACCEPTED,
@@ -261,12 +311,10 @@ pub async fn login(
 }
 
 pub fn generate_jwt_key() -> String {
-    let mut key = [0u8; 96];  // 96 bytes * 8 bits/byte = 768 bits.
+    let mut key = [0u8; 96]; // 96 bytes * 8 bits/byte = 768 bits.
     rand::thread_rng().fill_bytes(&mut key);
     openssl::base64::encode_block(&key)
 }
-
-
 
 pub fn create_jwt_token(
     id: &str,
@@ -489,7 +537,6 @@ mod tests {
     // Test JWT token creation and validation
     #[test]
     fn test_jwt_token_creation_and_validation() {
-     
         let token = create_jwt_token("user_id", "user_email", &CATAN_ENV.login_secret_key).unwrap();
         assert!(validate_jwt_token(&token, &CATAN_ENV.login_secret_key).is_some());
     }

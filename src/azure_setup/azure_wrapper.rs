@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+#![allow(unused_imports)]
 use once_cell::sync::Lazy;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
@@ -222,7 +223,7 @@ pub fn is_location_valid(location: &str) -> Result<bool, String> {
     Ok(false)
 }
 
-pub fn create_cosmosdb_account(
+pub fn create_cosmos_account(
     resource_group_name: &str,
     db_name: &str,
     location: &str,
@@ -231,7 +232,7 @@ pub fn create_cosmosdb_account(
         return Err(format!("Invalid location: {}", location));
     }
 
-    if cosmosdb_account_exists(db_name, resource_group_name)? {
+    if cosmos_account_exists(db_name, resource_group_name)? {
         return Ok(());
     }
 
@@ -260,7 +261,7 @@ pub fn create_cosmosdb_account(
         Err(error) => Err(error),
     }
 }
-pub fn delete_cosmosdb_account(
+pub fn delete_cosmos_account(
     cosmos_db_name: &str,
     resource_group_name: &str,
 ) -> Result<(), String> {
@@ -280,7 +281,7 @@ pub fn delete_cosmosdb_account(
     }
 }
 
-fn cosmosdb_account_exists(
+pub fn cosmos_account_exists(
     cosmos_db_name: &str,
     resource_group_name: &str,
 ) -> Result<bool, String> {
@@ -307,7 +308,7 @@ fn cosmosdb_account_exists(
     }
 }
 
-pub fn get_cosmosdb_secrets(
+pub fn get_cosmos_secrets(
     cosmos_db_name: &str,
     resource_group: &str,
 ) -> Result<Vec<CosmosSecret>, String> {
@@ -366,7 +367,7 @@ pub fn create_database(
     database_name: &str,
     resource_group: &str,
 ) -> Result<(), String> {
-    if database_exists(account_name, database_name, resource_group)? {
+    if cosmos_database_exists(account_name, database_name, resource_group)? {
         println!("Database {} already exists.", database_name);
         return Ok(());
     }
@@ -392,7 +393,7 @@ pub fn create_database(
     }
 }
 
-fn database_exists(
+pub fn cosmos_database_exists(
     account_name: &str,
     database_name: &str,
     resource_group: &str,
@@ -415,14 +416,14 @@ fn database_exists(
         Err(_) => Ok(false),
     }
 }
-pub fn create_collection(
+pub fn create_container(
     account_name: &str,
     database_name: &str,
-    collection_name: &str,
+    container_name: &str,
     resource_group: &str,
 ) -> Result<(), String> {
-    if collection_exists(account_name, database_name, collection_name, resource_group)? {
-        println!("Collection {} already exists", collection_name);
+    if cosmos_container_exists(account_name, database_name, container_name, resource_group)? {
+        println!("Container {} already exists", container_name);
         return Ok(());
     }
 
@@ -438,7 +439,7 @@ pub fn create_collection(
         .arg("--database-name")
         .arg(database_name)
         .arg("--name")
-        .arg(collection_name)
+        .arg(container_name)
         .arg("--resource-group")
         .arg(resource_group)
         .arg("--partition-key-path")
@@ -453,16 +454,16 @@ pub fn create_collection(
         Err(error) => {
             Err(format!(
                 "Failed to create Cosmos SQL container {} in database {} for account {} in resource group {}: {}",
-                collection_name, database_name, account_name, resource_group, error
+                container_name, database_name, account_name, resource_group, error
             ))
         }
     }
 }
 
-fn collection_exists(
+pub fn cosmos_container_exists(
     account_name: &str,
     database_name: &str,
-    collection_name: &str,
+    container_name: &str,
     resource_group: &str,
 ) -> Result<bool, String> {
     let mut command = Command::new("az");
@@ -476,7 +477,7 @@ fn collection_exists(
         .arg("--database-name")
         .arg(database_name)
         .arg("--name")
-        .arg(collection_name)
+        .arg(container_name)
         .arg("--resource-group")
         .arg(resource_group);
 
@@ -662,7 +663,7 @@ pub fn azure_resources_integration_test() {
 
     println!("creating cosmosdb: {}", cosmos_account_name);
     //Add a Cosmos DB instance to it
-    create_cosmosdb_account(&resource_group, &cosmos_account_name, location)
+    create_cosmos_account(&resource_group, &cosmos_account_name, location)
         .expect("Failed to create Cosmos DB instance.");
 
     println!("Creating database: {}", database_name);
@@ -670,7 +671,7 @@ pub fn azure_resources_integration_test() {
         .expect("creating a cosmos db should succeed");
     // Create a collection in the Cosmos DB instance
     println!("Creating collection: {}", collection_name);
-    create_collection(
+    create_container(
         &cosmos_account_name,
         &database_name,
         &collection_name,
@@ -679,7 +680,7 @@ pub fn azure_resources_integration_test() {
     .expect("Failed to create collection in Cosmos DB.");
 
     //Add the Cosmos DB secrets to Key Vault
-    let secrets = get_cosmosdb_secrets(&cosmos_account_name, &resource_group)
+    let secrets = get_cosmos_secrets(&cosmos_account_name, &resource_group)
         .expect("Failed to retrieve Cosmos DB secrets.");
 
     let secret = secrets
@@ -704,7 +705,7 @@ pub fn azure_resources_integration_test() {
         resource_group_exists(&resource_group).expect("Failed to check resource group existence.")
     );
     assert!(
-        cosmosdb_account_exists(&cosmos_account_name, &resource_group)
+        cosmos_account_exists(&cosmos_account_name, &resource_group)
             .expect("Failed to check Cosmos DB existence.")
     );
 
@@ -717,7 +718,7 @@ pub fn azure_resources_integration_test() {
     );
 
     // Delete Cosmos DB
-    delete_cosmosdb_account(&cosmos_account_name, &resource_group)
+    delete_cosmos_account(&cosmos_account_name, &resource_group)
         .expect("Failed to delete Cosmos DB.");
 
     // Clean up: Delete the test resource group (you can comment this out if you want to inspect resources)
