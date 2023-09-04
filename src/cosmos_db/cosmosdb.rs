@@ -16,7 +16,7 @@ use futures::StreamExt;
 use log::info;
 
 /**
- *  we have 3 cosmos container that we are currently using:  User, Profile, and (eventually) Game.
+ *  we have 3 cosmos collections that we are currently using:  User, Profile, and (eventually) Game.
  *  this just makes sure we consistently use them throughout the code.
  */
 #[derive(PartialEq, Eq, Hash)]

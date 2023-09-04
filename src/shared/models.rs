@@ -417,57 +417,67 @@ where
  */
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ConfigEnvironmentVariables {
+    pub resource_group: String,
+    pub kv_name: String,
+    pub azure_location: String,
+
     pub cosmos_token: String,
     pub cosmos_account: String,
-    pub user_database_name: String,
-    pub user_container_name: String,
+    pub cosmos_database: String,
+    pub cosmos_collections: Vec<String>,
 
     pub ssl_key_location: String,
     pub ssl_cert_location: String,
     pub login_secret_key: String,
 
     pub rust_log: String,
-    pub kv_name: String,
     pub test_phone_number: String,
-    pub resource_group: String,
+    pub service_phone_number: String,
 }
 
 impl ConfigEnvironmentVariables {
     pub fn load_from_env() -> Result<Self> {
         let resource_group = env::var("AZURE_RESOURCE_GROUP")
             .context("AZURE_RESOURCE_GROUP not found in environment")?;
+
+        let kv_name =
+            env::var("KEV_VAULT_NAME").context("KEV_VAULT_NAME not found in environment")?;
+
         let cosmos_token =
             env::var("COSMOS_AUTH_TOKEN").context("COSMOS_AUTH_TOKEN not found in environment")?;
         let cosmos_account = env::var("COSMOS_ACCOUNT_NAME")
             .context("COSMOS_ACCOUNT_NAME not found in environment")?;
+
+        let cosmos_database = env::var("COSMOS_DATABASE_NAME")
+            .context("COSMOS_DATABASE_NAME not found in environment")?;
+
         let ssl_key_location =
             env::var("SSL_KEY_FILE").context("SSL_KEY_FILE not found in environment")?;
         let ssl_cert_location =
             env::var("SSL_CERT_FILE").context("SSL_CERT_FILE not found in environment")?;
         let login_secret_key =
             env::var("LOGIN_SECRET_KEY").context("LOGIN_SECRET_KEY not found in environment")?;
-        let user_database_name = env::var("USER_DATABASE_NAME")
-            .context("USER_DATABASE_NAME not found in environment")?;
-        let user_container_name = env::var("USER_CONTAINER_NAME")
-            .context("USER_CONTAINER_NAME not found in environment")?;
+
         let rust_log = env::var("RUST_LOG").context("RUST_LOG not found in environment")?;
-        let kv_name =
-            env::var("KEV_VAULT_NAME").context("KEV_VAULT_NAME not found in environment")?;
         let test_phone_number =
             env::var("TEST_PHONE_NUMBER").context("TEST_PHONE_NUMBER not found in environment")?;
+        let service_phone_number = env::var("SERVICE_PHONE_NUMBER")
+            .context("SERVICE_PHONE_NUMBER not found in environment")?;
 
         Ok(Self {
+            resource_group,
+            kv_name,
+            test_phone_number,
+            service_phone_number,
+            azure_location: "West US 3".to_owned(),
             cosmos_token,
             cosmos_account,
             ssl_key_location,
             ssl_cert_location,
             login_secret_key,
-            user_database_name,
-            user_container_name,
+            cosmos_database,
+            cosmos_collections: vec!["Users-Collection".to_owned(), "GameCollection".to_owned()],
             rust_log,
-            kv_name,
-            test_phone_number,
-            resource_group,
         })
     }
 
@@ -477,8 +487,7 @@ impl ConfigEnvironmentVariables {
         log::info!("ssl_key_location: {}", self.ssl_key_location);
         log::info!("ssl_cert_location: {}", self.ssl_cert_location);
         log::info!("login_secret_key: {}", self.login_secret_key);
-        log::info!("database_name: {}", self.user_database_name);
-        log::info!("container_name: {}", self.user_container_name);
+        log::info!("database_name: {}", self.cosmos_database);
         log::info!("rust_log: {}", self.rust_log);
         log::info!("kv_name: {}", self.kv_name);
         log::info!("test_phone_number: {}", self.test_phone_number);
@@ -492,12 +501,15 @@ impl Default for ConfigEnvironmentVariables {
             ssl_key_location: String::default(),
             ssl_cert_location: String::default(),
             login_secret_key: String::default(),
-            user_database_name: "Users-Database".to_owned(),
-            user_container_name: "User-Container".to_owned(),
+            cosmos_database: "Users-Database".to_owned(),
+            cosmos_collections: vec!["Users-Collection".to_owned(), "GameCollection".to_owned()],
             rust_log: "actix_web=trace,actix_server=trace,rust=trace".to_owned(),
             kv_name: String::default(),
             test_phone_number: String::default(),
             resource_group: "catan-rg".to_owned(),
+            azure_location: "westus3".to_owned(),
+            service_phone_number: String::default(),
+
         }
     }
 }

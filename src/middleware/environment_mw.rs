@@ -71,8 +71,8 @@ impl RequestContext {
 
     pub fn database_name(&self) -> String {
         match self.test_context.clone() {
-            Some(_) => format!("{}-test", self.env.user_database_name),
-            None => self.env.user_database_name.clone()
+            Some(_) => format!("{}-test", self.env.cosmos_database),
+            None => self.env.cosmos_database.clone()
         }
     }
 }

@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::azure_setup::azure_wrapper::{
-    cosmos_account_exists, cosmos_container_exists, cosmos_database_exists,
+    cosmos_account_exists, cosmos_collection_exists, cosmos_database_exists,
 };
 /**
  * this module implements the WebApi to create the database/collection, list all the users, and to create/find/delete
@@ -68,7 +68,7 @@ pub async fn setup(context: &RequestContext) -> Result<ServiceResponse, ServiceR
 
         if cosmos_database_exists(
             &context.env.cosmos_account,
-            &context.env.user_container_name,
+            &context.env.cosmos_database,
             &context.env.resource_group,
         )
         .is_err()
@@ -76,32 +76,36 @@ pub async fn setup(context: &RequestContext) -> Result<ServiceResponse, ServiceR
             return Err(ServiceResponse::new(
                 &format!(
                     "account {} does exists, but database {} does not",
-                    context.env.cosmos_account, context.env.user_container_name
+                    context.env.cosmos_account, context.env.cosmos_database
                 ),
                 StatusCode::NOT_FOUND,
                 ResponseType::NoData,
                 GameError::HttpError,
             ));
         }
-
-        if cosmos_container_exists(
-            &context.env.cosmos_account,
-            &context.env.user_database_name,
-            &context.env.user_container_name,
-            &context.env.resource_group,
-        )
-        .is_err()
-        {
-            return Err(ServiceResponse::new(
-                &format!(
-                    "account {} does exists, but database {} does not",
-                    context.env.cosmos_account, context.env.user_container_name
-                ),
-                StatusCode::NOT_FOUND,
-                ResponseType::NoData,
-                GameError::HttpError,
-            ));
+        for collection in &context.env.cosmos_collections {
+            let collection_exists = cosmos_collection_exists(
+                &context.env.cosmos_account,
+                &context.env.cosmos_database,
+                &collection,
+                &context.env.resource_group,
+            );
+        
+            if collection_exists.is_err() {
+                let error_message = format!(
+                    "account {} exists, database {} exists, but {} does not",
+                    context.env.cosmos_account, context.env.cosmos_database, collection
+                );
+                
+                return Err(ServiceResponse::new(
+                    &error_message,
+                    StatusCode::NOT_FOUND,
+                    ResponseType::NoData,
+                    GameError::HttpError,
+                ));
+            }
         }
+        
 
         return Ok(ServiceResponse::new(
             "already exists",

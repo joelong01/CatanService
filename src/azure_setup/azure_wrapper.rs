@@ -8,6 +8,7 @@ use std::process::Command;
 use std::str;
 use std::sync::Mutex;
 
+use crate::middleware::environment_mw::CATAN_ENV;
 use crate::user_service::users::create_jwt_token;
 use crate::user_service::users::generate_jwt_key;
 use crate::user_service::users::validate_jwt_token;
@@ -416,14 +417,14 @@ pub fn cosmos_database_exists(
         Err(_) => Ok(false),
     }
 }
-pub fn create_container(
+pub fn create_collection(
     account_name: &str,
     database_name: &str,
-    container_name: &str,
+    collection_name: &str,
     resource_group: &str,
 ) -> Result<(), String> {
-    if cosmos_container_exists(account_name, database_name, container_name, resource_group)? {
-        println!("Container {} already exists", container_name);
+    if cosmos_collection_exists(account_name, database_name, collection_name, resource_group)? {
+        println!("Collection {} already exists", collection_name);
         return Ok(());
     }
 
@@ -439,7 +440,7 @@ pub fn create_container(
         .arg("--database-name")
         .arg(database_name)
         .arg("--name")
-        .arg(container_name)
+        .arg(collection_name)
         .arg("--resource-group")
         .arg(resource_group)
         .arg("--partition-key-path")
@@ -454,16 +455,16 @@ pub fn create_container(
         Err(error) => {
             Err(format!(
                 "Failed to create Cosmos SQL container {} in database {} for account {} in resource group {}: {}",
-                container_name, database_name, account_name, resource_group, error
+                collection_name, database_name, account_name, resource_group, error
             ))
         }
     }
 }
 
-pub fn cosmos_container_exists(
+pub fn cosmos_collection_exists(
     account_name: &str,
     database_name: &str,
-    container_name: &str,
+    collection_name: &str,
     resource_group: &str,
 ) -> Result<bool, String> {
     let mut command = Command::new("az");
@@ -477,7 +478,7 @@ pub fn cosmos_container_exists(
         .arg("--database-name")
         .arg(database_name)
         .arg("--name")
-        .arg(container_name)
+        .arg(collection_name)
         .arg("--resource-group")
         .arg(resource_group);
 
@@ -633,6 +634,30 @@ fn exec_os(command: &mut Command) -> Result<String, String> {
         Err(String::from_utf8_lossy(&output.stderr).into_owned())
     }
 }
+///
+///  az communication sms send --sender +18662361341  --recipient +12069152796 --message "Hey -- this is a test!"
+pub fn send_text_message(to: &str, msg: &str) -> Result<(), String> {
+    let mut command = Command::new("az");
+    command
+        .arg("communication")
+        .arg("sms")
+        .arg("send")
+        .arg("--sender")
+        .arg(&CATAN_ENV.service_phone_number)
+        .arg("--recipient")
+        .arg(to)
+        .arg("--message")
+        .arg(msg);
+
+    // Use exec_os to execute the command
+    match exec_os(&mut command) {
+        Ok(output) => {
+            println!("Output: {}", output);
+            Ok(())
+        }
+        Err(error) => Err(format!("Failed to send message. Error: {:#?}", error)),
+    }
+}
 
 // use crate::azure_setup::azure_wrapper::{
 //     create_collection, create_cosmos_db_instance, create_keyvault, create_resource_group,
@@ -641,10 +666,15 @@ fn exec_os(command: &mut Command) -> Result<String, String> {
 // };
 
 #[test]
+pub fn send_text_message_test() {
+    send_text_message(&CATAN_ENV.test_phone_number, "this is a test").expect("text message should be sent");
+}
+
+#[test]
 pub fn azure_resources_integration_test() {
     let three_letters = "abc";
     let resource_group = "test-resource-group-".to_owned() + three_letters;
-    let location = "eastus"; // You can adjust this as needed
+    let location = &CATAN_ENV.azure_location;
     let kv_name = std::env::var("KEV_VAULT_NAME").expect("KEV_VAULT_NAME not found in environment");
     let cosmos_account_name = "test-cosmos-account-".to_owned() + three_letters;
     let database_name = "test-cosmos-database-".to_owned() + three_letters;
@@ -671,7 +701,7 @@ pub fn azure_resources_integration_test() {
         .expect("creating a cosmos db should succeed");
     // Create a collection in the Cosmos DB instance
     println!("Creating collection: {}", collection_name);
-    create_container(
+    create_collection(
         &cosmos_account_name,
         &database_name,
         &collection_name,
@@ -704,10 +734,8 @@ pub fn azure_resources_integration_test() {
     assert!(
         resource_group_exists(&resource_group).expect("Failed to check resource group existence.")
     );
-    assert!(
-        cosmos_account_exists(&cosmos_account_name, &resource_group)
-            .expect("Failed to check Cosmos DB existence.")
-    );
+    assert!(cosmos_account_exists(&cosmos_account_name, &resource_group)
+        .expect("Failed to check Cosmos DB existence."));
 
     //  Get the secrets back out of Key Vault and validate they are correct
     let retrieved_secrets = retrieve_cosmos_secrets_from_keyvault(&kv_name)
