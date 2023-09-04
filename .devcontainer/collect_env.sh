@@ -149,9 +149,9 @@ function build_set_env_script() {
     local toWrite=""
     local environmentVariable
     local description
-    local val        # the value of the environment variable
+    local val # the value of the environment variable
 
-    local length     # the length of the json array
+    local length # the length of the json array
 
     json_array=$(jq '.secrets' "$REQUIRED_REPO_ENV_VARS")
 
@@ -248,6 +248,32 @@ function save_in_codespaces() {
 #   2. reconstruct and overwrite the $LOCAL_REQUIRED_ENV_FILE
 #   3. source the $LOCAL_REQUIRED_ENV_FILE
 function update_vars {
+    # check the last modified date of the env file file and if it is gt the last modified time of the config file
+    # we have no work to do
+    local local_file_modified
+    local required_file_modified
+
+    if [[ -f "$LOCAL_REQUIRED_ENV_FILE" ]]; then
+        if [[ $(uname) == "Darwin" ]]; then
+            local_file_modified=$(stat -f "%m" "$LOCAL_REQUIRED_ENV_FILE")
+            required_file_modified=$(stat -f "%m" "$REQUIRED_REPO_ENV_VARS")
+        else
+            local_file_modified=$(stat -c "%Y" "$LOCAL_REQUIRED_ENV_FILE")
+            required_file_modified=$(stat -c "%Y" "$REQUIRED_REPO_ENV_VARS")
+        fi
+    else
+        # force the creation of the file - this makes the below if statment false
+        local_file_modified=0
+        required_file_modified=1
+    fi
+
+    if [[ $local_file_modified -ge $required_file_modified ]]; then
+        echo_info "Using existing $LOCAL_REQUIRED_ENV_FILE"
+        echo_info "Update $REQUIRED_REPO_ENV_VARS if you want more secrets!"
+        #shellcheck disable=SC1090
+        source "$LOCAL_REQUIRED_ENV_FILE"
+        return 0
+    fi
 
     # we require GitHub login if GitHub secrets are being used. there might be other reasons outside the pervue of this
     # this script to login to GitHub..
@@ -259,9 +285,9 @@ function update_vars {
     # when this returns each secret will have an environment variable set
 
     collect_env
-
-    # build, save, and source the local secrets script
     build_set_env_script
+
+
 
     #TODO:  if you want to support codespace -- add the call to update the secrets here
 
@@ -365,7 +391,6 @@ help)
 update)
     echo_info "running update"
     devcontainer_dir="$(dirname "$0")"
-    echo_info "devcontainer_dir: $devcontainer_dir"
     pushd "$devcontainer_dir" >/dev/null ||
         {
             echo_error "Unable to change directory to $(dirname "$REQUIRED_REPO_ENV_VARS")"
@@ -383,7 +408,6 @@ reset)
     rm "$SSL_KEY_FILE" 2>/dev/null
     rm "$SSL_CERT_FILE" 2>/dev/null
     update_vars
-    # code for resetting the terminal goes here
     ;;
 *)
     echo "Invalid option: $1"
