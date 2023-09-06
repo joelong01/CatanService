@@ -60,17 +60,24 @@ impl CosmosSecret {
     }
 }
 
+/// Verifies if the user is already logged into Azure.
+///
+/// If the user is logged in, the subscription ID is returned.
+/// If not logged in, the function prompts the user to log in.
+/// In the case where the user is unable to login or if the subscription ID
+/// cannot be retrieved, the function will panic.
+///
+/// Returns:
+///   - A `String` containing the Azure subscription ID.
 pub fn verify_login_or_panic() -> String {
     // Check if the user is already logged into Azure
     if let Some(subscription_id) = SUBSCRIPTION_ID.get() {
         trace!("user already logged into azure");
         return subscription_id.clone();
     }
-
-    let mut cmd = Command::new("az");
-    cmd.arg("account").arg("show");
-
-    match exec_os(&mut cmd) {
+    let args = ["account", "show"];
+    print_cmd(&args);
+    match exec_os(&args) {
         Ok(output) => {
             let response: Value = serde_json::from_str(&output)
                 .unwrap_or_else(|_| panic!("Failed to parse JSON output from Azure CLI"));
@@ -86,16 +93,16 @@ pub fn verify_login_or_panic() -> String {
         Err(_) => {
             // If not logged in, prompt the user to log in
             log::trace!("Not logged into Azure. Initiating login process...");
-            let mut login_cmd = Command::new("az");
-            login_cmd.arg("login");
-            match exec_os(&mut login_cmd) {
+            let args = ["login"];
+            print_cmd(&args);
+            match exec_os(&args) {
                 Ok(_) => {
                     log::trace!("Login to Azure succeeded!");
 
                     // After login, re-attempt to get the subscription ID
-                    let mut post_login_cmd = Command::new("az");
-                    post_login_cmd.arg("account").arg("show");
-                    match exec_os(&mut post_login_cmd) {
+                    let args = &["account", "show"];
+                    print_cmd(args);
+                    match exec_os(args) {
                         Ok(post_output) => {
                             let post_response: Value = serde_json::from_str(&post_output)
                                 .unwrap_or_else(|_| {
@@ -120,13 +127,20 @@ pub fn verify_login_or_panic() -> String {
     }
 }
 
+/// Retrieves an access token from Azure.
+///
+/// The function assumes that the user is already logged into Azure.
+/// If not logged in, the function will prompt the user to log in
+/// (this behavior is due to the call to `verify_login_or_panic`).
+///
+/// Returns:
+///   - `Ok(String)`: The Azure access token.
+///   - `Err(String)`: An error message describing the reason for the failure.
 pub fn get_azure_token() -> Result<String, String> {
     let _ = verify_login_or_panic();
-
-    let mut command = Command::new("az");
-    command.arg("account").arg("get-access-token");
-
-    match exec_os(&mut command) {
+    let args = ["account", "get-access-token"];
+    print_cmd(&args);
+    match exec_os(&args) {
         Ok(output) => {
             let response: Value = serde_json::from_str(&output)
                 .map_err(|e| format!("Failed to parse JSON output: {}", e))?;
@@ -139,6 +153,18 @@ pub fn get_azure_token() -> Result<String, String> {
     }
 }
 
+/// Creates a new Azure resource group.
+///
+/// This function creates a new resource group in Azure in the given location.
+/// If the location is invalid or the resource group already exists, it returns an error.
+///
+/// Parameters:
+///   - `resource_group_name`: The name of the resource group to be created.
+///   - `location`: The Azure location where the resource group should be created.
+///
+/// Returns:
+///   - `Ok(())`: If the resource group creation is successful.
+///   - `Err(String)`: An error message describing the reason for the failure.
 pub fn create_resource_group(resource_group_name: &str, location: &str) -> Result<(), String> {
     if !is_location_valid(location)? {
         return Err(format!("Invalid location: {}", location));
@@ -148,15 +174,16 @@ pub fn create_resource_group(resource_group_name: &str, location: &str) -> Resul
         return Ok(());
     }
 
-    let mut cmd = Command::new("az");
-    cmd.arg("group")
-        .arg("create")
-        .arg("--name")
-        .arg(resource_group_name)
-        .arg("--location")
-        .arg(location);
-
-    match exec_os(&mut cmd) {
+    let cmd_args = [
+        "group",
+        "create",
+        "--name",
+        resource_group_name,
+        "--location",
+        location,
+    ];
+    print_cmd(&cmd_args);
+    match exec_os(&cmd_args) {
         Ok(_) => Ok(()),
         Err(e) => Err(format!(
             "Failed to create resource group {}. Error: {}",
@@ -164,16 +191,20 @@ pub fn create_resource_group(resource_group_name: &str, location: &str) -> Resul
         )),
     }
 }
-
+/// Checks if an Azure resource group exists.
+///
+/// This function checks if a resource group with the given name exists in Azure.
+///
+/// Parameters:
+///   - `resource_group_name`: The name of the resource group to check.
+///
+/// Returns:
+///   - `Ok(bool)`: `true` if the resource group exists, `false` otherwise.
+///   - `Err(String)`: An error message describing the reason for the failure.
 pub fn resource_group_exists(resource_group_name: &str) -> Result<bool, String> {
-    let mut cmd = Command::new("az");
-
-    cmd.arg("group")
-        .arg("exists")
-        .arg("--name")
-        .arg(resource_group_name);
-
-    match exec_os(&mut cmd) {
+    let cmd_args = ["group", "exists", "--name", resource_group_name];
+    print_cmd(&cmd_args);
+    match exec_os(&cmd_args) {
         Ok(output) => {
             let result_str = output.trim().to_string();
             match result_str.as_str() {
@@ -188,17 +219,28 @@ pub fn resource_group_exists(resource_group_name: &str) -> Result<bool, String> 
         )),
     }
 }
-pub fn delete_resource_group(resource_group_name: &str) -> Result<(), String> {
-    let mut command = Command::new("az");
-    command
-        .arg("group")
-        .arg("delete")
-        .arg("--name")
-        .arg(resource_group_name)
-        .arg("--yes") // Automatically confirm the deletion without prompt.
-        .arg("--no-wait"); // Don't wait for the deletion to complete; this makes it non-blocking.
 
-    match exec_os(&mut command) {
+/// Deletes an Azure resource group.
+///
+/// This function attempts to delete a resource group with the given name from Azure.
+///
+/// Parameters:
+///   - `resource_group_name`: The name of the resource group to be deleted.
+///
+/// Returns:
+///   - `Ok(())`: If the resource group deletion is successful.
+///   - `Err(String)`: An error message describing the reason for the failure.
+pub fn delete_resource_group(resource_group_name: &str) -> Result<(), String> {
+    let cmd_args = [
+        "group",
+        "delete",
+        "--name",
+        resource_group_name,
+        "--yes",
+        "--no-wait",
+    ];
+    print_cmd(&cmd_args);
+    match exec_os(&cmd_args) {
         Ok(_) => Ok(()),
         Err(e) => Err(format!(
             "Failed to delete resource group {}. Error: {}",
@@ -210,7 +252,17 @@ pub fn delete_resource_group(resource_group_name: &str) -> Result<(), String> {
 lazy_static! {
     static ref LOCATIONS_CACHE: Mutex<Option<HashSet<String>>> = Mutex::new(None);
 }
-
+/// Checks if a location is valid within Azure.
+///
+/// This function checks if a given location is valid by first checking a local cache,
+/// and then if necessary, querying Azure directly.
+///
+/// Parameters:
+///   - `location`: The name or display name of the location to check.
+///
+/// Returns:
+///   - `Ok(bool)`: `true` if the location is valid, `false` otherwise.
+///   - `Err(String)`: An error message describing the reason for the failure.
 pub fn is_location_valid(location: &str) -> Result<bool, String> {
     let mut cached_locations = LOCATIONS_CACHE.lock().unwrap();
 
@@ -222,8 +274,7 @@ pub fn is_location_valid(location: &str) -> Result<bool, String> {
     }
 
     // Step 2: If not in cache, fetch from Azure
-    let mut command = Command::new("az");
-    command.args(&[
+    let cmd_args = [
         "account",
         "list-locations",
         "--query",
@@ -231,8 +282,9 @@ pub fn is_location_valid(location: &str) -> Result<bool, String> {
             "[?name == '{}' || displayName == '{}'].{{Name: name, DisplayName: displayName}}",
             location, location
         ),
-    ]);
-    match exec_os(&mut command) {
+    ];
+    print_cmd(&cmd_args);
+    match exec_os(&cmd_args) {
         Ok(output) => {
             let available_locations: Vec<Value> = serde_json::from_str(&output)
                 .map_err(|e| format!("Error parsing locations: {}", e))?;
@@ -259,6 +311,31 @@ pub fn is_location_valid(location: &str) -> Result<bool, String> {
     Ok(false)
 }
 
+fn exec_os(args: &[&str]) -> Result<String, String> {
+    let mut command = Command::new("az");
+    command.args(args);
+    let output = command
+        .output()
+        .map_err(|e| format!("Error executing command: {}", e))?;
+
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).into_owned())
+    }
+}
+/// Creates a Cosmos DB account.
+///
+/// This function creates a Cosmos DB account in a given location and resource group if it doesn't exist.
+///
+/// Parameters:
+///   - `resource_group_name`: Name of the resource group.
+///   - `db_name`: Name of the Cosmos DB.
+///   - `location`: Location to create the Cosmos DB in.
+///
+/// Returns:
+///   - `Ok(())`: If the Cosmos DB account was successfully created.
+///   - `Err(String)`: An error message describing the reason for the failure.
 pub fn create_cosmos_account(
     resource_group_name: &str,
     db_name: &str,
@@ -274,22 +351,22 @@ pub fn create_cosmos_account(
 
     let kind = "GlobalDocumentDB"; // For SQL API. Change if you need a different API.
 
-    let mut command = Command::new("az");
-    command
-        .arg("cosmosdb")
-        .arg("create")
-        .arg("--name")
-        .arg(db_name)
-        .arg("--resource-group")
-        .arg(resource_group_name)
-        .arg("--kind")
-        .arg(kind)
-        .arg("--locations")
-        .arg(format!("regionName={}", location))
-        .arg("--capabilities")
-        .arg("EnableServerless");
-
-    match exec_os(&mut command) {
+    let cmd_args = [
+        "cosmosdb",
+        "create",
+        "--name",
+        db_name,
+        "--resource-group",
+        resource_group_name,
+        "--kind",
+        kind,
+        "--locations",
+        &format!("regionName={}", location),
+        "--capabilities",
+        "EnableServerless",
+    ];
+    print_cmd(&cmd_args);
+    match exec_os(&cmd_args) {
         Ok(output) => {
             log::trace!("stdout: {}", output);
             Ok(())
@@ -297,42 +374,61 @@ pub fn create_cosmos_account(
         Err(error) => Err(error),
     }
 }
+
+/// Deletes a Cosmos DB account.
+///
+/// Parameters:
+///   - `cosmos_db_name`: Name of the Cosmos DB.
+///   - `resource_group_name`: Name of the resource group.
+///
+/// Returns:
+///   - `Ok(())`: If the Cosmos DB account was successfully deleted.
+///   - `Err(String)`: An error message describing the reason for the failure.
 pub fn delete_cosmos_account(
     cosmos_db_name: &str,
     resource_group_name: &str,
 ) -> Result<(), String> {
-    let mut command = Command::new("az");
-    command
-        .arg("cosmosdb")
-        .arg("delete")
-        .arg("--name")
-        .arg(cosmos_db_name)
-        .arg("--resource-group")
-        .arg(resource_group_name)
-        .arg("--yes"); // Automatically confirm the deletion without prompt.
-
-    match exec_os(&mut command) {
+    let cmd_args = [
+        "cosmosdb",
+        "delete",
+        "--name",
+        cosmos_db_name,
+        "--resource-group",
+        resource_group_name,
+        "--yes", // Automatically confirm the deletion without prompt.
+    ];
+    print_cmd(&cmd_args);
+    match exec_os(&cmd_args) {
         Ok(_) => Ok(()),
         Err(error) => Err(error),
     }
 }
 
+/// Checks if a Cosmos DB account exists.
+///
+/// Parameters:
+///   - `cosmos_db_name`: Name of the Cosmos DB.
+///   - `resource_group_name`: Name of the resource group.
+///
+/// Returns:
+///   - `Ok(bool)`: `true` if the Cosmos DB account exists, `false` otherwise.
+///   - `Err(String)`: An error message describing the reason for the failure.
 pub fn cosmos_account_exists(
     cosmos_db_name: &str,
     resource_group_name: &str,
 ) -> Result<bool, String> {
-    let mut command = Command::new("az");
-    command
-        .arg("cosmosdb")
-        .arg("list")
-        .arg("--resource-group")
-        .arg(resource_group_name)
-        .arg("--query")
-        .arg(format!("[?name=='{}']", cosmos_db_name))
-        .arg("--output")
-        .arg("json");
-
-    match exec_os(&mut command) {
+    let cmd_args = [
+        "cosmosdb",
+        "list",
+        "--resource-group",
+        resource_group_name,
+        "--query",
+        &format!("[?name=='{}']", cosmos_db_name),
+        "--output",
+        "json",
+    ];
+    print_cmd(&cmd_args);
+    match exec_os(&cmd_args) {
         Ok(output) => {
             if output.trim().is_empty() || output.trim() == "[]" {
                 Ok(false)
@@ -343,27 +439,34 @@ pub fn cosmos_account_exists(
         Err(error) => Err(error),
     }
 }
-
+/// Retrieves secrets for a given Cosmos DB.
+///
+/// # Parameters:
+/// - `cosmos_db_name`: Name of the Cosmos DB.
+/// - `resource_group`: Name of the resource group where the Cosmos DB resides.
+///
+/// # Returns:
+/// - `Result<Vec<CosmosSecret>, String>`: On success, returns a vector of Cosmos secrets. On failure, returns an error message.
 pub fn get_cosmos_secrets(
     cosmos_db_name: &str,
     resource_group: &str,
 ) -> Result<Vec<CosmosSecret>, String> {
     let sub_id = verify_login_or_panic();
-    let mut command = Command::new("az");
-    command
-        .arg("cosmosdb")
-        .arg("keys")
-        .arg("list")
-        .arg("--name")
-        .arg(cosmos_db_name)
-        .arg("--subscription")
-        .arg(&sub_id)
-        .arg("--type")
-        .arg("connection-strings")
-        .arg("--resource-group")
-        .arg(&resource_group);
-
-    match exec_os(&mut command) {
+    let cmd_args = [
+        "cosmosdb",
+        "keys",
+        "list",
+        "--name",
+        cosmos_db_name,
+        "--subscription",
+        &sub_id,
+        "--type",
+        "connection-strings",
+        "--resource-group",
+        &resource_group,
+    ];
+    print_cmd(&cmd_args);
+    match exec_os(&cmd_args) {
         Ok(output) => {
             let output: CosmosSecretsOutput = serde_json::from_str(&output)
                 .map_err(|e| format!("Failed to parse JSON output: {}", e))?;
@@ -373,6 +476,14 @@ pub fn get_cosmos_secrets(
     }
 }
 
+/// Stores Cosmos DB secrets in a given Azure Key Vault.
+///
+/// # Parameters:
+/// - `secrets`: The Cosmos DB secrets.
+/// - `keyvault_name`: Name of the Azure Key Vault.
+///
+/// # Returns:
+/// - `Result<(), String>`: On success, returns unit type. On failure, returns an error message.
 pub fn store_cosmos_secrets_in_keyvault(
     secrets: &CosmosSecret,
     keyvault_name: &str,
@@ -382,6 +493,13 @@ pub fn store_cosmos_secrets_in_keyvault(
     save_secret(keyvault_name, "cosmos-secrets", &secrets_json)
 }
 
+/// Retrieves Cosmos DB secrets from a given Azure Key Vault.
+///
+/// # Parameters:
+/// - `keyvault_name`: Name of the Azure Key Vault.
+///
+/// # Returns:
+/// - `Result<CosmosSecret, String>`: On success, returns the Cosmos secrets. On failure, returns an error message.
 pub fn retrieve_cosmos_secrets_from_keyvault(keyvault_name: &str) -> Result<CosmosSecret, String> {
     let cosmos_secret_str = match get_secret(keyvault_name, "cosmos-secrets") {
         Ok(s) => s,
@@ -398,6 +516,16 @@ pub fn retrieve_cosmos_secrets_from_keyvault(keyvault_name: &str) -> Result<Cosm
 
     Ok(secrets)
 }
+
+/// Creates a Cosmos SQL database if it does not exist.
+///
+/// # Parameters:
+/// - `account_name`: Name of the Cosmos account.
+/// - `database_name`: Name of the database to create.
+/// - `resource_group`: Name of the resource group.
+///
+/// # Returns:
+/// - `Result<(), String>`: On success, returns unit type. On failure, returns an error message.
 pub fn create_database(
     account_name: &str,
     database_name: &str,
@@ -407,20 +535,21 @@ pub fn create_database(
         log::trace!("Database {} already exists.", database_name);
         return Ok(());
     }
-    let mut command = Command::new("az");
-    command
-        .arg("cosmosdb")
-        .arg("sql")
-        .arg("database")
-        .arg("create")
-        .arg("--account-name")
-        .arg(account_name)
-        .arg("--name")
-        .arg(database_name)
-        .arg("--resource-group")
-        .arg(resource_group);
 
-    match exec_os(&mut command) {
+    let cmd_args = [
+        "cosmosdb",
+        "sql",
+        "database",
+        "create",
+        "--account-name",
+        account_name,
+        "--name",
+        database_name,
+        "--resource-group",
+        resource_group,
+    ];
+    print_cmd(&cmd_args);
+    match exec_os(&cmd_args) {
         Ok(_output) => {
             log::trace!("Created database: {}", database_name);
             Ok(())
@@ -429,29 +558,49 @@ pub fn create_database(
     }
 }
 
+/// Checks if a Cosmos SQL database exists.
+///
+/// # Parameters:
+/// - `account_name`: Name of the Cosmos account.
+/// - `database_name`: Name of the database to check.
+/// - `resource_group`: Name of the resource group.
+///
+/// # Returns:
+/// - `Result<bool, String>`: On success, returns whether the database exists or not. On failure, returns an error message.
 pub fn cosmos_database_exists(
     account_name: &str,
     database_name: &str,
     resource_group: &str,
 ) -> Result<bool, String> {
-    let mut command = Command::new("az");
-    command
-        .arg("cosmosdb")
-        .arg("sql")
-        .arg("database")
-        .arg("show")
-        .arg("--account-name")
-        .arg(account_name)
-        .arg("--name")
-        .arg(database_name)
-        .arg("--resource-group")
-        .arg(resource_group);
-
-    match exec_os(&mut command) {
+    let cmd_args = [
+        "cosmosdb",
+        "sql",
+        "database",
+        "show",
+        "--account-name",
+        account_name,
+        "--name",
+        database_name,
+        "--resource-group",
+        resource_group,
+    ];
+    print_cmd(&cmd_args);
+    match exec_os(&cmd_args) {
         Ok(_) => Ok(true),
         Err(_) => Ok(false),
     }
 }
+
+/// Creates a Cosmos SQL collection if it does not exist.
+///
+/// # Parameters:
+/// - `account_name`: Name of the Cosmos account.
+/// - `database_name`: Name of the database.
+/// - `collection_name`: Name of the collection to create.
+/// - `resource_group`: Name of the resource group.
+///
+/// # Returns:
+/// - `Result<(), String>`: On success, returns unit type. On failure, returns an error message.
 pub fn create_collection(
     account_name: &str,
     database_name: &str,
@@ -463,26 +612,24 @@ pub fn create_collection(
         return Ok(());
     }
 
-    // Construct the command without executing it.
-    let mut command = Command::new("az");
-    command
-        .arg("cosmosdb")
-        .arg("sql")
-        .arg("container")
-        .arg("create")
-        .arg("--account-name")
-        .arg(account_name)
-        .arg("--database-name")
-        .arg(database_name)
-        .arg("--name")
-        .arg(collection_name)
-        .arg("--resource-group")
-        .arg(resource_group)
-        .arg("--partition-key-path")
-        .arg("/partitionKey");
-
-    // Use exec_os to execute the command
-    match exec_os(&mut command) {
+    let cmd_args = [
+        "cosmosdb",
+        "sql",
+        "container",
+        "create",
+        "--account-name",
+        account_name,
+        "--database-name",
+        database_name,
+        "--name",
+        collection_name,
+        "--resource-group",
+        resource_group,
+        "--partition-key-path",
+        "/partitionKey",
+    ];
+    print_cmd(&cmd_args);
+    match exec_os(&cmd_args) {
         Ok(output) => {
             log::trace!("Output: {}", output);
             Ok(())
@@ -495,29 +642,38 @@ pub fn create_collection(
         }
     }
 }
-
+/// Checks if a Cosmos SQL collection exists.
+///
+/// # Parameters:
+/// - `account_name`: Name of the Cosmos account.
+/// - `database_name`: Name of the database.
+/// - `collection_name`: Name of the collection to check.
+/// - `resource_group`: Name of the resource group.
+///
+/// # Returns:
+/// - `Result<bool, String>`: On success, returns whether the collection exists or not. On failure, returns an error message.
 pub fn cosmos_collection_exists(
     account_name: &str,
     database_name: &str,
     collection_name: &str,
     resource_group: &str,
 ) -> Result<bool, String> {
-    let mut command = Command::new("az");
-    command
-        .arg("cosmosdb")
-        .arg("sql")
-        .arg("container")
-        .arg("show")
-        .arg("--account-name")
-        .arg(account_name)
-        .arg("--database-name")
-        .arg(database_name)
-        .arg("--name")
-        .arg(collection_name)
-        .arg("--resource-group")
-        .arg(resource_group);
+    let cmd_args = [
+        "cosmosdb",
+        "sql",
+        "container",
+        "show",
+        "--account-name",
+        account_name,
+        "--database-name",
+        database_name,
+        "--name",
+        collection_name,
+        "--resource-group",
+        resource_group,
+    ];
 
-    match exec_os(&mut command) {
+    match exec_os(&cmd_args) {
         Ok(_) => Ok(true),
         Err(_) => Ok(false),
     }
@@ -536,12 +692,12 @@ lazy_static! {
 fn get_env_name(value: &str) -> Option<String> {
     ENV_MAP.get(value).cloned()
 }
-pub fn print_cmd(command: &Command) {
-    let program = command.get_program().to_string_lossy();
-    let args = command.get_args();
+
+pub fn print_cmd(args: &[&str]) {
     let re = Regex::new(r"(AccountKey=)([^;]+)").unwrap();
-    let mut cmd_str: Vec<String> = std::iter::once(program.into_owned())
-        .chain(args.map(|arg| arg.to_string_lossy().into_owned()))
+    let program = "az";
+    let mut cmd_str: Vec<String> = std::iter::once(program.to_string())
+        .chain(args.iter().map(|&arg| arg.to_string()))
         .collect();
 
     // Hide environment variable values using ENV_MAP
@@ -551,26 +707,33 @@ pub fn print_cmd(command: &Command) {
             *arg = format!("${}", env_name);
         } else {
             // If not an environment variable value, check for AccountKey and mask it
-            *arg = re.replace(arg, |caps: &regex::Captures| {
-                let key_length = caps[2].len();
-                format!("AccountKey={}x==", "X".repeat(key_length - 3))
-            }).to_string();
+            *arg = re
+                .replace(arg, |caps: &regex::Captures| {
+                    let key_length = caps[2].len();
+                    format!("AccountKey={}x==", "X".repeat(key_length - 3))
+                })
+                .to_string();
         }
     }
 
     info!("Executing: {}", cmd_str.join(" "));
 }
 
+/// Checks if a given Azure Key Vault exists.
+///
+/// # Arguments
+///
+/// * `kv_name` - The name of the Azure Key Vault.
+///
+/// # Returns
+///
+/// * `Ok(true)` if the Key Vault exists, `Ok(false)` otherwise.
 pub fn keyvault_exists(kv_name: &str) -> Result<bool, String> {
-    let mut command = Command::new("az");
-    command
-        .arg("keyvault")
-        .arg("show")
-        .arg("--name")
-        .arg(kv_name);
+    let args = ["keyvault", "show", "--name", kv_name];
+    print_cmd(&args);
+    let output = exec_os(&args)?;
 
-    let output = exec_os(&mut command)?;
-
+    // Check if the output contains the name of the Key Vault.
     if output.contains(kv_name) {
         log::trace!("KV {} already exists", kv_name);
         Ok(true)
@@ -580,44 +743,88 @@ pub fn keyvault_exists(kv_name: &str) -> Result<bool, String> {
     }
 }
 
+/// Saves a secret in an Azure Key Vault.
+///
+/// # Arguments
+///
+/// * `keyvault_name` - The name of the Azure Key Vault.
+/// * `secret_name` - The name of the secret.
+/// * `secret_value` - The value of the secret.
+///
+/// # Returns
+///
+/// * `Ok(())` if the secret is saved successfully.
 pub fn save_secret(
     keyvault_name: &str,
     secret_name: &str,
     secret_value: &str,
 ) -> Result<(), String> {
-    let mut command = Command::new("az");
-    command
-        .arg("keyvault")
-        .arg("secret")
-        .arg("set")
-        .arg("--vault-name")
-        .arg(keyvault_name)
-        .arg("--name")
-        .arg(secret_name)
-        .arg("--value")
-        .arg(secret_value);
+    let args = [
+        "keyvault",
+        "secret",
+        "set",
+        "--vault-name",
+        keyvault_name,
+        "--name",
+        secret_name,
+        "--value",
+        secret_value,
+    ];
 
-    exec_os(&mut command).map(|_| ())
+    // If the secret_value is longer than 4 characters, modify it for logging
+    let displayed_secret_value = if secret_value.len() > 4 {
+        format!("{}...{}", &secret_value[..2], &secret_value[secret_value.len()-2..])
+    } else {
+        "<secret>".to_string()
+    };
+    
+    // Adjusted args for print_cmd
+    let print_args = [
+        "keyvault",
+        "secret",
+        "set",
+        "--vault-name",
+        keyvault_name,
+        "--name",
+        secret_name,
+        "--value",
+        &displayed_secret_value,
+    ];
+
+    print_cmd(&print_args);
+
+    exec_os(&args).map(|_| ())
 }
 
-pub fn get_secret(keyvault_name: &str, secret_name: &str) -> Result<String, String> {
-    let mut command = Command::new("az");
-    command
-        .arg("keyvault")
-        .arg("secret")
-        .arg("show")
-        .arg("--vault-name")
-        .arg(keyvault_name)
-        .arg("--name")
-        .arg(secret_name);
 
-    match exec_os(&mut command) {
+/// Retrieves a secret from an Azure Key Vault.
+///
+/// # Arguments
+///
+/// * `keyvault_name` - The name of the Azure Key Vault.
+/// * `secret_name` - The name of the secret to retrieve.
+///
+/// # Returns
+///
+/// * The value of the retrieved secret wrapped in `Ok` if successful.
+pub fn get_secret(keyvault_name: &str, secret_name: &str) -> Result<String, String> {
+    let args = [
+        "keyvault",
+        "secret",
+        "show",
+        "--vault-name",
+        keyvault_name,
+        "--name",
+        secret_name,
+    ];
+    print_cmd(&args);
+    match exec_os(&args) {
         Ok(secret_json) => {
             // Parse the top-level JSON
             let top_level: serde_json::Value = serde_json::from_str(&secret_json)
                 .map_err(|e| format!("Error parsing Key Vault response: {}", e))?;
 
-            // Extract the value field as String
+            // Extract the 'value' field from the JSON.
             top_level["value"]
                 .as_str()
                 .map(|s| s.to_string())
@@ -630,38 +837,39 @@ pub fn get_secret(keyvault_name: &str, secret_name: &str) -> Result<String, Stri
     }
 }
 
-fn exec_os(command: &mut Command) -> Result<String, String> {
-    print_cmd(command);
-
-    let output = command
-        .output()
-        .map_err(|e| format!("Error executing command: {}", e))?;
-
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).into_owned())
-    }
-}
+/// Sends a text message using Azure Communication Services.
 ///
-///  az communication sms send --sender +1866XXXYYYY  --recipient +1206XXXYYYY --message "Hey -- this is a test!"
-///  sender must be configured in the communication service and must be a toll free number
-///  requires AZURE_COMMUNICATION_CONNECTION_STRING to be set as an environment variable
+/// The sender phone number is fetched from CATAN_ENV's `service_phone_number`.
+/// It's required to have AZURE_COMMUNICATION_CONNECTION_STRING set as an environment variable.
+///
+/// # Arguments
+///
+/// * `to` - The recipient's phone number.
+/// * `msg` - The message content.
+///
+/// # Returns
+///
+/// * `Ok(())` if the message is sent successfully.
+///
+/// # Example
+///
+/// ```ignore
+/// az communication sms send --sender +1866XXXYYYY --recipient +1206XXXYYYY --message "Hey -- this is a test!"
+/// ```
 pub fn send_text_message(to: &str, msg: &str) -> Result<(), String> {
-    let mut command = Command::new("az");
-    command
-        .arg("communication")
-        .arg("sms")
-        .arg("send")
-        .arg("--sender")
-        .arg(&CATAN_ENV.service_phone_number)
-        .arg("--recipient")
-        .arg(to)
-        .arg("--message")
-        .arg(msg);
-
-    // Use exec_os to execute the command
-    match exec_os(&mut command) {
+    let args = [
+        "communication",
+        "sms",
+        "send",
+        "--sender",
+        &CATAN_ENV.service_phone_number,
+        "--recipient",
+        to,
+        "--message",
+        msg,
+    ];
+    print_cmd(&args);
+    match exec_os(&args) {
         Ok(output) => {
             log::trace!("Output: {}", output);
             Ok(())
@@ -670,54 +878,102 @@ pub fn send_text_message(to: &str, msg: &str) -> Result<(), String> {
     }
 }
 
+/// Sends an email using Azure Communication Services.
 ///
-/// az communication email send --sender "<provisioned email>" --subject "Test email" --to "xxxx@outlook.com"  --text "This is a test from the Catan Service"
-/// the sender email must be provisioned in Azure
-/// requires AZURE_COMMUNICATION_CONNECTION_STRING to be set as an environment variable
-
+/// It's required to have AZURE_COMMUNICATION_CONNECTION_STRING set as an environment variable.
+///
+/// # Arguments
+///
+/// * `to` - The recipient's email address.
+/// * `from` - The sender's email address (must be provisioned in Azure).
+/// * `subject` - The subject of the email.
+/// * `msg` - The email message content.
+///
+/// # Returns
+///
+/// * `Ok(())` if the email is sent successfully.
+///
+/// # Example
+///
+/// ```ignore
+/// az communication email send --sender "<provisioned email>" --subject "Test email" --to "xxxx@outlook.com" --text "This is a test from the Catan Service"
+/// ```
 pub fn send_email(to: &str, from: &str, subject: &str, msg: &str) -> Result<(), String> {
-    trace_function!("azure_wrappers::send_email");
-    let mut command = Command::new("az");
-    command
-        .arg("communication")
-        .arg("email")
-        .arg("send")
-        .arg("--sender")
-        .arg(from)
-        .arg("--to")
-        .arg(to)
-        .arg("--subject")
-        .arg(subject)
-        .arg("--text")
-        .arg(msg);
+    let args = [
+        "communication",
+        "email",
+        "send",
+        "--sender",
+        from,
+        "--to",
+        to,
+        "--subject",
+        subject,
+        "--text",
+        msg,
+    ];
 
-    // Use exec_os to execute the command
-    match exec_os(&mut command) {
+    // If the msg is longer than 6 characters, modify it for logging
+    let displayed_msg = if msg.len() > 6 {
+        format!("{}...{}", &msg[..3], &msg[msg.len()-3..])
+    } else {
+        msg.to_string()
+    };
+    
+    // Adjusted args for print_cmd
+    let print_args = [
+        "communication",
+        "email",
+        "send",
+        "--sender",
+        from,
+        "--to",
+        to,
+        "--subject",
+        subject,
+        "--text",
+        &displayed_msg,
+    ];
+
+    print_cmd(&print_args);
+
+    match exec_os(&args) {
         Ok(output) => {
             log::trace!("Output: {}", output);
             Ok(())
         }
-        Err(error) => Err(format!("Failed to send message. Error: {:#?}", error)),
+        Err(error) => Err(format!("Failed to send email. Error: {:#?}", error)),
     }
 }
+
 
 #[test]
 pub fn send_text_message_test() {
+    tokio::runtime::Runtime::new()
+        .expect("Failed to create Tokio runtime")
+        .block_on(init_env_logger(
+            log::LevelFilter::Info,
+            log::LevelFilter::Error,
+        ));
     send_text_message(&CATAN_ENV.test_phone_number, "this is a test")
         .expect("text message should be sent");
 }
 
 #[test]
 pub fn send_email_test() {
-    //
-    //  run the async function synchronously
-    let runtime = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
-    runtime.block_on(init_env_logger(
-        log::LevelFilter::Trace,
-        log::LevelFilter::Error,
-    ));
-    send_email(&CATAN_ENV.test_email, &CATAN_ENV.service_email, "this is a test", "test email")
-        .expect("text message should be sent");
+    tokio::runtime::Runtime::new()
+        .expect("Failed to create Tokio runtime")
+        .block_on(init_env_logger(
+            log::LevelFilter::Info,
+            log::LevelFilter::Error,
+        ));
+    send_email(
+        &CATAN_ENV.test_email,
+        &CATAN_ENV.service_email,
+        "this is a test",
+        "test email",
+    )
+    .expect("text message should be sent");
 }
 
 #[test]
@@ -732,11 +988,12 @@ pub fn azure_resources_integration_test() {
 
     //
     //  run the async function synchronously
-    let runtime = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
-    runtime.block_on(init_env_logger(
-        log::LevelFilter::Trace,
-        log::LevelFilter::Error,
-    ));
+    tokio::runtime::Runtime::new()
+        .expect("Failed to create Tokio runtime")
+        .block_on(init_env_logger(
+            log::LevelFilter::Info,
+            log::LevelFilter::Error,
+        ));
 
     // make sure the user is logged in
 
