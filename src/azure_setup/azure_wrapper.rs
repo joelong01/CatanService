@@ -20,6 +20,7 @@ use crate::init_env_logger;
 use crate::middleware::environment_mw::TestContext;
 use crate::middleware::environment_mw::CATAN_ENV;
 use crate::shared::models::Claims;
+use crate::trace_function;
 use crate::user_service::users::create_jwt_token;
 use crate::user_service::users::generate_jwt_key;
 use crate::user_service::users::validate_jwt_token;
@@ -675,6 +676,7 @@ pub fn send_text_message(to: &str, msg: &str) -> Result<(), String> {
 /// requires AZURE_COMMUNICATION_CONNECTION_STRING to be set as an environment variable
 
 pub fn send_email(to: &str, from: &str, subject: &str, msg: &str) -> Result<(), String> {
+    trace_function!("azure_wrappers::send_email");
     let mut command = Command::new("az");
     command
         .arg("communication")
@@ -702,6 +704,19 @@ pub fn send_email(to: &str, from: &str, subject: &str, msg: &str) -> Result<(), 
 #[test]
 pub fn send_text_message_test() {
     send_text_message(&CATAN_ENV.test_phone_number, "this is a test")
+        .expect("text message should be sent");
+}
+
+#[test]
+pub fn send_email_test() {
+    //
+    //  run the async function synchronously
+    let runtime = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
+    runtime.block_on(init_env_logger(
+        log::LevelFilter::Trace,
+        log::LevelFilter::Error,
+    ));
+    send_email(&CATAN_ENV.test_email, &CATAN_ENV.service_email, "this is a test", "test email")
         .expect("text message should be sent");
 }
 

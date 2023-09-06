@@ -14,16 +14,20 @@ use std::{
     env, fmt,
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
+    fmt::Display, fmt::Formatter,
 };
 use tokio::sync::{mpsc, RwLock};
 
 use anyhow::{Context, Result};
 
-use crate::{games_service::{
-    catan_games::games::regular::regular_game::RegularGame,
-    game_container::game_messages::CatanMessage,
-    shared::game_enums::{CatanGames, GameAction},
-}, middleware::environment_mw::TestContext};
+use crate::{
+    games_service::{
+        catan_games::games::regular::regular_game::RegularGame,
+        game_container::game_messages::CatanMessage,
+        shared::game_enums::{CatanGames, GameAction},
+    },
+    middleware::environment_mw::TestContext,
+};
 
 use super::utility::get_id;
 
@@ -91,9 +95,9 @@ impl CosmosEntity for PersistUser {
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 
 pub struct PersistUser {
-    pub id: String,                    // not set by client
-    #[serde(rename="partitionKey")]
-    pub partition_key: u64,            // the cosmos client seems to care about the spelling of both id and partitionKey
+    pub id: String, // not set by client
+    #[serde(rename = "partitionKey")]
+    pub partition_key: u64, // the cosmos client seems to care about the spelling of both id and partitionKey
     pub password_hash: Option<String>, // when it is pulled from Cosmos, the hash is set
     pub validated_email: bool,         // has the mail been validated?
     pub validated_phone: bool,         // has the phone number been validated?
@@ -244,17 +248,24 @@ impl ClientUser {
         }
     }
 }
-
+// DO NOT ADD A #[serde(rename_all = "PascalCase")] macro to this struct!
+// it will throw an error and you'll spend hours figuring out why it doesn't work - the rust bcrypt library cares about
+// capitalization and enforces standard claim names
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct Claims {
     pub id: String,
     pub sub: String,
     pub exp: usize,
-    pub test_context: Option<TestContext>
+    pub test_context: Option<TestContext>,
 }
 
 impl Claims {
-    pub fn new(id: &str, email: &str, duration_secs: u64, test_context: &Option<TestContext>) -> Self {
+    pub fn new(
+        id: &str,
+        email: &str,
+        duration_secs: u64,
+        test_context: &Option<TestContext>,
+    ) -> Self {
         let exp = ((SystemTime::now() + Duration::from_secs(duration_secs))
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -273,6 +284,7 @@ pub enum ResponseType {
     ClientUser(ClientUser),
     ClientUsers(Vec<ClientUser>),
     Token(String),
+    Url(String),
     ErrorInfo(String),
     Todo(String),
     NoData,
@@ -296,6 +308,14 @@ pub struct ServiceResponse {
     pub response_type: ResponseType,
     pub game_error: GameError,
 }
+impl Display for ServiceResponse {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        // Convert the struct to a pretty-printed JSON string.
+        let json = serde_json::to_string_pretty(self).map_err(|_| fmt::Error)?;
+        write!(f, "{}", json)
+    }
+}
+
 impl ServiceResponse {
     pub fn new(
         message: &str,
@@ -389,7 +409,13 @@ impl ServiceResponse {
             _ => None,
         }
     }
-
+    pub fn get_url(&self) -> Option<String> {
+        // Extract auth token from response
+        match &self.response_type {
+            ResponseType::Url(url) => Some(url.clone()),
+            _ => None,
+        }
+    }
     pub fn get_game(&self) -> Option<RegularGame> {
         match &self.response_type {
             ResponseType::Game(game) => Some(game.clone()),

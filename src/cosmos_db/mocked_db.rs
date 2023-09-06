@@ -1,11 +1,12 @@
 #![allow(dead_code)]
 use std::{collections::HashMap, sync::Arc};
 
-use crate::shared::models::{PersistUser, ServiceResponse, ResponseType, GameError};
+use crate::shared::models::{GameError, PersistUser, ResponseType, ServiceResponse};
 use azure_core::{
     error::{ErrorKind, Result as AzureResult},
     Error,
 };
+use log::trace;
 use tokio::sync::RwLock;
 lazy_static::lazy_static! {
     // Initialize singleton lobby instance
@@ -30,12 +31,14 @@ impl TestDb {
         Ok(MOCKED_DB.users.read().await.values().cloned().collect())
     }
 
-    pub async fn update_or_create_user(user: PersistUser) -> AzureResult<()> {
-        let persist_user = user.clone();
-        match MOCKED_DB.users.write().await.insert(user.id, persist_user) {
-            Some(_) => Err(Error::new(ErrorKind::MockFramework, "User Already Exists")),
-            None => Ok(()),
+    pub async fn update_or_create_user(user: &PersistUser) -> AzureResult<()> {
+        let mut map = MOCKED_DB.users.write().await;
+        let result = map.insert(user.id.clone(), user.clone());
+        match result {
+            None => trace!("user id {} added", user.id.clone()),
+            Some(_) => trace!("user id {} updated", user.id.clone())
         }
+        Ok(())
     }
 
     pub async fn delete_user(unique_id: &str) -> AzureResult<()> {
@@ -54,18 +57,16 @@ impl TestDb {
             .find(|(_key, user)| *user.id == *id)
         {
             Some(u) => Ok(u.1.clone()),
-            None =>  Err(ServiceResponse::new(
+            None => Err(ServiceResponse::new(
                 "",
                 reqwest::StatusCode::NOT_FOUND,
                 ResponseType::NoData,
                 GameError::BadId(id.to_owned()),
-            ))
+            )),
         }
     }
 
     pub async fn find_user_by_email(val: &str) -> Result<PersistUser, ServiceResponse> {
-        
-
         match MOCKED_DB
             .users
             .read()
@@ -79,7 +80,7 @@ impl TestDb {
                 reqwest::StatusCode::NOT_FOUND,
                 ResponseType::NoData,
                 GameError::BadId(val.to_owned()),
-            ))
+            )),
         }
     }
 }
@@ -89,7 +90,8 @@ mod tests {
 
     use crate::{
         init_env_logger,
-        shared::{models::UserProfile, utility::get_id}, middleware::environment_mw::CATAN_ENV,
+        middleware::environment_mw::CATAN_ENV,
+        shared::{models::UserProfile, utility::get_id},
     };
 
     use super::*;
@@ -108,13 +110,12 @@ mod tests {
         // create users and add them to the database
         let users = create_users();
         for user in users {
-            let user_clone = user.clone();
-            match TestDb::update_or_create_user(user_clone.clone()).await {
+            match TestDb::update_or_create_user(&user).await {
                 Ok(..) => trace!("created user {}", user.user_profile.email),
                 Err(e) => panic!("failed to create user.  err: {}", e),
             }
 
-            let result = TestDb::update_or_create_user(user_clone.clone()).await;
+            let result = TestDb::update_or_create_user(&user).await;
             assert!(result.is_err());
         }
 

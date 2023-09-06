@@ -13,6 +13,7 @@ mod user_service;
 use actix_web::{web, HttpResponse, HttpServer, Scope};
 use games_service::actions::action_handlers;
 use games_service::long_poller::long_poller_handler::long_poll_handler;
+use std::net::ToSocketAddrs;
 
 use crate::games_service::lobby::lobby_handlers;
 use games_service::game_handlers;
@@ -20,47 +21,33 @@ use lazy_static::lazy_static;
 use log::{error, LevelFilter};
 use middleware::authn_mw::AuthenticationMiddlewareFactory;
 use middleware::environment_mw::CATAN_ENV;
-use once_cell::sync::OnceCell;
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
-use std::env;
 use std::sync::atomic::{AtomicBool, Ordering};
 use user_service::user_handlers;
 
 pub use log::info;
 pub use log::trace;
 
-/**
- *  Code to pick a port in a threadsafe way -- either specified in an environment variable named COSMOS_RUST_SAMPLE_PORT
- *  or 8080
- */
-static PORT: OnceCell<String> = OnceCell::new();
+fn get_host_ip_and_port() -> (String, String) {
+    let host_name = std::env::var("HOST_NAME").expect("HOST_NAME must be set");
+    let parts: Vec<&str> = host_name.split(':').collect();
 
-#[allow(unused_macros)]
-#[macro_export]
-macro_rules! safe_set_port {
-    () => {{
-        let port: String;
-        match PORT.get() {
-            Some(val) => {
-                port = val.to_string();
-            }
-            None => {
-                match env::var("CATAN_APP_PORT") {
-                    Ok(val) => port = val.to_string(),
-                    Err(_e) => port = "8080".to_string(),
-                }
-                println!("setting port to: {}", port);
-                match PORT.set(port.clone()) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        println!("error setting port: {:?}", e.to_string());
-                    }
-                }
-            }
-        };
-        port
-    }};
+    let hostname = parts[0];
+    let port: u16 = parts.get(1).unwrap_or(&"8080").parse().unwrap_or(8080);
+
+    // Resolve the server name to an IP address
+    let mut addrs = format!("{}:{}", hostname, port)
+        .to_socket_addrs()
+        .expect("Failed to resolve domain name");
+
+    let ip_address = addrs
+        .next()
+        .expect("No IP address found for the domain name")
+        .ip();
+
+    (ip_address.to_string(), port.to_string())
 }
+
 /**
  *  main:  entry point that sets up the web service
  */
@@ -72,7 +59,9 @@ async fn main() -> std::io::Result<()> {
     print!("ssl cert file {:#?}\n", CATAN_ENV.ssl_cert_location);
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
-    let port: String = safe_set_port!();
+   let (ip_address, port) = get_host_ip_and_port();
+    
+    println!("Binding to IP: {}:{}", ip_address, port);
 
     //
     //  SSL support
@@ -88,7 +77,7 @@ async fn main() -> std::io::Result<()> {
     // set up the HttpServer - pass in the broker service as part of App data
     // we use the create_app! macro so that we always create the same shape of app in our tests
     HttpServer::new(move || create_app!())
-        .bind_openssl(format!("0.0.0.0:{}", port), builder)?
+        .bind_openssl(format!("{}:{}", ip_address, port), builder)?
         .run()
         .await
 }
@@ -291,10 +280,11 @@ pub async fn init_env_logger(min_level: LevelFilter, cosmos_log_level: LevelFilt
 mod tests {
     use crate::{
         create_test_service,
+        setup_test,
         games_service::game_container::game_messages::GameHeader,
         init_env_logger,
         middleware::environment_mw::TestContext,
-        setup_test,
+     
         shared::models::{ClientUser, ServiceResponse, UserProfile},
     };
 

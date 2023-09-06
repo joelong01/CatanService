@@ -145,21 +145,26 @@ macro_rules! log_thread_info {
 
 #[macro_export]
 macro_rules! trace_thread_info {
-    ($from:expr, $($arg:tt)*) => {{
 
-       // log::info!("{}:{},{},{}", file!(), line!(), $from, format!($($arg)*))
+    ($from:expr, $($arg:tt)*) => {{
+       //  log::trace!("{}:{},{},{}", file!(), line!(), $from, format!($($arg)*))
     }};
 }
 #[macro_export]
 macro_rules! trace_function {
-    ($function:expr, $($arg:tt)*) => {{
-
-    use scopeguard::defer;
-    use crate::trace_thread_info;
-    
-    trace_thread_info!(format!("enter {}", $function), $($arg)*);
-        defer! {trace_thread_info!(format!("leave {}", $function), $($arg)*);}
-    }}
+    ($function:expr) => {{
+        use scopeguard::defer;
+        use std::time::Instant;
+        
+        let enter_time = Instant::now();
+        println!("Entering {}", $function);
+        
+        defer! {
+            let elapsed = enter_time.elapsed();
+            let duration_in_nanos = elapsed.as_secs() * 1_000_000_000 + elapsed.subsec_nanos() as u64;
+            println!("Leaving {} after duration: {} nanoseconds", $function, duration_in_nanos);
+        }
+    }};
 }
 #[macro_export]
 macro_rules! crack_game_update {

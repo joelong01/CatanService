@@ -7,10 +7,10 @@ use crate::{
         long_poller::long_poller::LongPoller,
     },
     shared::models::{ClientUser, GameError, ResponseType, ServiceResponse},
-    trace_function,
+
 };
 
-use scopeguard::defer;
+
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -70,12 +70,7 @@ impl GameContainer {
         game_id: &str,
         client_user: &ClientUser,
     ) -> Result<ServiceResponse, ServiceResponse> {
-        trace_function!(
-            "add_player",
-            "game_id: {}, user_id: {}",
-            game_id,
-            client_user.id
-        );
+
 
         let game_container = Self::get_locked_container(&game_id).await?;
         let mut game_container = game_container.write().await; // drop locked container

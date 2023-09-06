@@ -4,6 +4,12 @@
     },
     "secrets": [
         {
+            "environmentVariable": "HOST_NAME",
+            "description": "the DNS name for the application",
+            "shellscript": "",
+            "default": "localhost:8080"
+        },
+        {
             "environmentVariable": "AZURE_RESOURCE_GROUP",
             "description": "the Azure Resource Group for the app",
             "shellscript": "",

@@ -69,6 +69,14 @@ impl RequestContext {
         }
     }
 
+    pub fn use_cosmos_db(&self) -> bool {
+        match self.test_context.clone() {
+            Some(b) => b.use_cosmos_db,
+            None => true
+        }
+        
+    }
+
     pub fn database_name(&self) -> String {
         match self.test_context.clone() {
             Some(_) => format!("{}-test", self.env.cosmos_database),

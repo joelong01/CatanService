@@ -2,9 +2,10 @@
 #![allow(unused_variables)]
 use rand::RngCore;
 use std::sync::atomic::{AtomicBool, Ordering};
+use url::form_urlencoded;
 
 use crate::azure_setup::azure_wrapper::{
-    cosmos_account_exists, cosmos_collection_exists, cosmos_database_exists,
+    cosmos_account_exists, cosmos_collection_exists, cosmos_database_exists, send_email,
 };
 /**
  * this module implements the WebApi to create the database/collection, list all the users, and to create/find/delete
@@ -12,11 +13,11 @@ use crate::azure_setup::azure_wrapper::{
  */
 use crate::cosmos_db::cosmosdb::UserDb;
 use crate::cosmos_db::mocked_db::TestDb;
-use crate::full_info;
+use crate::{full_info, trace_function};
 
 use crate::games_service::long_poller::long_poller::LongPoller;
 
-use crate::middleware::environment_mw::RequestContext;
+use crate::middleware::environment_mw::{RequestContext, TestContext, CATAN_ENV};
 use crate::shared::models::{
     Claims, ClientUser, GameError, PersistUser, ResponseType, ServiceResponse, UserProfile,
 };
@@ -42,6 +43,7 @@ lazy_static! {
  */
 
 pub async fn setup(context: &RequestContext) -> Result<ServiceResponse, ServiceResponse> {
+    trace_function!("setup");
     let use_cosmos_db = match &context.test_context {
         Some(tc) => tc.use_cosmos_db,
         None => {
@@ -209,7 +211,7 @@ async fn internal_update_user(
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
     // Create the database connection
-    if !request_context.use_mock_db() {
+    if request_context.use_cosmos_db() {
         let userdb = UserDb::new(&request_context).await;
 
         // Save the user record to the database
@@ -230,7 +232,7 @@ async fn internal_update_user(
             }
         }
     } else {
-        TestDb::update_or_create_user(persist_user.clone())
+        TestDb::update_or_create_user(&persist_user)
             .await
             .unwrap();
         Ok(ServiceResponse::new(
@@ -360,7 +362,7 @@ pub fn validate_jwt_token(token: &str, secret_key: &str) -> Option<TokenData<Cla
 pub async fn list_users(
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    if !request_context.use_mock_db() {
+    if request_context.use_cosmos_db() {
         let userdb = UserDb::new(&request_context).await;
 
         // Get list of users
@@ -463,7 +465,7 @@ pub async fn delete(
     }
 
     let result;
-    if !request_context.use_mock_db() {
+    if request_context.use_cosmos_db() {
         let userdb = UserDb::new(&request_context).await;
         result = userdb.delete_user(&id_path).await
     } else {
@@ -496,7 +498,15 @@ pub async fn validate_email(
     token: &str,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    if let Some(claims) = validate_jwt_token(&token, &request_context.env.validation_secret_key) {
+    trace_function!("validate_email");
+    let decoded_token = form_urlencoded::parse(token.as_bytes())
+        .map(|(key, _)| key)
+        .collect::<Vec<_>>()
+        .join("");
+
+    if let Some(claims) =
+        validate_jwt_token(&decoded_token, &request_context.env.validation_secret_key)
+    {
         // Extract the id and sub from the claims
         let id = &claims.claims.id;
         let email = &claims.claims.sub;
@@ -507,20 +517,123 @@ pub async fn validate_email(
         ctx.test_context = claims.claims.test_context;
         let mut user = internal_find_user("id", &claims.claims.id, &ctx).await?;
         user.validated_email = true;
+        return internal_update_user(&user, &ctx).await;
+    } else {
+        return Err(ServiceResponse::new(
+            "unauthorized",
+            StatusCode::UNAUTHORIZED,
+            ResponseType::NoData,
+            GameError::HttpError,
+        ));
     }
-    return Err(ServiceResponse::new(
-        "unauthorized",
-        StatusCode::UNAUTHORIZED,
-        ResponseType::NoData,
-        GameError::HttpError,
-    ));
+}
+//
+//  url is in the form of host://api/v1/users/validate_email/<token>
+pub fn get_validation_url(
+    host: &str,
+    id: &str,
+    email: &str,
+    test_context: &Option<TestContext>,
+) -> String {
+    let claims = Claims::new(id, email, 60 * 10, test_context); // 10 minutes
+    let token = create_jwt_token(&claims, &CATAN_ENV.validation_secret_key)
+        .expect("Token creation should not fail");
+
+    let encoded_token = form_urlencoded::byte_serialize(token.as_bytes()).collect::<String>();
+
+    format!(
+        "https://{}/api/v1/users/validate_email/{}",
+        host, encoded_token
+    )
+}
+///
+/// Send a validation email
+/// returns an error or a ServiceResponse that has the validation URL embedded in it.  RegistgerUser should call
+/// this and drop the Ok() response. the Ok() response is useful for the test cases.
+pub fn send_validation_email(
+    host: &str,
+    id: &str,
+    email: &str,
+    request_context: &RequestContext,
+) -> Result<ServiceResponse, ServiceResponse> {
+    trace_function!("send_validation_email");
+    let url = get_validation_url(host, id, email, &request_context.test_context);
+    let msg = format!(
+        "Thank you for registering with our Service.\n\n\
+         Click on this link to validate your email: {}\n\n\
+         If you did not register with the service, something has gone terribly wrong.",
+        url
+    );
+    let result = send_email(
+        email,
+        &CATAN_ENV.service_email,
+        "Please validate your email",
+        &msg,
+    );
+    match result {
+        Ok(_) => Ok(ServiceResponse::new(
+            "sent",
+            StatusCode::OK,
+            ResponseType::Url(url),
+            GameError::NoError,
+        )),
+        Err(e) => Err(ServiceResponse::new(
+            "Error sending email",
+            reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+            ResponseType::ErrorInfo(e),
+            GameError::HttpError,
+        )),
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::middleware::environment_mw::CATAN_ENV;
+    use actix_web::test;
+ 
+
+    use crate::{
+        create_test_service, games_service::game_container::game_messages::GameHeader,
+        init_env_logger, middleware::environment_mw::CATAN_ENV, setup_test,
+    };
 
     use super::*;
+    #[tokio::test]
+    async fn test_validate_email() {
+        init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Error).await;
+        let app = create_test_service!();
+        setup_test!(&app, false);
+
+        let request_context = RequestContext::test_default(false);
+        let mut profile = UserProfile::new_test_user();
+        profile.email = CATAN_ENV.test_email.clone();
+        // setup
+        let response = setup(&request_context).await;
+       
+        let sr = register("password", &profile, &request_context)
+            .await
+            .expect("this should work");
+        let client_user = sr.get_client_user().expect("This should be a client user");
+        let host_name = std::env::var("HOST_NAME").expect("HOST_NAME must be set");
+        let result = send_validation_email(
+            &host_name,
+            &client_user.id,
+            &profile.email,
+            &request_context,
+        );
+        match result {
+            Ok(service_response) => {
+                let url = service_response.get_url().expect("this should be a URL!");
+                let req = test::TestRequest::get().uri(&url).to_request();
+                let resp = test::call_service(&app, req).await;
+                assert!(resp.status().is_success());
+               
+            }
+            Err(sr) => {
+                log::error!("{}", sr);
+                panic!("should not have failed to send an email");
+            }
+        }
+    }
 
     // Test the login function
     #[tokio::test]
@@ -567,8 +680,8 @@ mod tests {
     // Similar tests for other functions: get_profile, find_user_by_id
 
     // Test JWT token creation and validation
-    #[test]
-    fn test_jwt_token_creation_and_validation() {
+    #[tokio::test]
+    async fn test_jwt_token_creation_and_validation() {
         let claims = Claims::new("user_id", "user_email@email.com", 10 * 60, &None);
         let token = create_jwt_token(&claims, &CATAN_ENV.login_secret_key).unwrap();
         let token_claims = validate_jwt_token(&token, &CATAN_ENV.login_secret_key);
