@@ -75,13 +75,13 @@ pub async fn new_game(
         match test_game {
             Some(g) => g.clone(),
             None => {
-                let mut game = RegularGame::new(&ClientUser::from_persist_user(user));
+                let mut game = RegularGame::new(&ClientUser::from_persist_user(&user));
                 game.shuffle();
                 game
             }
         }
     } else {
-        let mut game = RegularGame::new(&ClientUser::from_persist_user(user));
+        let mut game = RegularGame::new(&ClientUser::from_persist_user(&user));
         game.shuffle();
         game
     };

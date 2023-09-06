@@ -10,16 +10,20 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use strum_macros::Display;
 
-use std::{env, fmt, sync::Arc};
+use std::{
+    env, fmt,
+    sync::Arc,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 use tokio::sync::{mpsc, RwLock};
 
 use anyhow::{Context, Result};
 
-use crate::games_service::{
+use crate::{games_service::{
     catan_games::games::regular::regular_game::RegularGame,
     game_container::game_messages::CatanMessage,
     shared::game_enums::{CatanGames, GameAction},
-};
+}, middleware::environment_mw::TestContext};
 
 use super::utility::get_id;
 
@@ -77,18 +81,22 @@ impl CosmosEntity for PersistUser {
 
 /**
  * this is the document stored in cosmosdb.  the "id" field and the "partition_key" field are "special" in that the
- * system needs them. if id is not specified, cosmosdb will create a guild for the id (and create an 'id' field), You
+ * system needs them. if id is not specified, cosmosdb will create a guid for the id (and create an 'id' field), You
  * can partition on any value, but it should be something that works well with the partion scheme that cosmos uses.
  * for this sample, we assume the db size is small, so we just partion on a number that the sample always sets to 1
- *
+ * note:  you don't want to use camelCase or PascalCase for this as you need to be careful about how 'id' and 'partionKey'
+ * are spelled and capitalized
  */
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
-#[serde(rename_all = "PascalCase")]
+
 pub struct PersistUser {
     pub id: String,                    // not set by client
-    pub partition_key: u64,            // Option<> so that the client can skip this
+    #[serde(rename="partitionKey")]
+    pub partition_key: u64,            // the cosmos client seems to care about the spelling of both id and partitionKey
     pub password_hash: Option<String>, // when it is pulled from Cosmos, the hash is set
+    pub validated_email: bool,         // has the mail been validated?
+    pub validated_phone: bool,         // has the phone number been validated?
     pub user_profile: UserProfile,
 }
 
@@ -99,6 +107,8 @@ impl PersistUser {
             partition_key: 1,
             password_hash: None,
             user_profile: UserProfile::default(),
+            validated_email: false,
+            validated_phone: false,
         }
     }
 }
@@ -109,6 +119,8 @@ impl PersistUser {
             partition_key: 1,
             password_hash: Some(hash.to_owned()),
             user_profile: client_user.user_profile.clone(),
+            validated_email: false,
+            validated_phone: false,
         }
     }
     pub fn from_user_profile(profile: &UserProfile, hash: String) -> Self {
@@ -117,6 +129,8 @@ impl PersistUser {
             partition_key: 1,
             password_hash: Some(hash.to_owned()),
             user_profile: profile.clone(),
+            validated_email: false,
+            validated_phone: false,
         }
     }
 }
@@ -189,7 +203,7 @@ impl UserProfile {
 
         let random_name = random_string();
         UserProfile {
-            email: format!("{}@test_user.com", random_string()),
+            email: format!("{}@test.com", random_string()),
             first_name: random_name.clone(),
             last_name: random_name.clone(),
             display_name: random_name,
@@ -223,20 +237,37 @@ impl ClientUser {
         }
     }
 
-    pub fn from_persist_user(persist_user: PersistUser) -> Self {
+    pub fn from_persist_user(persist_user: &PersistUser) -> Self {
         Self {
-            id: persist_user.id,
+            id: persist_user.id.clone(),
             user_profile: persist_user.user_profile.clone(),
         }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct Claims {
     pub id: String,
     pub sub: String,
     pub exp: usize,
+    pub test_context: Option<TestContext>
 }
+
+impl Claims {
+    pub fn new(id: &str, email: &str, duration_secs: u64, test_context: &Option<TestContext>) -> Self {
+        let exp = ((SystemTime::now() + Duration::from_secs(duration_secs))
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs()) as usize;
+        Self {
+            id: id.to_owned(),
+            sub: email.to_owned(),
+            exp,
+            test_context: test_context.clone(),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Display)]
 pub enum ResponseType {
     ClientUser(ClientUser),
@@ -429,10 +460,15 @@ pub struct ConfigEnvironmentVariables {
     pub ssl_key_location: String,
     pub ssl_cert_location: String,
     pub login_secret_key: String,
+    pub validation_secret_key: String,
 
     pub rust_log: String,
+
     pub test_phone_number: String,
     pub service_phone_number: String,
+
+    pub test_email: String,
+    pub service_email: String,
 }
 
 impl ConfigEnvironmentVariables {
@@ -458,12 +494,18 @@ impl ConfigEnvironmentVariables {
         let login_secret_key =
             env::var("LOGIN_SECRET_KEY").context("LOGIN_SECRET_KEY not found in environment")?;
 
+        let validation_secret_key = env::var("VALIDATION_SECRET_KEY")
+            .context("VALIDATION_SECRET_KEY not found in environment")?;
+
         let rust_log = env::var("RUST_LOG").context("RUST_LOG not found in environment")?;
         let test_phone_number =
             env::var("TEST_PHONE_NUMBER").context("TEST_PHONE_NUMBER not found in environment")?;
         let service_phone_number = env::var("SERVICE_PHONE_NUMBER")
             .context("SERVICE_PHONE_NUMBER not found in environment")?;
 
+        let test_email = env::var("TEST_EMAIL").context("TEST_EMAIL not found in environment")?;
+        let service_email = env::var("SERVICE_FROM_EMAIL")
+            .context("SERVICE_FROM_EMAIL not found in environment")?;
         Ok(Self {
             resource_group,
             kv_name,
@@ -475,9 +517,12 @@ impl ConfigEnvironmentVariables {
             ssl_key_location,
             ssl_cert_location,
             login_secret_key,
+            validation_secret_key,
             cosmos_database,
             cosmos_collections: vec!["Users-Collection".to_owned(), "GameCollection".to_owned()],
             rust_log,
+            test_email,
+            service_email,
         })
     }
 
@@ -487,10 +532,13 @@ impl ConfigEnvironmentVariables {
         log::info!("ssl_key_location: {}", self.ssl_key_location);
         log::info!("ssl_cert_location: {}", self.ssl_cert_location);
         log::info!("login_secret_key: {}", self.login_secret_key);
+        log::info!("validation_secret_key: {}", self.validation_secret_key);
         log::info!("database_name: {}", self.cosmos_database);
         log::info!("rust_log: {}", self.rust_log);
         log::info!("kv_name: {}", self.kv_name);
         log::info!("test_phone_number: {}", self.test_phone_number);
+        log::info!("test_email: {}", self.test_email);
+        log::info!("service_mail: {}", self.service_email);
     }
 }
 impl Default for ConfigEnvironmentVariables {
@@ -501,6 +549,7 @@ impl Default for ConfigEnvironmentVariables {
             ssl_key_location: String::default(),
             ssl_cert_location: String::default(),
             login_secret_key: String::default(),
+            validation_secret_key: String::default(),
             cosmos_database: "Users-Database".to_owned(),
             cosmos_collections: vec!["Users-Collection".to_owned(), "GameCollection".to_owned()],
             rust_log: "actix_web=trace,actix_server=trace,rust=trace".to_owned(),
@@ -509,7 +558,8 @@ impl Default for ConfigEnvironmentVariables {
             resource_group: "catan-rg".to_owned(),
             azure_location: "westus3".to_owned(),
             service_phone_number: String::default(),
-
+            test_email: String::default(),
+            service_email: String::default(),
         }
     }
 }

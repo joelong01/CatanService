@@ -30,7 +30,7 @@ impl TestDb {
         Ok(MOCKED_DB.users.read().await.values().cloned().collect())
     }
 
-    pub async fn create_user(user: PersistUser) -> AzureResult<()> {
+    pub async fn update_or_create_user(user: PersistUser) -> AzureResult<()> {
         let persist_user = user.clone();
         match MOCKED_DB.users.write().await.insert(user.id, persist_user) {
             Some(_) => Err(Error::new(ErrorKind::MockFramework, "User Already Exists")),
@@ -63,11 +63,8 @@ impl TestDb {
         }
     }
 
-    pub async fn find_user_by_profile(prop: &str, val: &str) -> Result<PersistUser, ServiceResponse> {
-        // the only prop we support is email
-        if prop != "email" {
-            panic!("Only email is allowed for find_user_by_profile")
-        }
+    pub async fn find_user_by_email(val: &str) -> Result<PersistUser, ServiceResponse> {
+        
 
         match MOCKED_DB
             .users
@@ -101,7 +98,7 @@ mod tests {
     #[tokio::test]
 
     async fn test_e2e() {
-        init_env_logger().await;
+        init_env_logger(log::LevelFilter::Error).await;
 
         // create the database -- note this will DELETE the database as well
         match TestDb::setupdb().await {
@@ -112,12 +109,12 @@ mod tests {
         let users = create_users();
         for user in users {
             let user_clone = user.clone();
-            match TestDb::create_user(user_clone.clone()).await {
+            match TestDb::update_or_create_user(user_clone.clone()).await {
                 Ok(..) => trace!("created user {}", user.user_profile.email),
                 Err(e) => panic!("failed to create user.  err: {}", e),
             }
 
-            let result = TestDb::create_user(user_clone.clone()).await;
+            let result = TestDb::update_or_create_user(user_clone.clone()).await;
             assert!(result.is_err());
         }
 
@@ -193,6 +190,8 @@ mod tests {
                     games_played: Some(10 * i as u16),
                     games_won: Some(5 * i as u16),
                 },
+                validated_email: false,
+                validated_phone: false,
             };
 
             users.push(user);

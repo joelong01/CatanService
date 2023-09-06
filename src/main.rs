@@ -17,7 +17,7 @@ use games_service::long_poller::long_poller_handler::long_poll_handler;
 use crate::games_service::lobby::lobby_handlers;
 use games_service::game_handlers;
 use lazy_static::lazy_static;
-use log::error;
+use log::{error, LevelFilter};
 use middleware::authn_mw::AuthenticationMiddlewareFactory;
 use middleware::environment_mw::CATAN_ENV;
 use once_cell::sync::OnceCell;
@@ -135,7 +135,8 @@ fn create_unauthenticated_service() -> Scope {
                 web::post().to(user_handlers::register_handler),
             )
             .route("/users/login", web::post().to(user_handlers::login_handler))
-            .route("/test/setup", web::post().to(user_handlers::setup_handler)), /* TEST ONLY */
+            .route("/test/setup", web::post().to(user_handlers::setup_handler)) /* TEST ONLY */
+            .route("/users/validate_email/{token}", web::get().to(user_handlers::validate_email))
     )
 }
 
@@ -248,7 +249,7 @@ lazy_static! {
     static ref LOGGER_INIT_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::new(());
 }
 
-pub async fn init_env_logger() {
+pub async fn init_env_logger(cosmos_log_level: LevelFilter) {
     if LOGGER_INIT.load(Ordering::Relaxed) {
         full_info!("env logger already created");
         return;
@@ -262,7 +263,7 @@ pub async fn init_env_logger() {
     match env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
         .filter(
             Some("catan_service::cosmos_db::cosmosdb"),
-            log::LevelFilter::Off,
+            cosmos_log_level,
         )
         .try_init()
     {
@@ -292,8 +293,8 @@ mod tests {
 
     #[actix_rt::test]
     async fn test_version_and_log_intialized() {
-        init_env_logger().await;
-        init_env_logger().await;
+        init_env_logger(log::LevelFilter::Error).await;
+        init_env_logger(log::LevelFilter::Error).await;
         let mut app = create_test_service!();
         let req = test::TestRequest::get().uri("/api/v1/version").to_request();
 

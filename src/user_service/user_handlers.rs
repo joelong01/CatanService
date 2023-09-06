@@ -99,6 +99,12 @@ pub async fn delete_handler(
     .unwrap_or_else(|sr| sr.to_http_response())
 }
 
+pub async fn validate_email(token: web::Path<String>, request_context: RequestContext) -> HttpResponse {
+    super::users::validate_email(&token, &request_context).await
+    .map(|sr| sr.to_http_response())
+    .unwrap_or_else(|sr| sr.to_http_response())
+}
+
 pub fn create_http_response(status_code: StatusCode, message: &str, body: &str) -> HttpResponse {
     let response = ServiceResponse::new(
         message,
@@ -117,3 +123,5 @@ pub fn create_http_response(status_code: StatusCode, message: &str, body: &str) 
         _ => HttpResponse::BadGateway().json(response),
     }
 }
+
+

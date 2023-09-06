@@ -15,7 +15,7 @@ verify_azure_login() {
 # Function to get Cosmos Auth Token
 get_cosmos_auth_token() {
     verify_azure_login
-     echo "getting cosmos auth_token"
+    echo "getting cosmos auth_token"
     if [[ -z "$COSMOS_ACCOUNT_NAME" ]] || [[ -z "$AZURE_RESOURCE_GROUP" ]]; then
         echo "Ensure COSMOS_ACCOUNT_NAME and AZURE_RESOURCE_GROUP are set."
         exit 1
@@ -49,6 +49,12 @@ get_login_secret_key() {
     export LOGIN_SECRET_KEY
 }
 
+get_validation_secret_key() {
+     echo "generating a validation secret key"
+    VALIDATION_SECRET_KEY=$(openssl rand -hex 32)
+    export VALIDATION_SECRET_KEY
+}
+
 # Main script
 while [[ "$#" -gt 0 ]]; do
     case $1 in
@@ -64,8 +70,12 @@ while [[ "$#" -gt 0 ]]; do
         get_service_phone_number
         shift
         ;;
-    --secret-key)
+    --login-secret-key)
         get_login_secret_key
+        shift
+        ;;
+    --validation-secret-key)
+        get_validation_secret_key
         shift
         ;;
     *)

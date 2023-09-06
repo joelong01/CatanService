@@ -16,7 +16,7 @@ Dependencies (required executables that the service uses)
     /opt/homebrew/Ce/opt/homebrew/Cellar/azure-cli/2.50.0_1/libexec/bin/pip install azure-communication-sms
     /opt/homebrew/Cellar/azure-cli/2.50.0_1/libexec/bin/pip install azure-communication-phonenumbers
 
-
+/opt/homebrew/Cellar/azure-cli/2.50.0_1/libexec/bin/pip install azure-communication-email
 
 - Python
 - 

@@ -121,7 +121,7 @@ macro_rules! create_test_service {
         use crate::init_env_logger;
         use actix_web::test;
 
-        init_env_logger().await;
+        init_env_logger(log::LevelFilter::Error).await;
 
         let app = test::init_service(create_app!()).await;
         app

@@ -28,6 +28,36 @@
             "default": "Users-db"
         },
         {
+            "environmentVariable": "RUST_LOG",
+            "description": "the settings for rust logger",
+            "shellscript": "",
+            "default": "actix_web=trace,actix_server=trace,rust=trace"
+        },
+        {
+            "environmentVariable": "TEST_PHONE_NUMBER",
+            "description": "the phone number to use in tests (*to*)",
+            "shellscript": "",
+            "default": ""
+        },
+        {
+            "environmentVariable": "SERVICE_PHONE_NUMBER",
+            "description": "the phone number that the service uses (*from*)",
+            "shellscript": "./get_azure_info.sh --phone-number",
+            "default": ""
+        },
+        {
+            "environmentVariable": "TEST_EMAIL",
+            "description": "the *to* email to use in tests",
+            "shellscript": "",
+            "default": ""
+        },
+        {
+            "environmentVariable": "SERVICE_FROM_EMAIL",
+            "description": "the Service *from* email",
+            "shellscript": "",
+            "default": ""
+        },
+        {
             "environmentVariable": "COSMOS_AUTH_TOKEN",
             "description": "the Cosmosdb authentication token (look for 'Keys' in the Azure Portal)",
             "shellscript": "./get_azure_info.sh --cosmos-token",
@@ -48,34 +78,22 @@
         {
             "environmentVariable": "LOGIN_SECRET_KEY",
             "description": "the secret key used for login",
-            "shellscript": "./get_azure_info.sh --secret-key",
+            "shellscript": "./get_azure_info.sh --login-secret-key",
             "default": ""
         },
         {
-            "environmentVariable": "RUST_LOG",
-            "description": "the settings for rust logger",
-            "shellscript": "",
-            "default": "actix_web=trace,actix_server=trace,rust=trace"
+            "environmentVariable": "VALIDATION_SECRET_KEY",
+            "description": "the secret key used for email validation",
+            "shellscript": "./get_azure_info.sh --validation-secret-key",
+            "default": ""
         },
-      
+        
         {
             "environmentVariable": "AZURE_COMMUNICATION_CONNECTION_STRING",
             "description": "the azure communication connection string",
             "shellscript": "./get_azure_info.sh --comm-string",
             "default": ""
         }
-        ,
-        {
-            "environmentVariable": "TEST_PHONE_NUMBER",
-            "description": "the phone number to use in tests (*to*)",
-            "shellscript": "",
-            "default": ""
-        },
-        {
-            "environmentVariable": "SERVICE_PHONE_NUMBER",
-            "description": "the phone number that the service uses (*from*)",
-            "shellscript": "./get_azure_info.sh --phone-number",
-            "default": ""
-        }
+        
     ]
 }

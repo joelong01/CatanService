@@ -1,8 +1,9 @@
 #![allow(dead_code)]
-use std::{collections::HashMap, fmt};
+use std::collections::HashMap;
 
 use crate::middleware::environment_mw::RequestContext;
 use crate::shared::models::{GameError, PersistUser, ResponseType};
+
 /**
  *  this is the class that calls directly to CosmosDb --
  */
@@ -19,24 +20,32 @@ use log::info;
  *  we have 3 cosmos collections that we are currently using:  User, Profile, and (eventually) Game.
  *  this just makes sure we consistently use them throughout the code.
  */
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy)]
 pub enum CosmosCollectionName {
     User,
     Profile,
     Game,
 }
 
-//
-//  this converts them to string
-impl fmt::Display for CosmosCollectionName {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            CosmosCollectionName::User => write!(f, "User-Collection"),
-            CosmosCollectionName::Profile => write!(f, "Profile-Collection"),
-            CosmosCollectionName::Game => write!(f, "Game-Collection"),
-        }
-    }
+struct CosmosCollectionNameValues {
+    pub name: CosmosCollectionName,
+    pub value: &'static str,
 }
+
+static COLLECTION_NAME_VALUES: [CosmosCollectionNameValues; 3] = [
+    CosmosCollectionNameValues {
+        name: CosmosCollectionName::User,
+        value: "User-Collection",
+    },
+    CosmosCollectionNameValues {
+        name: CosmosCollectionName::Profile,
+        value: "Profile-Collection",
+    },
+    CosmosCollectionNameValues {
+        name: CosmosCollectionName::Game,
+        value: "Game-Collection",
+    },
+];
 
 /**
  *  this is a convinient way to pass around meta data about CosmosDb.  UserDb will also expose methods for calling
@@ -70,7 +79,7 @@ fn public_client(account: &str, token: &str) -> CosmosClient {
  *  this is the scruct that contains methods to manipulate cosmosdb.  the idea is to be able to write code like
  *
  *      let mut user_db = UserDb::new().await;
- *      user_db.connec();
+ *      user_db.connect();
  *      user_db.list();
  *      user_db.create(...)
  */
@@ -79,17 +88,19 @@ impl UserDb {
     pub async fn new(context: &RequestContext) -> Self {
         let client = public_client(&context.env.cosmos_account, &context.env.cosmos_token);
         let database_name = context.database_name().clone();
-        let collection_names = vec![
-            CosmosCollectionName::User,
-            CosmosCollectionName::Profile,
-            CosmosCollectionName::Game,
-        ];
+
         let database = client.database_client(database_name.clone());
         let mut collection_clients: HashMap<CosmosCollectionName, CollectionClient> =
             HashMap::new();
-        for name in collection_names {
-            let client = database.collection_client(name.to_string());
-            collection_clients.insert(name, client);
+        for item in &COLLECTION_NAME_VALUES {
+            let collection_name: String;
+            if context.is_test() {
+                collection_name = format!("{}-test", item.value);
+            } else {
+                collection_name = item.value.to_owned();
+            }
+            let client = database.collection_client(collection_name);
+            collection_clients.insert(item.name, client); // now we have a map of (say) CosmosCollectionName::User to "User-db-test"
         }
 
         Self {
@@ -133,18 +144,21 @@ impl UserDb {
         }
 
         info!("Creating collections");
-        for name in self.collection_clients.keys() {
+        for collection_client in self.collection_clients.values() {
             match self
                 .database
                 .as_ref()
                 .unwrap()
                 // note: this is where the field for the partion key is set -- if you change anything, make sure this is
                 // a member of your document struct!
-                .create_collection(name.to_string(), "/partitionKey")
+                .create_collection(collection_client.collection_name(), "/partitionKey")
                 .await
             {
                 Ok(..) => {
-                    info!("\tCreated {} collection", name);
+                    info!(
+                        "\tCreated {} collection",
+                        collection_client.collection_name()
+                    );
                 }
                 Err(e) => log_return_err!(e),
             }
@@ -182,9 +196,7 @@ impl UserDb {
         while let Some(response) = stream.next().await {
             match response {
                 Ok(response) => {
-                    info!("\n{:#?}", response);
                     for doc in response.documents() {
-                        // Process the document
                         let user: PersistUser = serde_json::from_value(doc.clone())?;
                         users.push(user);
                     }
@@ -198,17 +210,28 @@ impl UserDb {
         Err(azure_core::Error::new(ErrorKind::Other, "User not found")) // return error if user not found
     }
 
+    fn collection_name(&self, col_type: &CosmosCollectionName) -> String {
+        let collection_client = self
+            .collection_clients
+            .get(col_type)
+            .expect("this should be set in ::new");
+
+        collection_client.collection_name().to_string()
+    }
+
     /**
      *  an api that creates a user in the cosmosdb users collection. in this sample, we return
      *  the full User object in the body, giving the client the partitionKey and user id
      */
-    pub async fn create_user(&self, user: PersistUser) -> Result<(), azure_core::Error> {
-        match self
-            .database
-            .as_ref()
-            .unwrap()
-            .collection_client(CosmosCollectionName::User.to_string())
+    pub async fn update_or_create_user(&self, user: PersistUser) -> Result<(), azure_core::Error> {
+        let collection = self
+            .collection_clients
+            .get(&CosmosCollectionName::User)
+            .unwrap();
+
+        match collection
             .create_document(user.clone())
+            .is_upsert(true)
             .await
         {
             Ok(..) => match serde_json::to_string(&user) {
@@ -258,20 +281,15 @@ impl UserDb {
             )),
         }
     }
-    pub async fn find_user_by_profile(
-        &self,
-        prop: &str,
-        val: &str,
-    ) -> Result<PersistUser, ServiceResponse> {
-        let query = format!(
-            r#"SELECT * FROM c WHERE c.userProfile.{} = '{}'"#,
-            prop, val
-        );
+    pub async fn find_user_by_email(&self, val: &str) -> Result<PersistUser, ServiceResponse> {
+        let query = format!(r#"SELECT * FROM c WHERE c.user_profile.Email = '{}'"#, val);
         match self.execute_query(CosmosCollectionName::User, &query).await {
             Ok(users) => {
                 if !users.is_empty() {
+                    log::trace!("found user with email={}", val);
                     Ok(users.first().unwrap().clone()) // clone is necessary because `first()` returns a reference
                 } else {
+                    log::trace!("did not find user with email={}", val);
                     Err(ServiceResponse::new(
                         "",
                         reqwest::StatusCode::NOT_FOUND,
@@ -295,7 +313,8 @@ mod tests {
 
     use crate::{
         init_env_logger,
-        shared::{models::UserProfile, utility::get_id}, middleware::environment_mw::{CATAN_ENV, TestContext},
+        middleware::environment_mw::{TestContext, CATAN_ENV},
+        shared::{models::UserProfile, utility::get_id},
     };
 
     use super::*;
@@ -304,11 +323,16 @@ mod tests {
     #[tokio::test]
 
     async fn test_e2e() {
-        let context = RequestContext::new(Some(TestContext{use_cosmos_db: false}), &CATAN_ENV);
+        let context = RequestContext::new(
+            Some(TestContext {
+                use_cosmos_db: true,
+            }),
+            &CATAN_ENV,
+        );
 
         let user_db = UserDb::new(&context).await;
 
-        init_env_logger().await;
+        init_env_logger(log::LevelFilter::Trace).await;
 
         // create the database -- note this will DELETE the database as well
         match user_db.setupdb().await {
@@ -317,18 +341,44 @@ mod tests {
         }
         // create users and add them to the database
         let users = create_users();
-        for user in users {
+        for user in users.clone() {
             let user_clone = user.clone();
-            match user_db.create_user(user_clone.clone()).await {
+            match user_db.update_or_create_user(user_clone.clone()).await {
                 Ok(..) => trace!("created user {}", user.user_profile.email),
                 Err(e) => panic!("failed to create user.  err: {}", e),
             }
-
-            let result = user_db.create_user(user_clone.clone()).await;
-            assert!(result.is_err());
         }
 
-        // try to create the same user again:
+        // update a user
+
+        let mut modified_user = users[0].clone();
+        modified_user.validated_email = true;
+        let _ = user_db
+            .update_or_create_user(modified_user.clone())
+            .await
+            .expect("update should succeed");
+        let test_user = user_db
+            .find_user_by_id(&modified_user.id)
+            .await
+            .expect("should find this user");
+        assert!(test_user.validated_email);
+
+        // find user by email
+        log::trace!("looking for user {}", test_user.user_profile.email);
+        let found_user = match user_db
+            .find_user_by_email(&test_user.user_profile.email)
+            .await
+        {
+            Ok(user) => user,
+            Err(service_response) => {
+                panic!(
+                    "Error looking up by email: {}",
+                    serde_json::to_string(&service_response).unwrap()
+                );
+            }
+        };
+
+        assert_eq!(found_user.user_profile.email, test_user.user_profile.email);
 
         // get a list of all users
         let users: Vec<PersistUser> = match user_db.list().await {
@@ -400,6 +450,8 @@ mod tests {
                     games_played: Some(10 * i as u16),
                     games_won: Some(5 * i as u16),
                 },
+                validated_email: false,
+                validated_phone: false,
             };
 
             users.push(user);

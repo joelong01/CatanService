@@ -2,7 +2,6 @@
 #![allow(unused_variables)]
 use rand::RngCore;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::azure_setup::azure_wrapper::{
     cosmos_account_exists, cosmos_collection_exists, cosmos_database_exists,
@@ -90,13 +89,13 @@ pub async fn setup(context: &RequestContext) -> Result<ServiceResponse, ServiceR
                 &collection,
                 &context.env.resource_group,
             );
-        
+
             if collection_exists.is_err() {
                 let error_message = format!(
                     "account {} exists, database {} exists, but {} does not",
                     context.env.cosmos_account, context.env.cosmos_database, collection
                 );
-                
+
                 return Err(ServiceResponse::new(
                     &error_message,
                     StatusCode::NOT_FOUND,
@@ -105,7 +104,6 @@ pub async fn setup(context: &RequestContext) -> Result<ServiceResponse, ServiceR
                 ));
             }
         }
-        
 
         return Ok(ServiceResponse::new(
             "already exists",
@@ -171,7 +169,7 @@ pub async fn register(
     profile_in: &UserProfile,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    if internal_find_user("email", &profile_in.email, request_context)
+    if internal_find_user("Email", &profile_in.email, request_context)
         .await
         .is_ok()
     {
@@ -203,21 +201,25 @@ pub async fn register(
     // ignore the game stats passed in by the client and create a new one
     persist_user.user_profile.games_played = Some(0);
     persist_user.user_profile.games_won = Some(0);
+    internal_update_user(&persist_user, &request_context).await
+}
+
+async fn internal_update_user(
+    persist_user: &PersistUser,
+    request_context: &RequestContext,
+) -> Result<ServiceResponse, ServiceResponse> {
     // Create the database connection
     if !request_context.use_mock_db() {
         let userdb = UserDb::new(&request_context).await;
 
         // Save the user record to the database
-        match userdb.create_user(persist_user.clone()).await {
-            Ok(..) => {
-                persist_user.password_hash = None;
-                Ok(ServiceResponse::new(
-                    "created",
-                    StatusCode::CREATED,
-                    ResponseType::ClientUser(ClientUser::from_persist_user(persist_user)),
-                    GameError::NoError,
-                ))
-            }
+        match userdb.update_or_create_user(persist_user.clone()).await {
+            Ok(..) => Ok(ServiceResponse::new(
+                "created",
+                StatusCode::CREATED,
+                ResponseType::ClientUser(ClientUser::from_persist_user(persist_user)),
+                GameError::NoError,
+            )),
             Err(e) => {
                 return Err(ServiceResponse::new(
                     "Bad Request",
@@ -228,10 +230,9 @@ pub async fn register(
             }
         }
     } else {
-        //
-        //  if it is a test, set the user_id to the email name so that it is easier to follow in the logs
-        persist_user.id = profile_in.email.clone();
-        TestDb::create_user(persist_user.clone()).await.unwrap();
+        TestDb::update_or_create_user(persist_user.clone())
+            .await
+            .unwrap();
         Ok(ServiceResponse::new(
             "created",
             StatusCode::CREATED,
@@ -254,7 +255,7 @@ pub async fn login(
     password: &str,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    let user = internal_find_user("email", username, request_context).await?;
+    let user = internal_find_user("Email", username, request_context).await?;
     let password_hash: String = match user.password_hash {
         Some(p) => p,
         None => {
@@ -280,11 +281,13 @@ pub async fn login(
     };
 
     if is_password_match {
-        let token_result = create_jwt_token(
+        let claims = Claims::new(
             &user.id,
             &user.user_profile.email,
-            &request_context.env.login_secret_key,
+            24 * 60 * 60,
+            &request_context.test_context,
         );
+        let token_result = create_jwt_token(&claims, &request_context.env.login_secret_key);
         match token_result {
             Ok(token) => {
                 let _ = LongPoller::add_user(&user.id, &user.user_profile).await;
@@ -321,21 +324,9 @@ pub fn generate_jwt_key() -> String {
 }
 
 pub fn create_jwt_token(
-    id: &str,
-    email: &str,
+    claims: &Claims,
     secret_key: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let expire_duration = ((SystemTime::now() + Duration::from_secs(24 * 60 * 60))
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs()) as usize;
-
-    let claims = Claims {
-        id: id.to_owned(),
-        sub: email.to_owned(),
-        exp: expire_duration,
-    };
-
     let token_result = encode(
         &Header::new(Algorithm::HS512),
         &claims,
@@ -377,7 +368,7 @@ pub async fn list_users(
             Ok(users) => {
                 let client_users: Vec<ClientUser> = users
                     .iter()
-                    .map(|user| ClientUser::from_persist_user(user.clone()))
+                    .map(|user| ClientUser::from_persist_user(&user))
                     .collect();
 
                 Ok(ServiceResponse::new(
@@ -401,7 +392,7 @@ pub async fn list_users(
             .await
             .unwrap()
             .iter()
-            .map(|user| ClientUser::from_persist_user(user.clone()))
+            .map(|user| ClientUser::from_persist_user(&user))
             .collect();
 
         Ok(ServiceResponse::new(
@@ -421,7 +412,7 @@ pub async fn get_profile(
     Ok(ServiceResponse::new(
         "",
         StatusCode::OK,
-        ResponseType::ClientUser(ClientUser::from_persist_user(user)),
+        ResponseType::ClientUser(ClientUser::from_persist_user(&user)),
         GameError::NoError,
     ))
 }
@@ -435,22 +426,22 @@ pub async fn find_user_by_id(
 
 pub async fn internal_find_user(
     prop: &str,
-    id: &str,
+    val: &str,
     request_context: &RequestContext,
 ) -> Result<PersistUser, ServiceResponse> {
     if request_context.use_mock_db() {
         if prop == "id" {
-            return TestDb::find_user_by_id(id).await;
+            return TestDb::find_user_by_id(val).await;
         } else {
-            return TestDb::find_user_by_profile(&prop, id).await;
+            return TestDb::find_user_by_email(val).await;
         }
     }
 
     let userdb = UserDb::new(request_context).await;
     if prop == "id" {
-        userdb.find_user_by_id(id).await
+        userdb.find_user_by_id(val).await
     } else {
-        userdb.find_user_by_profile(&prop, id).await
+        userdb.find_user_by_email(val).await
     }
 }
 
@@ -495,6 +486,35 @@ pub async fn delete(
         }
     }
 }
+///
+/// the token is a signed claim with an email
+/// validate it
+/// get the profile
+/// mark the email as validated
+/// save the profile
+pub async fn validate_email(
+    token: &str,
+    request_context: &RequestContext,
+) -> Result<ServiceResponse, ServiceResponse> {
+    if let Some(claims) = validate_jwt_token(&token, &request_context.env.validation_secret_key) {
+        // Extract the id and sub from the claims
+        let id = &claims.claims.id;
+        let email = &claims.claims.sub;
+        //
+        //  we have to embed the TestContext in the claim because we come through a GET from a URL where
+        //  we can't add headers.
+        let mut ctx = request_context.clone();
+        ctx.test_context = claims.claims.test_context;
+        let mut user = internal_find_user("id", &claims.claims.id, &ctx).await?;
+        user.validated_email = true;
+    }
+    return Err(ServiceResponse::new(
+        "unauthorized",
+        StatusCode::UNAUTHORIZED,
+        ResponseType::NoData,
+        GameError::HttpError,
+    ));
+}
 
 #[cfg(test)]
 mod tests {
@@ -504,10 +524,14 @@ mod tests {
 
     // Test the login function
     #[tokio::test]
-    async fn test_login() {
-        let profile = UserProfile::new_test_user();
-        let request_context = RequestContext::test_default(true);
+    async fn test_login_mocked_and_cosmos() {
+        test_login(true).await;
+        test_login(false).await;
+    }
 
+    async fn test_login(use_cosmos: bool) {
+        let request_context = RequestContext::test_default(use_cosmos);
+        let profile = UserProfile::new_test_user();
         // setup
         let response = setup(&request_context).await;
 
@@ -517,6 +541,10 @@ mod tests {
             .expect("this should work");
         let client_user = sr.get_client_user().expect("This should be a client user");
 
+        let user = internal_find_user("email", &client_user.user_profile.email, &request_context)
+            .await
+            .expect("we just put this here!");
+
         // Test login with correct credentials
         let response = login(&profile.email, "password", &request_context)
             .await
@@ -525,7 +553,7 @@ mod tests {
         // Test login with incorrect credentials
         let response = login(&profile.email, "wrong_password", &request_context).await;
         match response {
-            Ok(_) => panic!("this hsould be an error!"),
+            Ok(_) => panic!("this should be an error!"),
             Err(e) => {
                 assert_eq!(e.status, StatusCode::UNAUTHORIZED);
             }
@@ -541,9 +569,11 @@ mod tests {
     // Test JWT token creation and validation
     #[test]
     fn test_jwt_token_creation_and_validation() {
-        let token = create_jwt_token("user_id", "user_email", &CATAN_ENV.login_secret_key).unwrap();
-        assert!(validate_jwt_token(&token, &CATAN_ENV.login_secret_key).is_some());
+        let claims = Claims::new("user_id", "user_email@email.com", 10 * 60, &None);
+        let token = create_jwt_token(&claims, &CATAN_ENV.login_secret_key).unwrap();
+        let token_claims = validate_jwt_token(&token, &CATAN_ENV.login_secret_key);
+        assert!(token_claims.is_some());
+        let token_claims = token_claims.expect("there should be a token in here");
+        assert_eq!(token_claims.claims, claims);
     }
-
-    // Add more tests as needed
 }

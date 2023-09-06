@@ -9,6 +9,8 @@ use std::str;
 use std::sync::Mutex;
 
 use crate::middleware::environment_mw::CATAN_ENV;
+use crate::middleware::environment_mw::TestContext;
+use crate::shared::models::Claims;
 use crate::user_service::users::create_jwt_token;
 use crate::user_service::users::generate_jwt_key;
 use crate::user_service::users::validate_jwt_token;
@@ -635,7 +637,9 @@ fn exec_os(command: &mut Command) -> Result<String, String> {
     }
 }
 ///
-///  az communication sms send --sender +18662361341  --recipient +12069152796 --message "Hey -- this is a test!"
+///  az communication sms send --sender +1866XXXYYYY  --recipient +1206XXXYYYY --message "Hey -- this is a test!"
+///  sender must be configured in the communication service and must be a toll free number
+///  requires AZURE_COMMUNICATION_CONNECTION_STRING to be set as an environment variable
 pub fn send_text_message(to: &str, msg: &str) -> Result<(), String> {
     let mut command = Command::new("az");
     command
@@ -659,15 +663,40 @@ pub fn send_text_message(to: &str, msg: &str) -> Result<(), String> {
     }
 }
 
-// use crate::azure_setup::azure_wrapper::{
-//     create_collection, create_cosmos_db_instance, create_keyvault, create_resource_group,
-//     delete_resource_group, resource_group_exists, retrieve_cosmos_secrets,
-//     store_cosmos_secrets_in_keyvault,
-// };
+///
+/// az communication email send --sender "<provisioned email>" --subject "Test email" --to "xxxx@outlook.com"  --text "This is a test from the Catan Service"
+/// the sender email must be provisioned in Azure
+/// requires AZURE_COMMUNICATION_CONNECTION_STRING to be set as an environment variable
+
+pub fn send_email(to: &str, from: &str, subject: &str, msg: &str) -> Result<(), String> {
+    let mut command = Command::new("az");
+    command
+        .arg("communication")
+        .arg("email")
+        .arg("send")
+        .arg("--sender")
+        .arg(from)
+        .arg("--to")
+        .arg(to)
+        .arg("--subject")
+        .arg(subject)
+        .arg("--text")
+        .arg(msg);
+
+    // Use exec_os to execute the command
+    match exec_os(&mut command) {
+        Ok(output) => {
+            println!("Output: {}", output);
+            Ok(())
+        }
+        Err(error) => Err(format!("Failed to send message. Error: {:#?}", error)),
+    }
+}
 
 #[test]
 pub fn send_text_message_test() {
-    send_text_message(&CATAN_ENV.test_phone_number, "this is a test").expect("text message should be sent");
+    send_text_message(&CATAN_ENV.test_phone_number, "this is a test")
+        .expect("text message should be sent");
 }
 
 #[test]
@@ -766,8 +795,9 @@ pub fn rotate_login_keys() {
     keyvault_exists(&kv_name).expect(&format!("Failed to find Key Vault named {}.", kv_name));
 
     let current_login_key = get_secret(&kv_name, new_name).unwrap_or_else(|_| generate_jwt_key());
-
-    let token = create_jwt_token("test_id", "test@email.com", &current_login_key)
+    let test_context = TestContext::new(false);
+    let claims = Claims::new("test_id", "test@email.com", 24*60*60, &Some(test_context));
+    let token = create_jwt_token(&claims, &current_login_key)
         .expect("create token should not fail");
 
     let new_key = generate_jwt_key();

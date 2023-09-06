@@ -53,7 +53,7 @@ pub async fn respond_to_invite(
 
         GameContainer::add_player(
             &invite_response.game_id,
-            &ClientUser::from_persist_user(persist_user),
+            &ClientUser::from_persist_user(&persist_user),
         )
         .await
         .expect("add_player shouldn't fail.  TODO: handle failure");
