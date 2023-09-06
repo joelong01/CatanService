@@ -1,3 +1,4 @@
+mod azure_setup;
 /**
  *  main entry point for the application.  The goal here is to set up the Web Server.
  */
@@ -8,7 +9,6 @@ mod middleware;
 mod shared;
 mod test;
 mod user_service;
-mod azure_setup;
 
 use actix_web::{web, HttpResponse, HttpServer, Scope};
 use games_service::actions::action_handlers;
@@ -136,7 +136,10 @@ fn create_unauthenticated_service() -> Scope {
             )
             .route("/users/login", web::post().to(user_handlers::login_handler))
             .route("/test/setup", web::post().to(user_handlers::setup_handler)) /* TEST ONLY */
-            .route("/users/validate_email/{token}", web::get().to(user_handlers::validate_email))
+            .route(
+                "/users/validate_email/{token}",
+                web::get().to(user_handlers::validate_email),
+            ),
     )
 }
 
@@ -232,7 +235,10 @@ fn game_service() -> Scope {
 fn action_service() -> Scope {
     web::scope("/action")
         .route("/start/{game_id}", web::post().to(action_handlers::next))
-        .route("/actions/{game_id}", web::get().to(action_handlers::valid_actions))
+        .route(
+            "/actions/{game_id}",
+            web::get().to(action_handlers::valid_actions),
+        )
         .route("/next/{game_id}", web::post().to(action_handlers::next))
 }
 
@@ -249,7 +255,7 @@ lazy_static! {
     static ref LOGGER_INIT_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::new(());
 }
 
-pub async fn init_env_logger(cosmos_log_level: LevelFilter) {
+pub async fn init_env_logger(min_level: LevelFilter, cosmos_log_level: LevelFilter) {
     if LOGGER_INIT.load(Ordering::Relaxed) {
         full_info!("env logger already created");
         return;
@@ -260,19 +266,23 @@ pub async fn init_env_logger(cosmos_log_level: LevelFilter) {
         return;
     }
 
-    match env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
-        .filter(
-            Some("catan_service::cosmos_db::cosmosdb"),
-            cosmos_log_level,
-        )
-        .try_init()
-    {
+    // Start by setting the global filter level to `min_level`
+    let mut builder =
+        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"));
+    builder.filter(None, min_level);
+
+    // Then, set the module-specific filter level
+    builder.filter(Some("catan_service::cosmos_db::cosmosdb"), cosmos_log_level);
+
+    match builder.try_init() {
         Ok(()) => {
             full_info!(
-                "logger initialized - NOTE: catan_service::cosmos_db::cosmosdb is always OFF!"
+                "logger initialized [min_level: {:#?}] [cosmos_min_level: {:#?}]",
+                min_level,
+                cosmos_log_level
             );
         }
-        Err(e) => error!("logger failt to init -- already inited?: {:#?}", e),
+        Err(e) => error!("logger failed to init -- already inited?: {:#?}", e),
     }
     LOGGER_INIT.store(true, Ordering::Relaxed);
 }
@@ -282,8 +292,10 @@ mod tests {
     use crate::{
         create_test_service,
         games_service::game_container::game_messages::GameHeader,
-        init_env_logger, setup_test,
-        shared::models::{ClientUser, ServiceResponse, UserProfile}, middleware::environment_mw::TestContext,
+        init_env_logger,
+        middleware::environment_mw::TestContext,
+        setup_test,
+        shared::models::{ClientUser, ServiceResponse, UserProfile},
     };
 
     use actix_web::{http::header, test};
@@ -293,8 +305,8 @@ mod tests {
 
     #[actix_rt::test]
     async fn test_version_and_log_intialized() {
-        init_env_logger(log::LevelFilter::Error).await;
-        init_env_logger(log::LevelFilter::Error).await;
+        init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Error).await;
+        init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Error).await;
         let mut app = create_test_service!();
         let req = test::TestRequest::get().uri("/api/v1/version").to_request();
 
@@ -319,7 +331,9 @@ mod tests {
             first_name: "Test".into(),
             last_name: "User".into(),
             display_name: "TestUser".into(),
-            phone_number: crate::middleware::environment_mw::CATAN_ENV.test_phone_number.to_owned(),
+            phone_number: crate::middleware::environment_mw::CATAN_ENV
+                .test_phone_number
+                .to_owned(),
             picture_url: "https://example.com/photo.jpg".into(),
             foreground_color: "#000000".into(),
             background_color: "#FFFFFF".into(),
@@ -396,9 +410,10 @@ mod tests {
         let body = test::read_body(resp).await;
         //
         //  we get a service response where the body is a ClientUser
-        let profile_from_service = ServiceResponse::to_client_user(std::str::from_utf8(&body).unwrap())
-        .expect("Service Response should deserialize")
-        .1;
+        let profile_from_service =
+            ServiceResponse::to_client_user(std::str::from_utf8(&body).unwrap())
+                .expect("Service Response should deserialize")
+                .1;
 
         user1_profile.games_played = Some(0);
         user1_profile.games_won = Some(0); // service sets this when regisering.

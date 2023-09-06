@@ -98,7 +98,7 @@ mod tests {
     #[tokio::test]
 
     async fn test_e2e() {
-        init_env_logger(log::LevelFilter::Error).await;
+        init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Error).await;
 
         // create the database -- note this will DELETE the database as well
         match TestDb::setupdb().await {

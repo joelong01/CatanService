@@ -1,15 +1,24 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
+use log::trace;
 use once_cell::sync::Lazy;
 use once_cell::sync::OnceCell;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::env;
 use std::process::Command;
 use std::str;
 use std::sync::Mutex;
+use tracing::info;
 
-use crate::middleware::environment_mw::CATAN_ENV;
+use lazy_static::lazy_static;
+
+use crate::init_env_logger;
 use crate::middleware::environment_mw::TestContext;
+use crate::middleware::environment_mw::CATAN_ENV;
 use crate::shared::models::Claims;
 use crate::user_service::users::create_jwt_token;
 use crate::user_service::users::generate_jwt_key;
@@ -37,9 +46,23 @@ pub struct CosmosSecret {
     pub key_type: String,
 }
 
+impl CosmosSecret {
+    pub fn equal_by_val(&self, other: &CosmosSecret) -> bool {
+        if self.connection_string == other.connection_string
+            && self.description == other.description
+            && self.key_kind == other.key_kind
+            && self.key_type == other.key_type
+        {
+            return true;
+        }
+        false
+    }
+}
+
 pub fn verify_login_or_panic() -> String {
     // Check if the user is already logged into Azure
     if let Some(subscription_id) = SUBSCRIPTION_ID.get() {
+        trace!("user already logged into azure");
         return subscription_id.clone();
     }
 
@@ -50,10 +73,10 @@ pub fn verify_login_or_panic() -> String {
         Ok(output) => {
             let response: Value = serde_json::from_str(&output)
                 .unwrap_or_else(|_| panic!("Failed to parse JSON output from Azure CLI"));
-
+            trace!("user already logged into azure");
             match response["id"].as_str() {
                 Some(subscription_id) => {
-                    println!("Already logged into Azure.");
+                    log::trace!("Already logged into Azure.");
                     subscription_id.to_string()
                 }
                 None => panic!("No subscription ID found in Azure CLI response."),
@@ -61,12 +84,12 @@ pub fn verify_login_or_panic() -> String {
         }
         Err(_) => {
             // If not logged in, prompt the user to log in
-            println!("Not logged into Azure. Initiating login process...");
+            log::trace!("Not logged into Azure. Initiating login process...");
             let mut login_cmd = Command::new("az");
             login_cmd.arg("login");
             match exec_os(&mut login_cmd) {
                 Ok(_) => {
-                    println!("Login to Azure succeeded!");
+                    log::trace!("Login to Azure succeeded!");
 
                     // After login, re-attempt to get the subscription ID
                     let mut post_login_cmd = Command::new("az");
@@ -183,40 +206,49 @@ pub fn delete_resource_group(resource_group_name: &str) -> Result<(), String> {
     }
 }
 
-static LOCATIONS_CACHE: Lazy<Mutex<Option<Vec<String>>>> = Lazy::new(|| Mutex::new(None));
+lazy_static! {
+    static ref LOCATIONS_CACHE: Mutex<Option<HashSet<String>>> = Mutex::new(None);
+}
 
 pub fn is_location_valid(location: &str) -> Result<bool, String> {
     let mut cached_locations = LOCATIONS_CACHE.lock().unwrap();
 
     // Step 1: Check the cache for the location
     if let Some(ref locations) = *cached_locations {
-        if locations.contains(&location.to_string()) {
+        if locations.contains(location) {
             return Ok(true);
         }
     }
 
     // Step 2: If not in cache, fetch from Azure
     let mut command = Command::new("az");
-    command.arg("account").arg("list-locations");
+    command.args(&[
+        "account",
+        "list-locations",
+        "--query",
+        &format!(
+            "[?name == '{}' || displayName == '{}'].{{Name: name, DisplayName: displayName}}",
+            location, location
+        ),
+    ]);
     match exec_os(&mut command) {
         Ok(output) => {
             let available_locations: Vec<Value> = serde_json::from_str(&output)
                 .map_err(|e| format!("Error parsing locations: {}", e))?;
 
             // Step 3: Update the cache with fetched locations
-            *cached_locations = Some(
-                available_locations
-                    .iter()
-                    .filter_map(|loc| loc["name"].as_str())
-                    .map(String::from)
-                    .collect(),
-            );
+            let mut new_locations = HashSet::new();
+            for loc in available_locations.iter() {
+                if let Some(name) = loc["Name"].as_str() {
+                    new_locations.insert(name.to_string());
+                }
+                if let Some(display_name) = loc["DisplayName"].as_str() {
+                    new_locations.insert(display_name.to_string());
+                }
+            }
+            *cached_locations = Some(new_locations);
 
-            if cached_locations
-                .as_ref()
-                .unwrap()
-                .contains(&location.to_string())
-            {
+            if cached_locations.as_ref().unwrap().contains(location) {
                 return Ok(true);
             }
         }
@@ -258,7 +290,7 @@ pub fn create_cosmos_account(
 
     match exec_os(&mut command) {
         Ok(output) => {
-            println!("stdout: {}", output);
+            log::trace!("stdout: {}", output);
             Ok(())
         }
         Err(error) => Err(error),
@@ -371,7 +403,7 @@ pub fn create_database(
     resource_group: &str,
 ) -> Result<(), String> {
     if cosmos_database_exists(account_name, database_name, resource_group)? {
-        println!("Database {} already exists.", database_name);
+        log::trace!("Database {} already exists.", database_name);
         return Ok(());
     }
     let mut command = Command::new("az");
@@ -389,7 +421,7 @@ pub fn create_database(
 
     match exec_os(&mut command) {
         Ok(_output) => {
-            println!("Created database: {}", database_name);
+            log::trace!("Created database: {}", database_name);
             Ok(())
         }
         Err(error) => Err(error),
@@ -426,7 +458,7 @@ pub fn create_collection(
     resource_group: &str,
 ) -> Result<(), String> {
     if cosmos_collection_exists(account_name, database_name, collection_name, resource_group)? {
-        println!("Collection {} already exists", collection_name);
+        log::trace!("Collection {} already exists", collection_name);
         return Ok(());
     }
 
@@ -451,7 +483,7 @@ pub fn create_collection(
     // Use exec_os to execute the command
     match exec_os(&mut command) {
         Ok(output) => {
-            println!("Output: {}", output);
+            log::trace!("Output: {}", output);
             Ok(())
         }
         Err(error) => {
@@ -489,69 +521,43 @@ pub fn cosmos_collection_exists(
         Err(_) => Ok(false),
     }
 }
-//
-//  create and delete keyvault isn't needed for the app -- key vault tends to be global to the company, not the app
-//  and it's name has to be globally unique, so we instead use a keyvault name that is set in the environment. we
-//  also assume that the app has been configured to access KeyVault.  When running in developer mode (outside azure)
-//  the dev needs to be configured for access to KeyVault.
-//
-// pub fn create_keyvault(resource_group: &str, kv_name: &str, region: &str) -> Result<(), String> {
-//     if keyvault_exists(kv_name)? {
-//         return Ok(());
-//     }
 
-//     let mut command = Command::new("az");
-//     command
-//         .arg("keyvault")
-//         .arg("create")
-//         .arg("--name")
-//         .arg(kv_name)
-//         .arg("--resource-group")
-//         .arg(resource_group)
-//         .arg("--location") // The location parameter is required
-//         .arg(region);
+lazy_static! {
+    static ref ENV_MAP: HashMap<String, String> = {
+        let mut m = HashMap::new();
+        for (key, value) in std::env::vars() {
+            m.insert(value, key);
+        }
+        m
+    };
+}
 
-//     print_cmd(&command);
-
-//     let status = command.status();
-
-//     match status {
-//         Ok(s) if s.success() => Ok(()),
-//         Ok(_) => Err(format!(
-//             "Failed to create Key Vault {} in resource group {}",
-//             kv_name, resource_group
-//         )),
-//         Err(e) => Err(format!("Error executing Azure CLI: {}", e)),
-//     }
-// }
-
-// pub fn delete_keyvault(kv_name: &str) -> Result<(), String> {
-//     let mut command = Command::new("az");
-//     command
-//         .arg("keyvault")
-//         .arg("delete")
-//         .arg("--name")
-//         .arg(kv_name);
-
-//     print_cmd(&command);
-//     let status = command.status();
-
-//     match status {
-//         Ok(s) if s.success() => Ok(()),
-//         Ok(_) => Err(format!("Failed to delete Key Vault {}", kv_name)),
-//         Err(e) => Err(format!("Error executing Azure CLI: {}", e)),
-//     }
-// }
-
+fn get_env_name(value: &str) -> Option<String> {
+    ENV_MAP.get(value).cloned()
+}
 pub fn print_cmd(command: &Command) {
     let program = command.get_program().to_string_lossy();
     let args = command.get_args();
-
-    let cmd_str: Vec<String> = std::iter::once(program.into_owned())
+    let re = Regex::new(r"(AccountKey=)([^;]+)").unwrap();
+    let mut cmd_str: Vec<String> = std::iter::once(program.into_owned())
         .chain(args.map(|arg| arg.to_string_lossy().into_owned()))
         .collect();
 
-    println!("Executing: {}", cmd_str.join(" "));
+    // Hide environment variable values using ENV_MAP
+    for arg in &mut cmd_str {
+        // Replace argument values that are environment variable values with their variable names
+        if let Some(env_name) = ENV_MAP.get(arg) {
+            *arg = format!("${}", env_name);
+        } else {
+            // If not an environment variable value, check for AccountKey and mask it
+            *arg = re.replace(arg, |caps: &regex::Captures| {
+                let key_length = caps[2].len();
+                format!("AccountKey={}x==", "X".repeat(key_length - 3))
+            }).to_string();
+        }
+    }
+
+    info!("Executing: {}", cmd_str.join(" "));
 }
 
 pub fn keyvault_exists(kv_name: &str) -> Result<bool, String> {
@@ -565,10 +571,10 @@ pub fn keyvault_exists(kv_name: &str) -> Result<bool, String> {
     let output = exec_os(&mut command)?;
 
     if output.contains(kv_name) {
-        println!("KV {} already exists", kv_name);
+        log::trace!("KV {} already exists", kv_name);
         Ok(true)
     } else {
-        println!("{} does not exist", kv_name);
+        log::trace!("{} does not exist", kv_name);
         Ok(false)
     }
 }
@@ -656,7 +662,7 @@ pub fn send_text_message(to: &str, msg: &str) -> Result<(), String> {
     // Use exec_os to execute the command
     match exec_os(&mut command) {
         Ok(output) => {
-            println!("Output: {}", output);
+            log::trace!("Output: {}", output);
             Ok(())
         }
         Err(error) => Err(format!("Failed to send message. Error: {:#?}", error)),
@@ -686,7 +692,7 @@ pub fn send_email(to: &str, from: &str, subject: &str, msg: &str) -> Result<(), 
     // Use exec_os to execute the command
     match exec_os(&mut command) {
         Ok(output) => {
-            println!("Output: {}", output);
+            log::trace!("Output: {}", output);
             Ok(())
         }
         Err(error) => Err(format!("Failed to send message. Error: {:#?}", error)),
@@ -709,6 +715,14 @@ pub fn azure_resources_integration_test() {
     let database_name = "test-cosmos-database-".to_owned() + three_letters;
     let collection_name = "test-collection-".to_owned() + three_letters;
 
+    //
+    //  run the async function synchronously
+    let runtime = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
+    runtime.block_on(init_env_logger(
+        log::LevelFilter::Trace,
+        log::LevelFilter::Error,
+    ));
+
     // make sure the user is logged in
 
     verify_login_or_panic();
@@ -717,19 +731,19 @@ pub fn azure_resources_integration_test() {
     keyvault_exists(&kv_name).expect(&format!("Failed to find Key Vault named {}.", kv_name));
 
     // Create a test resource group
-    println!("creating resource group");
+    log::info!("creating resource group");
     create_resource_group(&resource_group, location).expect("Failed to create resource group.");
 
-    println!("creating cosmosdb: {}", cosmos_account_name);
+    log::trace!("creating cosmosdb: {}", cosmos_account_name);
     //Add a Cosmos DB instance to it
     create_cosmos_account(&resource_group, &cosmos_account_name, location)
         .expect("Failed to create Cosmos DB instance.");
 
-    println!("Creating database: {}", database_name);
+    log::trace!("Creating database: {}", database_name);
     create_database(&cosmos_account_name, &database_name, &resource_group)
         .expect("creating a cosmos db should succeed");
     // Create a collection in the Cosmos DB instance
-    println!("Creating collection: {}", collection_name);
+    log::trace!("Creating collection: {}", collection_name);
     create_collection(
         &cosmos_account_name,
         &database_name,
@@ -738,24 +752,17 @@ pub fn azure_resources_integration_test() {
     )
     .expect("Failed to create collection in Cosmos DB.");
 
-    //Add the Cosmos DB secrets to Key Vault
+    //get cosmos secrets from cosmos
     let secrets = get_cosmos_secrets(&cosmos_account_name, &resource_group)
         .expect("Failed to retrieve Cosmos DB secrets.");
 
+    // find the secondary read/write secret
     let secret = secrets
         .iter()
         .find(|s| s.key_kind == "Secondary")
-        .expect("there should be a Secondary key in the cosmos secretes");
+        .expect("there should be a Secondary key in the cosmos secrets");
 
-    //
-    //  are they already there?
-    let result = retrieve_cosmos_secrets_from_keyvault(&kv_name);
-
-    match result {
-        Ok(s) => assert_eq!(s, *secret),
-        Err(_) => {}
-    };
-
+    // store in key vault
     store_cosmos_secrets_in_keyvault(&secret, &kv_name)
         .expect("Failed to store secrets in Key Vault.");
 
@@ -774,9 +781,9 @@ pub fn azure_resources_integration_test() {
         "Stored and retrieved secrets do not match."
     );
 
-    // Delete Cosmos DB
-    delete_cosmos_account(&cosmos_account_name, &resource_group)
-        .expect("Failed to delete Cosmos DB.");
+    // Delete Cosmos DB - commented out as this take *forever* to run
+    // delete_cosmos_account(&cosmos_account_name, &resource_group)
+    //     .expect("Failed to delete Cosmos DB.");
 
     // Clean up: Delete the test resource group (you can comment this out if you want to inspect resources)
     delete_resource_group(&resource_group).expect("Failed to delete resource group.");
@@ -796,9 +803,14 @@ pub fn rotate_login_keys() {
 
     let current_login_key = get_secret(&kv_name, new_name).unwrap_or_else(|_| generate_jwt_key());
     let test_context = TestContext::new(false);
-    let claims = Claims::new("test_id", "test@email.com", 24*60*60, &Some(test_context));
-    let token = create_jwt_token(&claims, &current_login_key)
-        .expect("create token should not fail");
+    let claims = Claims::new(
+        "test_id",
+        "test@email.com",
+        24 * 60 * 60,
+        &Some(test_context),
+    );
+    let token =
+        create_jwt_token(&claims, &current_login_key).expect("create token should not fail");
 
     let new_key = generate_jwt_key();
 

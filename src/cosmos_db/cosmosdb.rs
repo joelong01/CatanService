@@ -332,7 +332,7 @@ mod tests {
 
         let user_db = UserDb::new(&context).await;
 
-        init_env_logger(log::LevelFilter::Trace).await;
+        init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Error).await;
 
         // create the database -- note this will DELETE the database as well
         match user_db.setupdb().await {
