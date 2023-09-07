@@ -102,6 +102,7 @@ pub struct PersistUser {
     pub validated_email: bool,         // has the mail been validated?
     pub validated_phone: bool,         // has the phone number been validated?
     pub user_profile: UserProfile,
+    pub phone_code: Option<String>,
 }
 
 impl PersistUser {
@@ -113,6 +114,7 @@ impl PersistUser {
             user_profile: UserProfile::default(),
             validated_email: false,
             validated_phone: false,
+            phone_code: None,
         }
     }
 }
@@ -125,6 +127,7 @@ impl PersistUser {
             user_profile: client_user.user_profile.clone(),
             validated_email: false,
             validated_phone: false,
+            phone_code: None,
         }
     }
     pub fn from_user_profile(profile: &UserProfile, hash: String) -> Self {
@@ -135,6 +138,7 @@ impl PersistUser {
             user_profile: profile.clone(),
             validated_email: false,
             validated_phone: false,
+            phone_code: None,
         }
     }
 }
@@ -397,12 +401,12 @@ impl ServiceResponse {
             Ok(sr) => sr,
             Err(_) => return None,
         };
-        match service_response.get_authtoken() {
+        match service_response.get_token() {
             Some(token) => Some((service_response, token)),
             None => None,
         }
     }
-    pub fn get_authtoken(&self) -> Option<String> {
+    pub fn get_token(&self) -> Option<String> {
         // Extract auth token from response
         match &self.response_type {
             ResponseType::Token(token) => Some(token.clone()),

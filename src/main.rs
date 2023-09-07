@@ -159,6 +159,8 @@ fn user_service() -> Scope {
             "/{id}",
             web::get().to(user_handlers::find_user_by_id_handler),
         )
+        .route("/phone/validate/{code}", web::post().to(user_handlers::validate_phone_handler))
+        .route("/phone/send_code", web::post().to(user_handlers::send_phone_code_handler))
 }
 
 /**
@@ -283,9 +285,9 @@ mod tests {
         setup_test,
         games_service::game_container::game_messages::GameHeader,
         init_env_logger,
-        middleware::environment_mw::TestContext,
+        middleware::environment_mw::{TestContext, RequestContext, CATAN_ENV},
      
-        shared::models::{ClientUser, ServiceResponse, UserProfile},
+        shared::models::{ClientUser, ServiceResponse, UserProfile}, user_service::users::{register, login, setup},
     };
 
     use actix_web::{http::header, test};
@@ -431,5 +433,54 @@ mod tests {
     pub async fn find_or_create_test_db() {
         let app = create_test_service!();
         setup_test!(&app, false);
+    }
+
+    #[tokio::test]
+
+    async fn test_validate_phone() {
+        init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
+        let mut app = create_test_service!();
+        setup_test!(&app, false);
+
+        let request_context = RequestContext::test_default(false);
+        let mut profile = UserProfile::new_test_user();
+        profile.phone_number = CATAN_ENV.test_phone_number.clone();
+        // setup
+        let _response = setup(&request_context).await;
+
+        let sr = register("password", &profile, &request_context)
+            .await
+            .expect("this should work");
+        let _client_user = sr.get_client_user().expect("This should be a client user");
+
+        let response = login(&profile.email, "password", &request_context)
+            .await
+            .expect("login should succeed");
+
+        let auth_token = response.get_token().expect("an auth token!");
+
+        let req = test::TestRequest::post()
+            .uri("/auth/api/v1/users/phone/send_code")
+            .append_header((header::CONTENT_TYPE, "application/json"))
+            .append_header((GameHeader::TEST, TestContext::as_json(false)))
+            .append_header(("Authorization", auth_token.clone()))
+            .to_request();
+
+        let response = test::call_service(&mut app, req).await;
+        assert_eq!(response.status(), 200);
+
+        let body = test::read_body(response).await;
+        let phone_code = ServiceResponse::json_to_token(std::str::from_utf8(&body).unwrap())
+            .expect("should be jwt")
+            .1;
+
+        let req = test::TestRequest::post()
+            .uri(&format!("/auth/api/v1/users/phone/validate/{}", phone_code))
+            .append_header((header::CONTENT_TYPE, "application/json"))
+            .append_header((GameHeader::TEST, TestContext::as_json(false)))
+            .append_header(("Authorization", auth_token))
+            .to_request();
+        let response = test::call_service(&mut app, req).await;
+        assert_eq!(response.status(), 200);
     }
 }

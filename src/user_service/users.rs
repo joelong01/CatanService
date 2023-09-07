@@ -1,11 +1,13 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
-use rand::RngCore;
+
+use rand::{Rng, RngCore};
 use std::sync::atomic::{AtomicBool, Ordering};
 use url::form_urlencoded;
 
 use crate::azure_setup::azure_wrapper::{
     cosmos_account_exists, cosmos_collection_exists, cosmos_database_exists, send_email,
+    send_text_message,
 };
 /**
  * this module implements the WebApi to create the database/collection, list all the users, and to create/find/delete
@@ -232,9 +234,7 @@ async fn internal_update_user(
             }
         }
     } else {
-        TestDb::update_or_create_user(&persist_user)
-            .await
-            .unwrap();
+        TestDb::update_or_create_user(&persist_user).await.unwrap();
         Ok(ServiceResponse::new(
             "created",
             StatusCode::CREATED,
@@ -585,11 +585,92 @@ pub fn send_validation_email(
         )),
     }
 }
+///
+/// 1. get the user profile
+/// 2. generate a random 6 digit number
+/// 3. store the number in the profile
+/// 4. update the profile
+/// 5. send the text message to the phone
+pub async fn send_phone_code(
+    user_id: &str,
+    request_context: &RequestContext,
+) -> Result<ServiceResponse, ServiceResponse> {
+    let mut persist_user = internal_find_user("id", user_id, request_context).await?;
+    let code = rand::thread_rng().gen_range(100_000..=999_999);
+    persist_user.phone_code = Some(code.to_string());
+    internal_update_user(&persist_user, &request_context).await?;
+    let msg = format!(
+        "This is your 6 digit code for the Catan Service. \
+                   If You did not request this code, ignore this message. \
+                   code: {}",
+        code
+    );
+    match send_text_message(&persist_user.user_profile.phone_number, &msg) {
+        Ok(_) => Ok(ServiceResponse::new(
+            "sent",
+            StatusCode::OK,
+            ResponseType::Token(code.to_string()),
+            GameError::NoError,
+        )),
+        Err(e) => Err(ServiceResponse::new(
+            "Error sending email",
+            reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+            ResponseType::ErrorInfo(e),
+            GameError::HttpError,
+        )),
+    }
+}
+
+/// Validates a phone code for a given user.
+///
+/// This function checks if the provided phone code matches the stored code for the user.
+/// If the code matches, it updates the user's information to indicate a validated phone.
+///
+/// # Arguments
+///
+/// * `user_id` - The unique identifier for the user.
+/// * `code` - The phone code to validate.
+/// * `request_context` - Context related to the current request.
+///
+/// # Returns
+///
+/// * `Ok(ServiceResponse)` if the phone code is validated successfully.
+/// * `Err(ServiceResponse)` if the code does not match or is missing.
+pub async fn validate_phone(
+    user_id: &str,
+    code: &str,
+    request_context: &RequestContext,
+) -> Result<ServiceResponse, ServiceResponse> {
+    // Attempt to find the user with the provided ID.
+    let mut persist_user = internal_find_user("id", user_id, request_context).await?;
+
+    match &persist_user.phone_code {
+        // If the stored code matches the provided code, validate the phone.
+        Some(c) if c.to_string() == code => {
+            persist_user.validated_phone = true;
+            persist_user.phone_code = None;
+            internal_update_user(&persist_user, request_context).await?;
+            Ok(ServiceResponse::new(
+                "validated",
+                StatusCode::OK,
+                ResponseType::NoData,
+                GameError::NoError,
+            ))
+        }
+        // Handle all other cases (mismatch or missing code) as errors.
+        _ => Err(ServiceResponse::new(
+            "incorrect code.  request a new one",
+            reqwest::StatusCode::BAD_REQUEST,
+            ResponseType::NoData,
+            GameError::HttpError,
+        )),
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
     use actix_web::test;
- 
 
     use crate::{
         create_test_service, games_service::game_container::game_messages::GameHeader,
@@ -597,6 +678,32 @@ mod tests {
     };
 
     use super::*;
+    #[tokio::test]
+    async fn test_validate_phone() {
+        init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
+        let app = create_test_service!();
+        setup_test!(&app, false);
+
+        let request_context = RequestContext::test_default(false);
+        let mut profile = UserProfile::new_test_user();
+        profile.phone_number = CATAN_ENV.test_phone_number.clone();
+        // setup
+        let response = setup(&request_context).await;
+
+        let sr = register("password", &profile, &request_context)
+            .await
+            .expect("this should work");
+        let client_user = sr.get_client_user().expect("This should be a client user");
+        let sr = send_phone_code(&client_user.id, &request_context)
+            .await
+            .expect("text message should be sent!");
+
+        let code = sr.get_token().expect("this should be a number!");
+        log::trace!("code is: {}", code);
+        let sr = validate_phone(&client_user.id, &code, &request_context).await.expect("validation to work");
+        assert_eq!(sr.status, StatusCode::OK);
+    }
+
     #[tokio::test]
     async fn test_validate_email() {
         init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Error).await;
@@ -608,7 +715,7 @@ mod tests {
         profile.email = CATAN_ENV.test_email.clone();
         // setup
         let response = setup(&request_context).await;
-       
+
         let sr = register("password", &profile, &request_context)
             .await
             .expect("this should work");
@@ -626,7 +733,6 @@ mod tests {
                 let req = test::TestRequest::get().uri(&url).to_request();
                 let resp = test::call_service(&app, req).await;
                 assert!(resp.status().is_success());
-               
             }
             Err(sr) => {
                 log::error!("{}", sr);

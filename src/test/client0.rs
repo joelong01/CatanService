@@ -40,7 +40,7 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
     let auth_token = proxy
         .login("joe@longshotdev.com", "password")
         .await
-        .get_authtoken()
+        .get_token()
         .expect("successful login should have a JWT token in the ServiceResponse");
 
     let name = "Main(Joe)";

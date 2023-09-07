@@ -10,7 +10,7 @@ pub async fn game_poller(username: &str, tx: tokio::sync::mpsc::Sender<CatanMess
     let auth_token = &proxy
         .login(username, "password")
         .await
-        .get_authtoken()
+        .get_token()
         .expect("Login should work!");
 
     let client_user: ClientUser = proxy

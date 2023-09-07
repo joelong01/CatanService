@@ -85,7 +85,7 @@ pub mod test {
         let auth_token = proxy
             .login("joe@longshotdev.com", "password")
             .await
-            .get_authtoken()
+            .get_token()
             .expect("successful login should have a JWT token in the ServiceResponse");
 
         // start a game

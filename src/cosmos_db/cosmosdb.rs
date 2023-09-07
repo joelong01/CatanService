@@ -452,6 +452,7 @@ mod tests {
                 },
                 validated_email: false,
                 validated_phone: false,
+                phone_code: None
             };
 
             users.push(user);
