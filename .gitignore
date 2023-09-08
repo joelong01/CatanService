@@ -15,3 +15,7 @@ Cargo.lock
 .DS_Store
 tmp.txt
 output.json
+log/log.csv
+src/test/client2.rs
+*.csv
+./log

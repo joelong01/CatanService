@@ -1,0 +1,18 @@
+refresh_rate: 30 seconds
+
+appenders:
+  my_stdout:
+    kind: console
+    encoder:
+      pattern: "{d} {l}: {m}{n}"
+  my_file:
+    kind: file
+    path: "log/log.csv"
+    encoder:
+      pattern: "{d},{l},{m}{n}" 
+
+root:
+  level: info
+  appenders:
+    - my_stdout
+    - my_file

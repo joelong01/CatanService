@@ -13,12 +13,12 @@ pub struct GameData {
     pub id: String,
     pub players: Vec<ClientUser>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SupportedGames {
     pub catan_games: Vec<CatanGames>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy, Eq)]
 pub enum CatanGames {
     Regular,
     Expansion,
@@ -46,10 +46,9 @@ pub enum Entitlement {
     City,
     Road,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Copy)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum GameAction {
     AddPlayer,
-    RemovePlayer,
     NewBoard,
     SetOrder,
     Start,
@@ -58,16 +57,15 @@ pub enum GameAction {
     Roll,
     MoveBaron,
     Trade,
-    Done,
+    Next,
     Undo,
     Redo,
 }
 
-
 //
 //  answers the question "what are we doing now?"
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Copy)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "PascalCase")]
 pub enum GameState {
     AddingPlayers,
     ChoosingBoard,
@@ -78,10 +76,11 @@ pub enum GameState {
     MustMoveBaron,
     BuyingAndTrading,
     Supplemental,
+    GameOver,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "PascalCase")]
 pub enum GamePhase {
     SettingUp,
     Playing,

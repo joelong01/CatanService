@@ -6,7 +6,7 @@ use super::{harbor_enums::HarborType, harbor_key::HarborKey};
 
 // Defining HarborInfo struct to be analogous to TypeScript's class
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "PascalCase")]
 pub struct Harbor {
     pub harbor_key: HarborKey,
     pub harbor_type: HarborType,
@@ -26,13 +26,16 @@ impl Harbor {
     ///
     /// A new Harbor instance.
     pub fn new(key: HarborKey, harbor_type: HarborType) -> Self {
-        Self { harbor_key: key, harbor_type }
+        Self {
+            harbor_key: key,
+            harbor_type,
+        }
     }
 }
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::games_service::{tiles::tile_key::TileKey, shared::game_enums::Direction};
+    use crate::games_service::{shared::game_enums::Direction, tiles::tile_key::TileKey};
 
     #[test]
     fn test_harbor_key_serialization() {

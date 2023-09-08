@@ -4,15 +4,19 @@ use actix::fut::err;
 use actix_service::{Service, Transform};
 use actix_web::{dev::ServiceRequest, dev::ServiceResponse, error::ErrorUnauthorized, Error};
 
+use crate::{
+    games_service::game_container::game_messages::GameHeader, log_thread_info,
+    user_service::users::validate_jwt_token,
+};
 use futures::{
     future::{ok, Ready},
     Future,
 };
-use jsonwebtoken::{decode, Algorithm, DecodingKey, TokenData, Validation};
+
 use reqwest::header::{HeaderName, HeaderValue};
-use crate::shared::models::Claims;
 
 use super::environment_mw::CATAN_ENV;
+
 // AuthenticationMiddlewareFactory serves as a factory to create instances of AuthenticationMiddleware
 // which is the actual middleware component. It implements the Transform trait required by
 // Actix to apply transformations to requests/responses as they pass through the middleware.
@@ -69,26 +73,26 @@ where
     fn call(&self, mut req: ServiceRequest) -> Self::Future {
         // fetch the authorization header
         let auth_header = req.headers().get("Authorization");
-        
 
         match auth_header {
             Some(header_value) => {
                 let token_str = header_value.to_str().unwrap_or("").replace("Bearer ", "");
-                if let Some(claims) = is_token_valid(&token_str) {
+                if let Some(claims) = validate_jwt_token(&token_str, &CATAN_ENV.login_secret_key) {
                     // Extract the id and sub from the claims
                     let id = &claims.claims.id;
                     let sub = &claims.claims.sub;
 
                     // Insert the id and sub into the headers
                     req.headers_mut().insert(
-                        HeaderName::from_static("user_id"),
+                        HeaderName::from_static(GameHeader::USER_ID),
                         HeaderValue::from_str(id).unwrap(),
                     );
                     req.headers_mut().insert(
-                        HeaderName::from_static("email"),
+                        HeaderName::from_static(GameHeader::EMAIL),
                         HeaderValue::from_str(sub).unwrap(),
                     );
                 } else {
+                    log_thread_info!("auth_mw", "rejected call: {:#?}", req.request());
                     let fut = err(ErrorUnauthorized("Unauthorized"));
                     return Box::pin(fut);
                 }
@@ -100,18 +104,8 @@ where
                 return Box::pin(fut);
             }
         }
-      
+
         let fut = self.service.call(req);
         Box::pin(fut)
     }
-}
-
-pub fn is_token_valid(token: &str) -> Option<TokenData<Claims>> {
-    let validation = Validation::new(Algorithm::HS512);
-    decode::<Claims>(
-        &token,
-        &DecodingKey::from_secret(CATAN_ENV.login_secret_key.as_ref()),
-        &validation,
-    )
-    .ok()
 }

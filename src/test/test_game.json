@@ -1,0 +1,9343 @@
+{
+  "Id": "id-10934600610604811608",
+  "Players": [
+    [
+      "joe@longshotdev.com",
+      {
+        "UserData": {
+          "Id": "joe@longshotdev.com",
+          "UserProfile": {
+            "Email": "joe@longshotdev.com",
+            "FirstName": "Joe",
+            "LastName": "Winner",
+            "DisplayName": "Joe:(0)",
+            "PictureUrl": "https://example.com/photo.jpg",
+            "ForegroundColor": "#000000",
+            "BackgroundColor": "#FFFFFF",
+            "TextColor": "#000000",
+            "GamesPlayed": 0,
+            "GamesWon": 0
+          }
+        },
+        "Roads": [],
+        "Buildings": [],
+        "Harbors": [],
+        "Targets": [],
+        "ResourceCount": {
+          "acquired": 0,
+          "lost": 0
+        },
+        "GoodRolls": 0,
+        "BadRolls": 0,
+        "State": {
+          "KnightsPlayed": 0,
+          "LongestRoad": 0,
+          "TotalResources": 0,
+          "WonResources": {
+            "sheep": 0,
+            "wood": 0,
+            "wheat": 0,
+            "ore": 0,
+            "brick": 0,
+            "gold": 0
+          },
+          "HasLongestRoad": false,
+          "HasLargestArmy": false,
+          "CityCount": 0,
+          "SettlementCount": 0,
+          "RoadCount": 0,
+          "ShipCount": 0,
+          "KnownScore": 0,
+          "TimesTargeted": 0,
+          "PipCount": 0,
+          "IsCurrentPlayer": false,
+          "MaxNoResourcesRun": 0
+        }
+      }
+    ]
+  ],
+  "Tiles": [
+    [
+      {
+        "Q": -1,
+        "R": 2,
+        "S": -1
+      },
+      {
+        "CurrentResource": "Sheep",
+        "OriginalResource": "Sheep",
+        "Roll": 8,
+        "TileKey": {
+          "Q": -1,
+          "R": 2,
+          "S": -1
+        },
+        "Roads": [
+          [
+            "NorthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -1,
+                  "R": 2,
+                  "S": -1
+                },
+                "Direction": "NorthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "North",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -1,
+                  "R": 2,
+                  "S": -1
+                },
+                "Direction": "North"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "South",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -1,
+                  "R": 2,
+                  "S": -1
+                },
+                "Direction": "South"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -1,
+                  "R": 2,
+                  "S": -1
+                },
+                "Direction": "SouthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -1,
+                  "R": 2,
+                  "S": -1
+                },
+                "Direction": "SouthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -1,
+                  "R": 2,
+                  "S": -1
+                },
+                "Direction": "NorthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ]
+        ],
+        "OwnedBuildings": []
+      }
+    ],
+    [
+      {
+        "Q": 1,
+        "R": -1,
+        "S": 0
+      },
+      {
+        "CurrentResource": "Wood",
+        "OriginalResource": "Wood",
+        "Roll": 3,
+        "TileKey": {
+          "Q": 1,
+          "R": -1,
+          "S": 0
+        },
+        "Roads": [
+          [
+            "South",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 1,
+                  "R": -1,
+                  "S": 0
+                },
+                "Direction": "South"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 1,
+                  "R": -1,
+                  "S": 0
+                },
+                "Direction": "NorthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 1,
+                  "R": -1,
+                  "S": 0
+                },
+                "Direction": "SouthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 1,
+                  "R": -1,
+                  "S": 0
+                },
+                "Direction": "NorthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "North",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 1,
+                  "R": -1,
+                  "S": 0
+                },
+                "Direction": "North"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 1,
+                  "R": -1,
+                  "S": 0
+                },
+                "Direction": "SouthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ]
+        ],
+        "OwnedBuildings": []
+      }
+    ],
+    [
+      {
+        "Q": 2,
+        "R": -1,
+        "S": -1
+      },
+      {
+        "CurrentResource": "Desert",
+        "OriginalResource": "Desert",
+        "Roll": 7,
+        "TileKey": {
+          "Q": 2,
+          "R": -1,
+          "S": -1
+        },
+        "Roads": [
+          [
+            "NorthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 2,
+                  "R": -1,
+                  "S": -1
+                },
+                "Direction": "NorthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "North",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 2,
+                  "R": -1,
+                  "S": -1
+                },
+                "Direction": "North"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 2,
+                  "R": -1,
+                  "S": -1
+                },
+                "Direction": "SouthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 2,
+                  "R": -1,
+                  "S": -1
+                },
+                "Direction": "SouthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "South",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 2,
+                  "R": -1,
+                  "S": -1
+                },
+                "Direction": "South"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 2,
+                  "R": -1,
+                  "S": -1
+                },
+                "Direction": "NorthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ]
+        ],
+        "OwnedBuildings": []
+      }
+    ],
+    [
+      {
+        "Q": 2,
+        "R": 0,
+        "S": -2
+      },
+      {
+        "CurrentResource": "Wood",
+        "OriginalResource": "Wood",
+        "Roll": 5,
+        "TileKey": {
+          "Q": 2,
+          "R": 0,
+          "S": -2
+        },
+        "Roads": [
+          [
+            "SouthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 2,
+                  "R": 0,
+                  "S": -2
+                },
+                "Direction": "SouthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 2,
+                  "R": 0,
+                  "S": -2
+                },
+                "Direction": "SouthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 2,
+                  "R": 0,
+                  "S": -2
+                },
+                "Direction": "NorthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 2,
+                  "R": 0,
+                  "S": -2
+                },
+                "Direction": "NorthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "North",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 2,
+                  "R": 0,
+                  "S": -2
+                },
+                "Direction": "North"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "South",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 2,
+                  "R": 0,
+                  "S": -2
+                },
+                "Direction": "South"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ]
+        ],
+        "OwnedBuildings": []
+      }
+    ],
+    [
+      {
+        "Q": -1,
+        "R": 0,
+        "S": 1
+      },
+      {
+        "CurrentResource": "Wheat",
+        "OriginalResource": "Wheat",
+        "Roll": 10,
+        "TileKey": {
+          "Q": -1,
+          "R": 0,
+          "S": 1
+        },
+        "Roads": [
+          [
+            "SouthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -1,
+                  "R": 0,
+                  "S": 1
+                },
+                "Direction": "SouthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -1,
+                  "R": 0,
+                  "S": 1
+                },
+                "Direction": "NorthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "North",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -1,
+                  "R": 0,
+                  "S": 1
+                },
+                "Direction": "North"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -1,
+                  "R": 0,
+                  "S": 1
+                },
+                "Direction": "NorthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "South",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -1,
+                  "R": 0,
+                  "S": 1
+                },
+                "Direction": "South"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -1,
+                  "R": 0,
+                  "S": 1
+                },
+                "Direction": "SouthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ]
+        ],
+        "OwnedBuildings": []
+      }
+    ],
+    [
+      {
+        "Q": -1,
+        "R": 1,
+        "S": 0
+      },
+      {
+        "CurrentResource": "Ore",
+        "OriginalResource": "Ore",
+        "Roll": 5,
+        "TileKey": {
+          "Q": -1,
+          "R": 1,
+          "S": 0
+        },
+        "Roads": [
+          [
+            "NorthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -1,
+                  "R": 1,
+                  "S": 0
+                },
+                "Direction": "NorthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "South",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -1,
+                  "R": 1,
+                  "S": 0
+                },
+                "Direction": "South"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -1,
+                  "R": 1,
+                  "S": 0
+                },
+                "Direction": "NorthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "North",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -1,
+                  "R": 1,
+                  "S": 0
+                },
+                "Direction": "North"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -1,
+                  "R": 1,
+                  "S": 0
+                },
+                "Direction": "SouthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -1,
+                  "R": 1,
+                  "S": 0
+                },
+                "Direction": "SouthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ]
+        ],
+        "OwnedBuildings": []
+      }
+    ],
+    [
+      {
+        "Q": 1,
+        "R": 1,
+        "S": -2
+      },
+      {
+        "CurrentResource": "Wood",
+        "OriginalResource": "Wood",
+        "Roll": 6,
+        "TileKey": {
+          "Q": 1,
+          "R": 1,
+          "S": -2
+        },
+        "Roads": [
+          [
+            "SouthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 1,
+                  "R": 1,
+                  "S": -2
+                },
+                "Direction": "SouthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 1,
+                  "R": 1,
+                  "S": -2
+                },
+                "Direction": "SouthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 1,
+                  "R": 1,
+                  "S": -2
+                },
+                "Direction": "NorthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "South",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 1,
+                  "R": 1,
+                  "S": -2
+                },
+                "Direction": "South"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 1,
+                  "R": 1,
+                  "S": -2
+                },
+                "Direction": "NorthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "North",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 1,
+                  "R": 1,
+                  "S": -2
+                },
+                "Direction": "North"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ]
+        ],
+        "OwnedBuildings": []
+      }
+    ],
+    [
+      {
+        "Q": 1,
+        "R": -2,
+        "S": 1
+      },
+      {
+        "CurrentResource": "Wood",
+        "OriginalResource": "Wood",
+        "Roll": 11,
+        "TileKey": {
+          "Q": 1,
+          "R": -2,
+          "S": 1
+        },
+        "Roads": [
+          [
+            "South",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 1,
+                  "R": -2,
+                  "S": 1
+                },
+                "Direction": "South"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 1,
+                  "R": -2,
+                  "S": 1
+                },
+                "Direction": "SouthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 1,
+                  "R": -2,
+                  "S": 1
+                },
+                "Direction": "NorthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 1,
+                  "R": -2,
+                  "S": 1
+                },
+                "Direction": "NorthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "North",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 1,
+                  "R": -2,
+                  "S": 1
+                },
+                "Direction": "North"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 1,
+                  "R": -2,
+                  "S": 1
+                },
+                "Direction": "SouthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ]
+        ],
+        "OwnedBuildings": []
+      }
+    ],
+    [
+      {
+        "Q": 2,
+        "R": -2,
+        "S": 0
+      },
+      {
+        "CurrentResource": "Sheep",
+        "OriginalResource": "Sheep",
+        "Roll": 4,
+        "TileKey": {
+          "Q": 2,
+          "R": -2,
+          "S": 0
+        },
+        "Roads": [
+          [
+            "SouthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 2,
+                  "R": -2,
+                  "S": 0
+                },
+                "Direction": "SouthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 2,
+                  "R": -2,
+                  "S": 0
+                },
+                "Direction": "NorthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 2,
+                  "R": -2,
+                  "S": 0
+                },
+                "Direction": "NorthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 2,
+                  "R": -2,
+                  "S": 0
+                },
+                "Direction": "SouthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "South",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 2,
+                  "R": -2,
+                  "S": 0
+                },
+                "Direction": "South"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "North",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 2,
+                  "R": -2,
+                  "S": 0
+                },
+                "Direction": "North"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ]
+        ],
+        "OwnedBuildings": []
+      }
+    ],
+    [
+      {
+        "Q": 0,
+        "R": 2,
+        "S": -2
+      },
+      {
+        "CurrentResource": "Wheat",
+        "OriginalResource": "Wheat",
+        "Roll": 10,
+        "TileKey": {
+          "Q": 0,
+          "R": 2,
+          "S": -2
+        },
+        "Roads": [
+          [
+            "NorthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": 2,
+                  "S": -2
+                },
+                "Direction": "NorthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "North",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": 2,
+                  "S": -2
+                },
+                "Direction": "North"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "South",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": 2,
+                  "S": -2
+                },
+                "Direction": "South"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": 2,
+                  "S": -2
+                },
+                "Direction": "NorthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": 2,
+                  "S": -2
+                },
+                "Direction": "SouthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": 2,
+                  "S": -2
+                },
+                "Direction": "SouthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ]
+        ],
+        "OwnedBuildings": []
+      }
+    ],
+    [
+      {
+        "Q": 0,
+        "R": 1,
+        "S": -1
+      },
+      {
+        "CurrentResource": "Brick",
+        "OriginalResource": "Brick",
+        "Roll": 9,
+        "TileKey": {
+          "Q": 0,
+          "R": 1,
+          "S": -1
+        },
+        "Roads": [
+          [
+            "South",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": 1,
+                  "S": -1
+                },
+                "Direction": "South"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": 1,
+                  "S": -1
+                },
+                "Direction": "SouthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "North",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": 1,
+                  "S": -1
+                },
+                "Direction": "North"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": 1,
+                  "S": -1
+                },
+                "Direction": "NorthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": 1,
+                  "S": -1
+                },
+                "Direction": "SouthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": 1,
+                  "S": -1
+                },
+                "Direction": "NorthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ]
+        ],
+        "OwnedBuildings": []
+      }
+    ],
+    [
+      {
+        "Q": -2,
+        "R": 1,
+        "S": 1
+      },
+      {
+        "CurrentResource": "Brick",
+        "OriginalResource": "Brick",
+        "Roll": 2,
+        "TileKey": {
+          "Q": -2,
+          "R": 1,
+          "S": 1
+        },
+        "Roads": [
+          [
+            "NorthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -2,
+                  "R": 1,
+                  "S": 1
+                },
+                "Direction": "NorthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "South",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -2,
+                  "R": 1,
+                  "S": 1
+                },
+                "Direction": "South"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -2,
+                  "R": 1,
+                  "S": 1
+                },
+                "Direction": "NorthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "North",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -2,
+                  "R": 1,
+                  "S": 1
+                },
+                "Direction": "North"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -2,
+                  "R": 1,
+                  "S": 1
+                },
+                "Direction": "SouthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -2,
+                  "R": 1,
+                  "S": 1
+                },
+                "Direction": "SouthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ]
+        ],
+        "OwnedBuildings": []
+      }
+    ],
+    [
+      {
+        "Q": -2,
+        "R": 0,
+        "S": 2
+      },
+      {
+        "CurrentResource": "Brick",
+        "OriginalResource": "Brick",
+        "Roll": 8,
+        "TileKey": {
+          "Q": -2,
+          "R": 0,
+          "S": 2
+        },
+        "Roads": [
+          [
+            "NorthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -2,
+                  "R": 0,
+                  "S": 2
+                },
+                "Direction": "NorthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -2,
+                  "R": 0,
+                  "S": 2
+                },
+                "Direction": "SouthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "North",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -2,
+                  "R": 0,
+                  "S": 2
+                },
+                "Direction": "North"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -2,
+                  "R": 0,
+                  "S": 2
+                },
+                "Direction": "SouthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "South",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -2,
+                  "R": 0,
+                  "S": 2
+                },
+                "Direction": "South"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -2,
+                  "R": 0,
+                  "S": 2
+                },
+                "Direction": "NorthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ]
+        ],
+        "OwnedBuildings": []
+      }
+    ],
+    [
+      {
+        "Q": 0,
+        "R": -1,
+        "S": 1
+      },
+      {
+        "CurrentResource": "Wheat",
+        "OriginalResource": "Wheat",
+        "Roll": 6,
+        "TileKey": {
+          "Q": 0,
+          "R": -1,
+          "S": 1
+        },
+        "Roads": [
+          [
+            "SouthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": -1,
+                  "S": 1
+                },
+                "Direction": "SouthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "North",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": -1,
+                  "S": 1
+                },
+                "Direction": "North"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "South",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": -1,
+                  "S": 1
+                },
+                "Direction": "South"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": -1,
+                  "S": 1
+                },
+                "Direction": "SouthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": -1,
+                  "S": 1
+                },
+                "Direction": "NorthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": -1,
+                  "S": 1
+                },
+                "Direction": "NorthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ]
+        ],
+        "OwnedBuildings": []
+      }
+    ],
+    [
+      {
+        "Q": 0,
+        "R": -2,
+        "S": 2
+      },
+      {
+        "CurrentResource": "Sheep",
+        "OriginalResource": "Sheep",
+        "Roll": 4,
+        "TileKey": {
+          "Q": 0,
+          "R": -2,
+          "S": 2
+        },
+        "Roads": [
+          [
+            "SouthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": -2,
+                  "S": 2
+                },
+                "Direction": "SouthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": -2,
+                  "S": 2
+                },
+                "Direction": "NorthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": -2,
+                  "S": 2
+                },
+                "Direction": "SouthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "North",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": -2,
+                  "S": 2
+                },
+                "Direction": "North"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": -2,
+                  "S": 2
+                },
+                "Direction": "NorthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "South",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": -2,
+                  "S": 2
+                },
+                "Direction": "South"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ]
+        ],
+        "OwnedBuildings": []
+      }
+    ],
+    [
+      {
+        "Q": -1,
+        "R": -1,
+        "S": 2
+      },
+      {
+        "CurrentResource": "Ore",
+        "OriginalResource": "Ore",
+        "Roll": 9,
+        "TileKey": {
+          "Q": -1,
+          "R": -1,
+          "S": 2
+        },
+        "Roads": [
+          [
+            "NorthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -1,
+                  "R": -1,
+                  "S": 2
+                },
+                "Direction": "NorthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "South",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -1,
+                  "R": -1,
+                  "S": 2
+                },
+                "Direction": "South"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -1,
+                  "R": -1,
+                  "S": 2
+                },
+                "Direction": "SouthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -1,
+                  "R": -1,
+                  "S": 2
+                },
+                "Direction": "SouthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -1,
+                  "R": -1,
+                  "S": 2
+                },
+                "Direction": "NorthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "North",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -1,
+                  "R": -1,
+                  "S": 2
+                },
+                "Direction": "North"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ]
+        ],
+        "OwnedBuildings": []
+      }
+    ],
+    [
+      {
+        "Q": -2,
+        "R": 2,
+        "S": 0
+      },
+      {
+        "CurrentResource": "Sheep",
+        "OriginalResource": "Sheep",
+        "Roll": 11,
+        "TileKey": {
+          "Q": -2,
+          "R": 2,
+          "S": 0
+        },
+        "Roads": [
+          [
+            "NorthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -2,
+                  "R": 2,
+                  "S": 0
+                },
+                "Direction": "NorthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "North",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -2,
+                  "R": 2,
+                  "S": 0
+                },
+                "Direction": "North"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "South",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -2,
+                  "R": 2,
+                  "S": 0
+                },
+                "Direction": "South"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -2,
+                  "R": 2,
+                  "S": 0
+                },
+                "Direction": "SouthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -2,
+                  "R": 2,
+                  "S": 0
+                },
+                "Direction": "NorthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": -2,
+                  "R": 2,
+                  "S": 0
+                },
+                "Direction": "SouthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ]
+        ],
+        "OwnedBuildings": []
+      }
+    ],
+    [
+      {
+        "Q": 0,
+        "R": 0,
+        "S": 0
+      },
+      {
+        "CurrentResource": "Wheat",
+        "OriginalResource": "Wheat",
+        "Roll": 3,
+        "TileKey": {
+          "Q": 0,
+          "R": 0,
+          "S": 0
+        },
+        "Roads": [
+          [
+            "South",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": 0,
+                  "S": 0
+                },
+                "Direction": "South"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": 0,
+                  "S": 0
+                },
+                "Direction": "SouthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "North",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": 0,
+                  "S": 0
+                },
+                "Direction": "North"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": 0,
+                  "S": 0
+                },
+                "Direction": "SouthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": 0,
+                  "S": 0
+                },
+                "Direction": "NorthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 0,
+                  "R": 0,
+                  "S": 0
+                },
+                "Direction": "NorthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ]
+        ],
+        "OwnedBuildings": []
+      }
+    ],
+    [
+      {
+        "Q": 1,
+        "R": 0,
+        "S": -1
+      },
+      {
+        "CurrentResource": "Ore",
+        "OriginalResource": "Ore",
+        "Roll": 12,
+        "TileKey": {
+          "Q": 1,
+          "R": 0,
+          "S": -1
+        },
+        "Roads": [
+          [
+            "South",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 1,
+                  "R": 0,
+                  "S": -1
+                },
+                "Direction": "South"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 1,
+                  "R": 0,
+                  "S": -1
+                },
+                "Direction": "SouthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthWest",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 1,
+                  "R": 0,
+                  "S": -1
+                },
+                "Direction": "NorthWest"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "North",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 1,
+                  "R": 0,
+                  "S": -1
+                },
+                "Direction": "North"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "SouthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 1,
+                  "R": 0,
+                  "S": -1
+                },
+                "Direction": "SouthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ],
+          [
+            "NorthEast",
+            {
+              "PrimaryKey": {
+                "TileKey": {
+                  "Q": 1,
+                  "R": 0,
+                  "S": -1
+                },
+                "Direction": "NorthEast"
+              },
+              "Aliases": [],
+              "AdjacentRoads": [],
+              "Owner": null,
+              "State": "Unbuilt"
+            }
+          ]
+        ],
+        "OwnedBuildings": []
+      }
+    ]
+  ],
+  "Harbors": [
+    [
+      {
+        "TileKey": {
+          "Q": 2,
+          "R": -1,
+          "S": -1
+        },
+        "Position": "SouthEast"
+      },
+      {
+        "HarborKey": {
+          "TileKey": {
+            "Q": 2,
+            "R": -1,
+            "S": -1
+          },
+          "Position": "SouthEast"
+        },
+        "HarborType": "Brick"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": -1,
+          "R": -1,
+          "S": 2
+        },
+        "Position": "North"
+      },
+      {
+        "HarborKey": {
+          "TileKey": {
+            "Q": -1,
+            "R": -1,
+            "S": 2
+          },
+          "Position": "North"
+        },
+        "HarborType": "ThreeForOne"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 2,
+          "R": -2,
+          "S": 0
+        },
+        "Position": "NorthEast"
+      },
+      {
+        "HarborKey": {
+          "TileKey": {
+            "Q": 2,
+            "R": -2,
+            "S": 0
+          },
+          "Position": "NorthEast"
+        },
+        "HarborType": "ThreeForOne"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 1,
+          "R": 1,
+          "S": -2
+        },
+        "Position": "SouthEast"
+      },
+      {
+        "HarborKey": {
+          "TileKey": {
+            "Q": 1,
+            "R": 1,
+            "S": -2
+          },
+          "Position": "SouthEast"
+        },
+        "HarborType": "ThreeForOne"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": -2,
+          "R": 1,
+          "S": 1
+        },
+        "Position": "SouthWest"
+      },
+      {
+        "HarborKey": {
+          "TileKey": {
+            "Q": -2,
+            "R": 1,
+            "S": 1
+          },
+          "Position": "SouthWest"
+        },
+        "HarborType": "Sheep"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 0,
+          "R": 2,
+          "S": -2
+        },
+        "Position": "South"
+      },
+      {
+        "HarborKey": {
+          "TileKey": {
+            "Q": 0,
+            "R": 2,
+            "S": -2
+          },
+          "Position": "South"
+        },
+        "HarborType": "Ore"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": -2,
+          "R": 0,
+          "S": 2
+        },
+        "Position": "NorthWest"
+      },
+      {
+        "HarborKey": {
+          "TileKey": {
+            "Q": -2,
+            "R": 0,
+            "S": 2
+          },
+          "Position": "NorthWest"
+        },
+        "HarborType": "Wood"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": -1,
+          "R": 2,
+          "S": -1
+        },
+        "Position": "SouthWest"
+      },
+      {
+        "HarborKey": {
+          "TileKey": {
+            "Q": -1,
+            "R": 2,
+            "S": -1
+          },
+          "Position": "SouthWest"
+        },
+        "HarborType": "ThreeForOne"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 1,
+          "R": -2,
+          "S": 1
+        },
+        "Position": "North"
+      },
+      {
+        "HarborKey": {
+          "TileKey": {
+            "Q": 1,
+            "R": -2,
+            "S": 1
+          },
+          "Position": "North"
+        },
+        "HarborType": "Wheat"
+      }
+    ]
+  ],
+  "Roads": [
+    [
+      {
+        "TileKey": {
+          "Q": 0,
+          "R": -2,
+          "S": 2
+        },
+        "Direction": "South"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 0,
+            "R": -2,
+            "S": 2
+          },
+          "Direction": "South"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": -2,
+          "R": 2,
+          "S": 0
+        },
+        "Direction": "South"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": -2,
+            "R": 2,
+            "S": 0
+          },
+          "Direction": "South"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": -1,
+          "R": 2,
+          "S": -1
+        },
+        "Direction": "NorthEast"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": -1,
+            "R": 2,
+            "S": -1
+          },
+          "Direction": "NorthEast"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": -2,
+          "R": 1,
+          "S": 1
+        },
+        "Direction": "NorthWest"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": -2,
+            "R": 1,
+            "S": 1
+          },
+          "Direction": "NorthWest"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": -2,
+          "R": 2,
+          "S": 0
+        },
+        "Direction": "SouthWest"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": -2,
+            "R": 2,
+            "S": 0
+          },
+          "Direction": "SouthWest"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 1,
+          "R": 1,
+          "S": -2
+        },
+        "Direction": "SouthEast"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 1,
+            "R": 1,
+            "S": -2
+          },
+          "Direction": "SouthEast"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 0,
+          "R": -1,
+          "S": 1
+        },
+        "Direction": "South"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 0,
+            "R": -1,
+            "S": 1
+          },
+          "Direction": "South"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 0,
+          "R": -1,
+          "S": 1
+        },
+        "Direction": "NorthEast"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 0,
+            "R": -1,
+            "S": 1
+          },
+          "Direction": "NorthEast"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 0,
+          "R": 0,
+          "S": 0
+        },
+        "Direction": "SouthWest"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 0,
+            "R": 0,
+            "S": 0
+          },
+          "Direction": "SouthWest"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 2,
+          "R": -1,
+          "S": -1
+        },
+        "Direction": "SouthEast"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 2,
+            "R": -1,
+            "S": -1
+          },
+          "Direction": "SouthEast"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 1,
+          "R": -1,
+          "S": 0
+        },
+        "Direction": "NorthEast"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 1,
+            "R": -1,
+            "S": 0
+          },
+          "Direction": "NorthEast"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 0,
+          "R": 0,
+          "S": 0
+        },
+        "Direction": "NorthWest"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 0,
+            "R": 0,
+            "S": 0
+          },
+          "Direction": "NorthWest"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 2,
+          "R": -1,
+          "S": -1
+        },
+        "Direction": "SouthWest"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 2,
+            "R": -1,
+            "S": -1
+          },
+          "Direction": "SouthWest"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 1,
+          "R": 0,
+          "S": -1
+        },
+        "Direction": "SouthEast"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 1,
+            "R": 0,
+            "S": -1
+          },
+          "Direction": "SouthEast"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 1,
+          "R": -1,
+          "S": 0
+        },
+        "Direction": "NorthWest"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 1,
+            "R": -1,
+            "S": 0
+          },
+          "Direction": "NorthWest"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": -1,
+          "R": 2,
+          "S": -1
+        },
+        "Direction": "NorthWest"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": -1,
+            "R": 2,
+            "S": -1
+          },
+          "Direction": "NorthWest"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 2,
+          "R": -2,
+          "S": 0
+        },
+        "Direction": "SouthEast"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 2,
+            "R": -2,
+            "S": 0
+          },
+          "Direction": "SouthEast"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 1,
+          "R": -1,
+          "S": 0
+        },
+        "Direction": "South"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 1,
+            "R": -1,
+            "S": 0
+          },
+          "Direction": "South"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 1,
+          "R": 1,
+          "S": -2
+        },
+        "Direction": "North"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 1,
+            "R": 1,
+            "S": -2
+          },
+          "Direction": "North"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 2,
+          "R": -1,
+          "S": -1
+        },
+        "Direction": "North"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 2,
+            "R": -1,
+            "S": -1
+          },
+          "Direction": "North"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 2,
+          "R": -2,
+          "S": 0
+        },
+        "Direction": "NorthWest"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 2,
+            "R": -2,
+            "S": 0
+          },
+          "Direction": "NorthWest"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 2,
+          "R": -1,
+          "S": -1
+        },
+        "Direction": "NorthEast"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 2,
+            "R": -1,
+            "S": -1
+          },
+          "Direction": "NorthEast"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 1,
+          "R": 1,
+          "S": -2
+        },
+        "Direction": "NorthEast"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 1,
+            "R": 1,
+            "S": -2
+          },
+          "Direction": "NorthEast"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 2,
+          "R": -2,
+          "S": 0
+        },
+        "Direction": "North"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 2,
+            "R": -2,
+            "S": 0
+          },
+          "Direction": "North"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 0,
+          "R": -2,
+          "S": 2
+        },
+        "Direction": "NorthEast"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 0,
+            "R": -2,
+            "S": 2
+          },
+          "Direction": "NorthEast"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": -2,
+          "R": 0,
+          "S": 2
+        },
+        "Direction": "SouthWest"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": -2,
+            "R": 0,
+            "S": 2
+          },
+          "Direction": "SouthWest"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": -2,
+          "R": 1,
+          "S": 1
+        },
+        "Direction": "North"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": -2,
+            "R": 1,
+            "S": 1
+          },
+          "Direction": "North"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": -1,
+          "R": 2,
+          "S": -1
+        },
+        "Direction": "South"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": -1,
+            "R": 2,
+            "S": -1
+          },
+          "Direction": "South"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": -1,
+          "R": -1,
+          "S": 2
+        },
+        "Direction": "NorthWest"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": -1,
+            "R": -1,
+            "S": 2
+          },
+          "Direction": "NorthWest"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": -2,
+          "R": 1,
+          "S": 1
+        },
+        "Direction": "South"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": -2,
+            "R": 1,
+            "S": 1
+          },
+          "Direction": "South"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 1,
+          "R": 1,
+          "S": -2
+        },
+        "Direction": "NorthWest"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 1,
+            "R": 1,
+            "S": -2
+          },
+          "Direction": "NorthWest"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 0,
+          "R": 2,
+          "S": -2
+        },
+        "Direction": "SouthEast"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 0,
+            "R": 2,
+            "S": -2
+          },
+          "Direction": "SouthEast"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 2,
+          "R": 0,
+          "S": -2
+        },
+        "Direction": "SouthEast"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 2,
+            "R": 0,
+            "S": -2
+          },
+          "Direction": "SouthEast"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 0,
+          "R": 1,
+          "S": -1
+        },
+        "Direction": "NorthWest"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 0,
+            "R": 1,
+            "S": -1
+          },
+          "Direction": "NorthWest"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": -2,
+          "R": 1,
+          "S": 1
+        },
+        "Direction": "NorthEast"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": -2,
+            "R": 1,
+            "S": 1
+          },
+          "Direction": "NorthEast"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": -1,
+          "R": -1,
+          "S": 2
+        },
+        "Direction": "SouthWest"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": -1,
+            "R": -1,
+            "S": 2
+          },
+          "Direction": "SouthWest"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 1,
+          "R": -2,
+          "S": 1
+        },
+        "Direction": "NorthEast"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 1,
+            "R": -2,
+            "S": 1
+          },
+          "Direction": "NorthEast"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": -1,
+          "R": 2,
+          "S": -1
+        },
+        "Direction": "North"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": -1,
+            "R": 2,
+            "S": -1
+          },
+          "Direction": "North"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 0,
+          "R": 2,
+          "S": -2
+        },
+        "Direction": "South"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 0,
+            "R": 2,
+            "S": -2
+          },
+          "Direction": "South"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 0,
+          "R": -1,
+          "S": 1
+        },
+        "Direction": "SouthWest"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 0,
+            "R": -1,
+            "S": 1
+          },
+          "Direction": "SouthWest"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 1,
+          "R": -1,
+          "S": 0
+        },
+        "Direction": "SouthWest"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 1,
+            "R": -1,
+            "S": 0
+          },
+          "Direction": "SouthWest"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 0,
+          "R": -2,
+          "S": 2
+        },
+        "Direction": "SouthWest"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 0,
+            "R": -2,
+            "S": 2
+          },
+          "Direction": "SouthWest"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": -1,
+          "R": 0,
+          "S": 1
+        },
+        "Direction": "South"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": -1,
+            "R": 0,
+            "S": 1
+          },
+          "Direction": "South"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 0,
+          "R": -2,
+          "S": 2
+        },
+        "Direction": "North"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 0,
+            "R": -2,
+            "S": 2
+          },
+          "Direction": "North"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 1,
+          "R": 0,
+          "S": -1
+        },
+        "Direction": "NorthWest"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 1,
+            "R": 0,
+            "S": -1
+          },
+          "Direction": "NorthWest"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": -1,
+          "R": 0,
+          "S": 1
+        },
+        "Direction": "NorthWest"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": -1,
+            "R": 0,
+            "S": 1
+          },
+          "Direction": "NorthWest"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 2,
+          "R": 0,
+          "S": -2
+        },
+        "Direction": "NorthEast"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 2,
+            "R": 0,
+            "S": -2
+          },
+          "Direction": "NorthEast"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": -2,
+          "R": 1,
+          "S": 1
+        },
+        "Direction": "SouthWest"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": -2,
+            "R": 1,
+            "S": 1
+          },
+          "Direction": "SouthWest"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": -1,
+          "R": -1,
+          "S": 2
+        },
+        "Direction": "North"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": -1,
+            "R": -1,
+            "S": 2
+          },
+          "Direction": "North"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 0,
+          "R": 1,
+          "S": -1
+        },
+        "Direction": "South"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 0,
+            "R": 1,
+            "S": -1
+          },
+          "Direction": "South"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": -2,
+          "R": 0,
+          "S": 2
+        },
+        "Direction": "NorthWest"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": -2,
+            "R": 0,
+            "S": 2
+          },
+          "Direction": "NorthWest"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": -2,
+          "R": 1,
+          "S": 1
+        },
+        "Direction": "SouthEast"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": -2,
+            "R": 1,
+            "S": 1
+          },
+          "Direction": "SouthEast"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 0,
+          "R": -2,
+          "S": 2
+        },
+        "Direction": "SouthEast"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 0,
+            "R": -2,
+            "S": 2
+          },
+          "Direction": "SouthEast"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 2,
+          "R": -1,
+          "S": -1
+        },
+        "Direction": "South"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 2,
+            "R": -1,
+            "S": -1
+          },
+          "Direction": "South"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": -1,
+          "R": 1,
+          "S": 0
+        },
+        "Direction": "SouthWest"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": -1,
+            "R": 1,
+            "S": 0
+          },
+          "Direction": "SouthWest"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": -2,
+          "R": 0,
+          "S": 2
+        },
+        "Direction": "North"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": -2,
+            "R": 0,
+            "S": 2
+          },
+          "Direction": "North"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 1,
+          "R": 0,
+          "S": -1
+        },
+        "Direction": "SouthWest"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 1,
+            "R": 0,
+            "S": -1
+          },
+          "Direction": "SouthWest"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 0,
+          "R": 2,
+          "S": -2
+        },
+        "Direction": "SouthWest"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 0,
+            "R": 2,
+            "S": -2
+          },
+          "Direction": "SouthWest"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": -1,
+          "R": 2,
+          "S": -1
+        },
+        "Direction": "SouthEast"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": -1,
+            "R": 2,
+            "S": -1
+          },
+          "Direction": "SouthEast"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 1,
+          "R": -1,
+          "S": 0
+        },
+        "Direction": "North"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 1,
+            "R": -1,
+            "S": 0
+          },
+          "Direction": "North"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 0,
+          "R": -2,
+          "S": 2
+        },
+        "Direction": "NorthWest"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 0,
+            "R": -2,
+            "S": 2
+          },
+          "Direction": "NorthWest"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": -2,
+          "R": 2,
+          "S": 0
+        },
+        "Direction": "NorthWest"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": -2,
+            "R": 2,
+            "S": 0
+          },
+          "Direction": "NorthWest"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 1,
+          "R": -2,
+          "S": 1
+        },
+        "Direction": "North"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 1,
+            "R": -2,
+            "S": 1
+          },
+          "Direction": "North"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 0,
+          "R": 0,
+          "S": 0
+        },
+        "Direction": "South"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 0,
+            "R": 0,
+            "S": 0
+          },
+          "Direction": "South"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 1,
+          "R": -1,
+          "S": 0
+        },
+        "Direction": "SouthEast"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 1,
+            "R": -1,
+            "S": 0
+          },
+          "Direction": "SouthEast"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 2,
+          "R": -2,
+          "S": 0
+        },
+        "Direction": "NorthEast"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 2,
+            "R": -2,
+            "S": 0
+          },
+          "Direction": "NorthEast"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 2,
+          "R": 0,
+          "S": -2
+        },
+        "Direction": "South"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 2,
+            "R": 0,
+            "S": -2
+          },
+          "Direction": "South"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 0,
+          "R": -1,
+          "S": 1
+        },
+        "Direction": "NorthWest"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 0,
+            "R": -1,
+            "S": 1
+          },
+          "Direction": "NorthWest"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 1,
+          "R": 1,
+          "S": -2
+        },
+        "Direction": "SouthWest"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 1,
+            "R": 1,
+            "S": -2
+          },
+          "Direction": "SouthWest"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": -1,
+          "R": 2,
+          "S": -1
+        },
+        "Direction": "SouthWest"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": -1,
+            "R": 2,
+            "S": -1
+          },
+          "Direction": "SouthWest"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": -1,
+          "R": -1,
+          "S": 2
+        },
+        "Direction": "South"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": -1,
+            "R": -1,
+            "S": 2
+          },
+          "Direction": "South"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ],
+    [
+      {
+        "TileKey": {
+          "Q": 1,
+          "R": 1,
+          "S": -2
+        },
+        "Direction": "South"
+      },
+      {
+        "PrimaryKey": {
+          "TileKey": {
+            "Q": 1,
+            "R": 1,
+            "S": -2
+          },
+          "Direction": "South"
+        },
+        "Aliases": [],
+        "AdjacentRoads": [],
+        "Owner": null,
+        "State": "Unbuilt"
+      }
+    ]
+  ],
+  "Buildings": [
+    [
+      {
+        "BuildingPosition": "Left",
+        "TileKey": {
+          "Q": -1,
+          "R": 0,
+          "S": 1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Left",
+          "TileKey": {
+            "Q": -1,
+            "R": 0,
+            "S": 1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": -2,
+            "R": 0,
+            "S": 2
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "Left",
+            "TileKey": {
+              "Q": -1,
+              "R": 0,
+              "S": 1
+            }
+          },
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": -2,
+              "R": 0,
+              "S": 2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomLeft",
+        "TileKey": {
+          "Q": 2,
+          "R": 0,
+          "S": -2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomLeft",
+          "TileKey": {
+            "Q": 2,
+            "R": 0,
+            "S": -2
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomLeft",
+            "TileKey": {
+              "Q": 2,
+              "R": 0,
+              "S": -2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomLeft",
+        "TileKey": {
+          "Q": 0,
+          "R": 0,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomLeft",
+          "TileKey": {
+            "Q": 0,
+            "R": 0,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": -1,
+            "R": 1,
+            "S": 0
+          },
+          {
+            "Q": 0,
+            "R": 1,
+            "S": -1
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomLeft",
+            "TileKey": {
+              "Q": 0,
+              "R": 0,
+              "S": 0
+            }
+          },
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": -1,
+              "R": 1,
+              "S": 0
+            }
+          },
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": 0,
+              "R": 1,
+              "S": -1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomRight",
+        "TileKey": {
+          "Q": 0,
+          "R": -1,
+          "S": 1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomRight",
+          "TileKey": {
+            "Q": 0,
+            "R": -1,
+            "S": 1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 0,
+            "R": 0,
+            "S": 0
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": 0,
+              "R": -1,
+              "S": 1
+            }
+          },
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": 0,
+              "R": 0,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopLeft",
+        "TileKey": {
+          "Q": 0,
+          "R": 0,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopLeft",
+          "TileKey": {
+            "Q": 0,
+            "R": 0,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": -1,
+            "R": 0,
+            "S": 1
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": 0,
+              "R": 0,
+              "S": 0
+            }
+          },
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": -1,
+              "R": 0,
+              "S": 1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomLeft",
+        "TileKey": {
+          "Q": 1,
+          "R": -1,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomLeft",
+          "TileKey": {
+            "Q": 1,
+            "R": -1,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 0,
+            "R": 0,
+            "S": 0
+          },
+          {
+            "Q": 1,
+            "R": 0,
+            "S": -1
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomLeft",
+            "TileKey": {
+              "Q": 1,
+              "R": -1,
+              "S": 0
+            }
+          },
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": 0,
+              "R": 0,
+              "S": 0
+            }
+          },
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": 1,
+              "R": 0,
+              "S": -1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomRight",
+        "TileKey": {
+          "Q": 0,
+          "R": 1,
+          "S": -1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomRight",
+          "TileKey": {
+            "Q": 0,
+            "R": 1,
+            "S": -1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 0,
+            "R": 2,
+            "S": -2
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": 0,
+              "R": 1,
+              "S": -1
+            }
+          },
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": 0,
+              "R": 2,
+              "S": -2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomLeft",
+        "TileKey": {
+          "Q": 1,
+          "R": -2,
+          "S": 1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomLeft",
+          "TileKey": {
+            "Q": 1,
+            "R": -2,
+            "S": 1
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomLeft",
+            "TileKey": {
+              "Q": 1,
+              "R": -2,
+              "S": 1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomRight",
+        "TileKey": {
+          "Q": 2,
+          "R": -2,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomRight",
+          "TileKey": {
+            "Q": 2,
+            "R": -2,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": 2,
+              "R": -2,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopRight",
+        "TileKey": {
+          "Q": -2,
+          "R": 2,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopRight",
+          "TileKey": {
+            "Q": -2,
+            "R": 2,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": -2,
+              "R": 2,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Right",
+        "TileKey": {
+          "Q": 0,
+          "R": 2,
+          "S": -2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Right",
+          "TileKey": {
+            "Q": 0,
+            "R": 2,
+            "S": -2
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": 0,
+              "R": 2,
+              "S": -2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomLeft",
+        "TileKey": {
+          "Q": -2,
+          "R": 1,
+          "S": 1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomLeft",
+          "TileKey": {
+            "Q": -2,
+            "R": 1,
+            "S": 1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": -2,
+            "R": 2,
+            "S": 0
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomLeft",
+            "TileKey": {
+              "Q": -2,
+              "R": 1,
+              "S": 1
+            }
+          },
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": -2,
+              "R": 2,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopRight",
+        "TileKey": {
+          "Q": 0,
+          "R": -2,
+          "S": 2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopRight",
+          "TileKey": {
+            "Q": 0,
+            "R": -2,
+            "S": 2
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": 0,
+              "R": -2,
+              "S": 2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomLeft",
+        "TileKey": {
+          "Q": -2,
+          "R": 2,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomLeft",
+          "TileKey": {
+            "Q": -2,
+            "R": 2,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomLeft",
+            "TileKey": {
+              "Q": -2,
+              "R": 2,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopRight",
+        "TileKey": {
+          "Q": 2,
+          "R": -1,
+          "S": -1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopRight",
+          "TileKey": {
+            "Q": 2,
+            "R": -1,
+            "S": -1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 2,
+            "R": -2,
+            "S": 0
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": 2,
+              "R": -1,
+              "S": -1
+            }
+          },
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": 2,
+              "R": -2,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopLeft",
+        "TileKey": {
+          "Q": -1,
+          "R": 1,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopLeft",
+          "TileKey": {
+            "Q": -1,
+            "R": 1,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": -1,
+              "R": 1,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomRight",
+        "TileKey": {
+          "Q": 0,
+          "R": 0,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomRight",
+          "TileKey": {
+            "Q": 0,
+            "R": 0,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 0,
+            "R": 1,
+            "S": -1
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": 0,
+              "R": 0,
+              "S": 0
+            }
+          },
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": 0,
+              "R": 1,
+              "S": -1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomLeft",
+        "TileKey": {
+          "Q": -2,
+          "R": 0,
+          "S": 2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomLeft",
+          "TileKey": {
+            "Q": -2,
+            "R": 0,
+            "S": 2
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomLeft",
+            "TileKey": {
+              "Q": -2,
+              "R": 0,
+              "S": 2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopRight",
+        "TileKey": {
+          "Q": 2,
+          "R": -2,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopRight",
+          "TileKey": {
+            "Q": 2,
+            "R": -2,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": 2,
+              "R": -2,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Right",
+        "TileKey": {
+          "Q": -1,
+          "R": 1,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Right",
+          "TileKey": {
+            "Q": -1,
+            "R": 1,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": -1,
+              "R": 1,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopLeft",
+        "TileKey": {
+          "Q": -2,
+          "R": 2,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopLeft",
+          "TileKey": {
+            "Q": -2,
+            "R": 2,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": -2,
+              "R": 2,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomLeft",
+        "TileKey": {
+          "Q": -1,
+          "R": 2,
+          "S": -1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomLeft",
+          "TileKey": {
+            "Q": -1,
+            "R": 2,
+            "S": -1
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomLeft",
+            "TileKey": {
+              "Q": -1,
+              "R": 2,
+              "S": -1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopRight",
+        "TileKey": {
+          "Q": 0,
+          "R": 0,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopRight",
+          "TileKey": {
+            "Q": 0,
+            "R": 0,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": 0,
+              "R": 0,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomRight",
+        "TileKey": {
+          "Q": 0,
+          "R": -2,
+          "S": 2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomRight",
+          "TileKey": {
+            "Q": 0,
+            "R": -2,
+            "S": 2
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 0,
+            "R": -1,
+            "S": 1
+          },
+          {
+            "Q": 1,
+            "R": -2,
+            "S": 1
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": 0,
+              "R": -2,
+              "S": 2
+            }
+          },
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": 0,
+              "R": -1,
+              "S": 1
+            }
+          },
+          {
+            "BuildingPosition": "Left",
+            "TileKey": {
+              "Q": 1,
+              "R": -2,
+              "S": 1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomLeft",
+        "TileKey": {
+          "Q": 2,
+          "R": -1,
+          "S": -1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomLeft",
+          "TileKey": {
+            "Q": 2,
+            "R": -1,
+            "S": -1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 1,
+            "R": 0,
+            "S": -1
+          },
+          {
+            "Q": 2,
+            "R": 0,
+            "S": -2
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomLeft",
+            "TileKey": {
+              "Q": 2,
+              "R": -1,
+              "S": -1
+            }
+          },
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": 1,
+              "R": 0,
+              "S": -1
+            }
+          },
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": 2,
+              "R": 0,
+              "S": -2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomRight",
+        "TileKey": {
+          "Q": 2,
+          "R": 0,
+          "S": -2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomRight",
+          "TileKey": {
+            "Q": 2,
+            "R": 0,
+            "S": -2
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": 2,
+              "R": 0,
+              "S": -2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Right",
+        "TileKey": {
+          "Q": -2,
+          "R": 0,
+          "S": 2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Right",
+          "TileKey": {
+            "Q": -2,
+            "R": 0,
+            "S": 2
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": -2,
+              "R": 0,
+              "S": 2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Left",
+        "TileKey": {
+          "Q": 0,
+          "R": 2,
+          "S": -2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Left",
+          "TileKey": {
+            "Q": 0,
+            "R": 2,
+            "S": -2
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "Left",
+            "TileKey": {
+              "Q": 0,
+              "R": 2,
+              "S": -2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Right",
+        "TileKey": {
+          "Q": 1,
+          "R": -1,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Right",
+          "TileKey": {
+            "Q": 1,
+            "R": -1,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 2,
+            "R": -2,
+            "S": 0
+          },
+          {
+            "Q": 2,
+            "R": -1,
+            "S": -1
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": 1,
+              "R": -1,
+              "S": 0
+            }
+          },
+          {
+            "BuildingPosition": "BottomLeft",
+            "TileKey": {
+              "Q": 2,
+              "R": -2,
+              "S": 0
+            }
+          },
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": 2,
+              "R": -1,
+              "S": -1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopLeft",
+        "TileKey": {
+          "Q": 0,
+          "R": 1,
+          "S": -1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopLeft",
+          "TileKey": {
+            "Q": 0,
+            "R": 1,
+            "S": -1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": -1,
+            "R": 1,
+            "S": 0
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": 0,
+              "R": 1,
+              "S": -1
+            }
+          },
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": -1,
+              "R": 1,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopLeft",
+        "TileKey": {
+          "Q": 2,
+          "R": -2,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopLeft",
+          "TileKey": {
+            "Q": 2,
+            "R": -2,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 1,
+            "R": -2,
+            "S": 1
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": 2,
+              "R": -2,
+              "S": 0
+            }
+          },
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": 1,
+              "R": -2,
+              "S": 1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Right",
+        "TileKey": {
+          "Q": 1,
+          "R": -2,
+          "S": 1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Right",
+          "TileKey": {
+            "Q": 1,
+            "R": -2,
+            "S": 1
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": 1,
+              "R": -2,
+              "S": 1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopRight",
+        "TileKey": {
+          "Q": 0,
+          "R": -1,
+          "S": 1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopRight",
+          "TileKey": {
+            "Q": 0,
+            "R": -1,
+            "S": 1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 1,
+            "R": -2,
+            "S": 1
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": 0,
+              "R": -1,
+              "S": 1
+            }
+          },
+          {
+            "BuildingPosition": "Left",
+            "TileKey": {
+              "Q": 1,
+              "R": -2,
+              "S": 1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomRight",
+        "TileKey": {
+          "Q": -1,
+          "R": 2,
+          "S": -1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomRight",
+          "TileKey": {
+            "Q": -1,
+            "R": 2,
+            "S": -1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 0,
+            "R": 2,
+            "S": -2
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": -1,
+              "R": 2,
+              "S": -1
+            }
+          },
+          {
+            "BuildingPosition": "Left",
+            "TileKey": {
+              "Q": 0,
+              "R": 2,
+              "S": -2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomLeft",
+        "TileKey": {
+          "Q": 0,
+          "R": -1,
+          "S": 1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomLeft",
+          "TileKey": {
+            "Q": 0,
+            "R": -1,
+            "S": 1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": -1,
+            "R": 0,
+            "S": 1
+          },
+          {
+            "Q": 0,
+            "R": 0,
+            "S": 0
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomLeft",
+            "TileKey": {
+              "Q": 0,
+              "R": -1,
+              "S": 1
+            }
+          },
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": -1,
+              "R": 0,
+              "S": 1
+            }
+          },
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": 0,
+              "R": 0,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopLeft",
+        "TileKey": {
+          "Q": -1,
+          "R": -1,
+          "S": 2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopLeft",
+          "TileKey": {
+            "Q": -1,
+            "R": -1,
+            "S": 2
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": -1,
+              "R": -1,
+              "S": 2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomRight",
+        "TileKey": {
+          "Q": -2,
+          "R": 2,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomRight",
+          "TileKey": {
+            "Q": -2,
+            "R": 2,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": -2,
+              "R": 2,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomRight",
+        "TileKey": {
+          "Q": 0,
+          "R": 2,
+          "S": -2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomRight",
+          "TileKey": {
+            "Q": 0,
+            "R": 2,
+            "S": -2
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": 0,
+              "R": 2,
+              "S": -2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Left",
+        "TileKey": {
+          "Q": 1,
+          "R": 0,
+          "S": -1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Left",
+          "TileKey": {
+            "Q": 1,
+            "R": 0,
+            "S": -1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 0,
+            "R": 0,
+            "S": 0
+          },
+          {
+            "Q": 0,
+            "R": 1,
+            "S": -1
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "Left",
+            "TileKey": {
+              "Q": 1,
+              "R": 0,
+              "S": -1
+            }
+          },
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": 0,
+              "R": 0,
+              "S": 0
+            }
+          },
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": 0,
+              "R": 1,
+              "S": -1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopLeft",
+        "TileKey": {
+          "Q": 0,
+          "R": 2,
+          "S": -2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopLeft",
+          "TileKey": {
+            "Q": 0,
+            "R": 2,
+            "S": -2
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": 0,
+              "R": 2,
+              "S": -2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Left",
+        "TileKey": {
+          "Q": 1,
+          "R": -1,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Left",
+          "TileKey": {
+            "Q": 1,
+            "R": -1,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 0,
+            "R": -1,
+            "S": 1
+          },
+          {
+            "Q": 0,
+            "R": 0,
+            "S": 0
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "Left",
+            "TileKey": {
+              "Q": 1,
+              "R": -1,
+              "S": 0
+            }
+          },
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": 0,
+              "R": -1,
+              "S": 1
+            }
+          },
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": 0,
+              "R": 0,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomLeft",
+        "TileKey": {
+          "Q": -1,
+          "R": 0,
+          "S": 1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomLeft",
+          "TileKey": {
+            "Q": -1,
+            "R": 0,
+            "S": 1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": -1,
+            "R": 1,
+            "S": 0
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomLeft",
+            "TileKey": {
+              "Q": -1,
+              "R": 0,
+              "S": 1
+            }
+          },
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": -1,
+              "R": 1,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Left",
+        "TileKey": {
+          "Q": 0,
+          "R": 0,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Left",
+          "TileKey": {
+            "Q": 0,
+            "R": 0,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": -1,
+            "R": 0,
+            "S": 1
+          },
+          {
+            "Q": -1,
+            "R": 1,
+            "S": 0
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "Left",
+            "TileKey": {
+              "Q": 0,
+              "R": 0,
+              "S": 0
+            }
+          },
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": -1,
+              "R": 0,
+              "S": 1
+            }
+          },
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": -1,
+              "R": 1,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Right",
+        "TileKey": {
+          "Q": -1,
+          "R": -1,
+          "S": 2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Right",
+          "TileKey": {
+            "Q": -1,
+            "R": -1,
+            "S": 2
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": -1,
+              "R": -1,
+              "S": 2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopLeft",
+        "TileKey": {
+          "Q": -2,
+          "R": 1,
+          "S": 1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopLeft",
+          "TileKey": {
+            "Q": -2,
+            "R": 1,
+            "S": 1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": -2,
+            "R": 0,
+            "S": 2
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": -2,
+              "R": 1,
+              "S": 1
+            }
+          },
+          {
+            "BuildingPosition": "BottomLeft",
+            "TileKey": {
+              "Q": -2,
+              "R": 0,
+              "S": 2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomLeft",
+        "TileKey": {
+          "Q": 1,
+          "R": 1,
+          "S": -2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomLeft",
+          "TileKey": {
+            "Q": 1,
+            "R": 1,
+            "S": -2
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 0,
+            "R": 2,
+            "S": -2
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomLeft",
+            "TileKey": {
+              "Q": 1,
+              "R": 1,
+              "S": -2
+            }
+          },
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": 0,
+              "R": 2,
+              "S": -2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopLeft",
+        "TileKey": {
+          "Q": -1,
+          "R": 0,
+          "S": 1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopLeft",
+          "TileKey": {
+            "Q": -1,
+            "R": 0,
+            "S": 1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": -2,
+            "R": 0,
+            "S": 2
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": -1,
+              "R": 0,
+              "S": 1
+            }
+          },
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": -2,
+              "R": 0,
+              "S": 2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomRight",
+        "TileKey": {
+          "Q": -2,
+          "R": 1,
+          "S": 1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomRight",
+          "TileKey": {
+            "Q": -2,
+            "R": 1,
+            "S": 1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": -2,
+            "R": 2,
+            "S": 0
+          },
+          {
+            "Q": -1,
+            "R": 1,
+            "S": 0
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": -2,
+              "R": 1,
+              "S": 1
+            }
+          },
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": -2,
+              "R": 2,
+              "S": 0
+            }
+          },
+          {
+            "BuildingPosition": "Left",
+            "TileKey": {
+              "Q": -1,
+              "R": 1,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomLeft",
+        "TileKey": {
+          "Q": 0,
+          "R": 1,
+          "S": -1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomLeft",
+          "TileKey": {
+            "Q": 0,
+            "R": 1,
+            "S": -1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 0,
+            "R": 2,
+            "S": -2
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomLeft",
+            "TileKey": {
+              "Q": 0,
+              "R": 1,
+              "S": -1
+            }
+          },
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": 0,
+              "R": 2,
+              "S": -2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopLeft",
+        "TileKey": {
+          "Q": -2,
+          "R": 0,
+          "S": 2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopLeft",
+          "TileKey": {
+            "Q": -2,
+            "R": 0,
+            "S": 2
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": -2,
+              "R": 0,
+              "S": 2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopRight",
+        "TileKey": {
+          "Q": 1,
+          "R": 0,
+          "S": -1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopRight",
+          "TileKey": {
+            "Q": 1,
+            "R": 0,
+            "S": -1
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": 1,
+              "R": 0,
+              "S": -1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Right",
+        "TileKey": {
+          "Q": 0,
+          "R": -1,
+          "S": 1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Right",
+          "TileKey": {
+            "Q": 0,
+            "R": -1,
+            "S": 1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 1,
+            "R": -2,
+            "S": 1
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": 0,
+              "R": -1,
+              "S": 1
+            }
+          },
+          {
+            "BuildingPosition": "BottomLeft",
+            "TileKey": {
+              "Q": 1,
+              "R": -2,
+              "S": 1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Right",
+        "TileKey": {
+          "Q": 0,
+          "R": 0,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Right",
+          "TileKey": {
+            "Q": 0,
+            "R": 0,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": 0,
+              "R": 0,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopLeft",
+        "TileKey": {
+          "Q": 2,
+          "R": 0,
+          "S": -2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopLeft",
+          "TileKey": {
+            "Q": 2,
+            "R": 0,
+            "S": -2
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": 2,
+              "R": 0,
+              "S": -2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Right",
+        "TileKey": {
+          "Q": 1,
+          "R": 1,
+          "S": -2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Right",
+          "TileKey": {
+            "Q": 1,
+            "R": 1,
+            "S": -2
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 2,
+            "R": 0,
+            "S": -2
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": 1,
+              "R": 1,
+              "S": -2
+            }
+          },
+          {
+            "BuildingPosition": "BottomLeft",
+            "TileKey": {
+              "Q": 2,
+              "R": 0,
+              "S": -2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopRight",
+        "TileKey": {
+          "Q": 0,
+          "R": 2,
+          "S": -2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopRight",
+          "TileKey": {
+            "Q": 0,
+            "R": 2,
+            "S": -2
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": 0,
+              "R": 2,
+              "S": -2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomRight",
+        "TileKey": {
+          "Q": -1,
+          "R": -1,
+          "S": 2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomRight",
+          "TileKey": {
+            "Q": -1,
+            "R": -1,
+            "S": 2
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": -1,
+            "R": 0,
+            "S": 1
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": -1,
+              "R": -1,
+              "S": 2
+            }
+          },
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": -1,
+              "R": 0,
+              "S": 1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Right",
+        "TileKey": {
+          "Q": -1,
+          "R": 0,
+          "S": 1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Right",
+          "TileKey": {
+            "Q": -1,
+            "R": 0,
+            "S": 1
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": -1,
+              "R": 0,
+              "S": 1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Left",
+        "TileKey": {
+          "Q": -2,
+          "R": 1,
+          "S": 1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Left",
+          "TileKey": {
+            "Q": -2,
+            "R": 1,
+            "S": 1
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "Left",
+            "TileKey": {
+              "Q": -2,
+              "R": 1,
+              "S": 1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Right",
+        "TileKey": {
+          "Q": 0,
+          "R": 1,
+          "S": -1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Right",
+          "TileKey": {
+            "Q": 0,
+            "R": 1,
+            "S": -1
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": 0,
+              "R": 1,
+              "S": -1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopRight",
+        "TileKey": {
+          "Q": -1,
+          "R": 0,
+          "S": 1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopRight",
+          "TileKey": {
+            "Q": -1,
+            "R": 0,
+            "S": 1
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": -1,
+              "R": 0,
+              "S": 1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Right",
+        "TileKey": {
+          "Q": 1,
+          "R": 0,
+          "S": -1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Right",
+          "TileKey": {
+            "Q": 1,
+            "R": 0,
+            "S": -1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 2,
+            "R": 0,
+            "S": -2
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": 1,
+              "R": 0,
+              "S": -1
+            }
+          },
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": 2,
+              "R": 0,
+              "S": -2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomLeft",
+        "TileKey": {
+          "Q": -1,
+          "R": 1,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomLeft",
+          "TileKey": {
+            "Q": -1,
+            "R": 1,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": -2,
+            "R": 2,
+            "S": 0
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomLeft",
+            "TileKey": {
+              "Q": -1,
+              "R": 1,
+              "S": 0
+            }
+          },
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": -2,
+              "R": 2,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Right",
+        "TileKey": {
+          "Q": 2,
+          "R": -1,
+          "S": -1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Right",
+          "TileKey": {
+            "Q": 2,
+            "R": -1,
+            "S": -1
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": 2,
+              "R": -1,
+              "S": -1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Left",
+        "TileKey": {
+          "Q": -1,
+          "R": 2,
+          "S": -1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Left",
+          "TileKey": {
+            "Q": -1,
+            "R": 2,
+            "S": -1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": -2,
+            "R": 2,
+            "S": 0
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "Left",
+            "TileKey": {
+              "Q": -1,
+              "R": 2,
+              "S": -1
+            }
+          },
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": -2,
+              "R": 2,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopRight",
+        "TileKey": {
+          "Q": 1,
+          "R": -2,
+          "S": 1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopRight",
+          "TileKey": {
+            "Q": 1,
+            "R": -2,
+            "S": 1
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": 1,
+              "R": -2,
+              "S": 1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Left",
+        "TileKey": {
+          "Q": 0,
+          "R": -1,
+          "S": 1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Left",
+          "TileKey": {
+            "Q": 0,
+            "R": -1,
+            "S": 1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": -1,
+            "R": -1,
+            "S": 2
+          },
+          {
+            "Q": -1,
+            "R": 0,
+            "S": 1
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "Left",
+            "TileKey": {
+              "Q": 0,
+              "R": -1,
+              "S": 1
+            }
+          },
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": -1,
+              "R": -1,
+              "S": 2
+            }
+          },
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": -1,
+              "R": 0,
+              "S": 1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopRight",
+        "TileKey": {
+          "Q": 0,
+          "R": 1,
+          "S": -1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopRight",
+          "TileKey": {
+            "Q": 0,
+            "R": 1,
+            "S": -1
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": 0,
+              "R": 1,
+              "S": -1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopRight",
+        "TileKey": {
+          "Q": 1,
+          "R": 1,
+          "S": -2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopRight",
+          "TileKey": {
+            "Q": 1,
+            "R": 1,
+            "S": -2
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 1,
+            "R": 0,
+            "S": -1
+          },
+          {
+            "Q": 2,
+            "R": 0,
+            "S": -2
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": 1,
+              "R": 1,
+              "S": -2
+            }
+          },
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": 1,
+              "R": 0,
+              "S": -1
+            }
+          },
+          {
+            "BuildingPosition": "Left",
+            "TileKey": {
+              "Q": 2,
+              "R": 0,
+              "S": -2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Right",
+        "TileKey": {
+          "Q": 0,
+          "R": -2,
+          "S": 2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Right",
+          "TileKey": {
+            "Q": 0,
+            "R": -2,
+            "S": 2
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 1,
+            "R": -2,
+            "S": 1
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": 0,
+              "R": -2,
+              "S": 2
+            }
+          },
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": 1,
+              "R": -2,
+              "S": 1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopRight",
+        "TileKey": {
+          "Q": -2,
+          "R": 1,
+          "S": 1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopRight",
+          "TileKey": {
+            "Q": -2,
+            "R": 1,
+            "S": 1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": -2,
+            "R": 0,
+            "S": 2
+          },
+          {
+            "Q": -1,
+            "R": 0,
+            "S": 1
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": -2,
+              "R": 1,
+              "S": 1
+            }
+          },
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": -2,
+              "R": 0,
+              "S": 2
+            }
+          },
+          {
+            "BuildingPosition": "Left",
+            "TileKey": {
+              "Q": -1,
+              "R": 0,
+              "S": 1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomLeft",
+        "TileKey": {
+          "Q": 2,
+          "R": -2,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomLeft",
+          "TileKey": {
+            "Q": 2,
+            "R": -2,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomLeft",
+            "TileKey": {
+              "Q": 2,
+              "R": -2,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Left",
+        "TileKey": {
+          "Q": 0,
+          "R": -2,
+          "S": 2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Left",
+          "TileKey": {
+            "Q": 0,
+            "R": -2,
+            "S": 2
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": -1,
+            "R": -1,
+            "S": 2
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "Left",
+            "TileKey": {
+              "Q": 0,
+              "R": -2,
+              "S": 2
+            }
+          },
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": -1,
+              "R": -1,
+              "S": 2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomLeft",
+        "TileKey": {
+          "Q": 0,
+          "R": 2,
+          "S": -2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomLeft",
+          "TileKey": {
+            "Q": 0,
+            "R": 2,
+            "S": -2
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomLeft",
+            "TileKey": {
+              "Q": 0,
+              "R": 2,
+              "S": -2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopRight",
+        "TileKey": {
+          "Q": 1,
+          "R": -1,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopRight",
+          "TileKey": {
+            "Q": 1,
+            "R": -1,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 1,
+            "R": -2,
+            "S": 1
+          },
+          {
+            "Q": 2,
+            "R": -2,
+            "S": 0
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": 1,
+              "R": -1,
+              "S": 0
+            }
+          },
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": 1,
+              "R": -2,
+              "S": 1
+            }
+          },
+          {
+            "BuildingPosition": "Left",
+            "TileKey": {
+              "Q": 2,
+              "R": -2,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomLeft",
+        "TileKey": {
+          "Q": 0,
+          "R": -2,
+          "S": 2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomLeft",
+          "TileKey": {
+            "Q": 0,
+            "R": -2,
+            "S": 2
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": -1,
+            "R": -1,
+            "S": 2
+          },
+          {
+            "Q": 0,
+            "R": -1,
+            "S": 1
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomLeft",
+            "TileKey": {
+              "Q": 0,
+              "R": -2,
+              "S": 2
+            }
+          },
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": -1,
+              "R": -1,
+              "S": 2
+            }
+          },
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": 0,
+              "R": -1,
+              "S": 1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomRight",
+        "TileKey": {
+          "Q": 1,
+          "R": 1,
+          "S": -2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomRight",
+          "TileKey": {
+            "Q": 1,
+            "R": 1,
+            "S": -2
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": 1,
+              "R": 1,
+              "S": -2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopRight",
+        "TileKey": {
+          "Q": -1,
+          "R": 1,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopRight",
+          "TileKey": {
+            "Q": -1,
+            "R": 1,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": -1,
+              "R": 1,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomRight",
+        "TileKey": {
+          "Q": 1,
+          "R": 0,
+          "S": -1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomRight",
+          "TileKey": {
+            "Q": 1,
+            "R": 0,
+            "S": -1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 2,
+            "R": 0,
+            "S": -2
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": 1,
+              "R": 0,
+              "S": -1
+            }
+          },
+          {
+            "BuildingPosition": "Left",
+            "TileKey": {
+              "Q": 2,
+              "R": 0,
+              "S": -2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomRight",
+        "TileKey": {
+          "Q": 1,
+          "R": -1,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomRight",
+          "TileKey": {
+            "Q": 1,
+            "R": -1,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 1,
+            "R": 0,
+            "S": -1
+          },
+          {
+            "Q": 2,
+            "R": -1,
+            "S": -1
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": 1,
+              "R": -1,
+              "S": 0
+            }
+          },
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": 1,
+              "R": 0,
+              "S": -1
+            }
+          },
+          {
+            "BuildingPosition": "Left",
+            "TileKey": {
+              "Q": 2,
+              "R": -1,
+              "S": -1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Right",
+        "TileKey": {
+          "Q": 2,
+          "R": -2,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Right",
+          "TileKey": {
+            "Q": 2,
+            "R": -2,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": 2,
+              "R": -2,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopRight",
+        "TileKey": {
+          "Q": -2,
+          "R": 0,
+          "S": 2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopRight",
+          "TileKey": {
+            "Q": -2,
+            "R": 0,
+            "S": 2
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": -2,
+              "R": 0,
+              "S": 2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopLeft",
+        "TileKey": {
+          "Q": 1,
+          "R": -2,
+          "S": 1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopLeft",
+          "TileKey": {
+            "Q": 1,
+            "R": -2,
+            "S": 1
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": 1,
+              "R": -2,
+              "S": 1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopRight",
+        "TileKey": {
+          "Q": 2,
+          "R": 0,
+          "S": -2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopRight",
+          "TileKey": {
+            "Q": 2,
+            "R": 0,
+            "S": -2
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": 2,
+              "R": 0,
+              "S": -2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopLeft",
+        "TileKey": {
+          "Q": 1,
+          "R": 0,
+          "S": -1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopLeft",
+          "TileKey": {
+            "Q": 1,
+            "R": 0,
+            "S": -1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 0,
+            "R": 0,
+            "S": 0
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": 1,
+              "R": 0,
+              "S": -1
+            }
+          },
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": 0,
+              "R": 0,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Left",
+        "TileKey": {
+          "Q": -1,
+          "R": 1,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Left",
+          "TileKey": {
+            "Q": -1,
+            "R": 1,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": -2,
+            "R": 2,
+            "S": 0
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "Left",
+            "TileKey": {
+              "Q": -1,
+              "R": 1,
+              "S": 0
+            }
+          },
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": -2,
+              "R": 2,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopLeft",
+        "TileKey": {
+          "Q": 0,
+          "R": -1,
+          "S": 1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopLeft",
+          "TileKey": {
+            "Q": 0,
+            "R": -1,
+            "S": 1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": -1,
+            "R": -1,
+            "S": 2
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": 0,
+              "R": -1,
+              "S": 1
+            }
+          },
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": -1,
+              "R": -1,
+              "S": 2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Left",
+        "TileKey": {
+          "Q": 1,
+          "R": -2,
+          "S": 1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Left",
+          "TileKey": {
+            "Q": 1,
+            "R": -2,
+            "S": 1
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "Left",
+            "TileKey": {
+              "Q": 1,
+              "R": -2,
+              "S": 1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomRight",
+        "TileKey": {
+          "Q": 2,
+          "R": -1,
+          "S": -1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomRight",
+          "TileKey": {
+            "Q": 2,
+            "R": -1,
+            "S": -1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 2,
+            "R": 0,
+            "S": -2
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": 2,
+              "R": -1,
+              "S": -1
+            }
+          },
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": 2,
+              "R": 0,
+              "S": -2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Left",
+        "TileKey": {
+          "Q": 2,
+          "R": -2,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Left",
+          "TileKey": {
+            "Q": 2,
+            "R": -2,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 1,
+            "R": -2,
+            "S": 1
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "Left",
+            "TileKey": {
+              "Q": 2,
+              "R": -2,
+              "S": 0
+            }
+          },
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": 1,
+              "R": -2,
+              "S": 1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Left",
+        "TileKey": {
+          "Q": -2,
+          "R": 0,
+          "S": 2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Left",
+          "TileKey": {
+            "Q": -2,
+            "R": 0,
+            "S": 2
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "Left",
+            "TileKey": {
+              "Q": -2,
+              "R": 0,
+              "S": 2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Right",
+        "TileKey": {
+          "Q": -1,
+          "R": 2,
+          "S": -1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Right",
+          "TileKey": {
+            "Q": -1,
+            "R": 2,
+            "S": -1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 0,
+            "R": 1,
+            "S": -1
+          },
+          {
+            "Q": 0,
+            "R": 2,
+            "S": -2
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": -1,
+              "R": 2,
+              "S": -1
+            }
+          },
+          {
+            "BuildingPosition": "BottomLeft",
+            "TileKey": {
+              "Q": 0,
+              "R": 1,
+              "S": -1
+            }
+          },
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": 0,
+              "R": 2,
+              "S": -2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomRight",
+        "TileKey": {
+          "Q": 1,
+          "R": -2,
+          "S": 1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomRight",
+          "TileKey": {
+            "Q": 1,
+            "R": -2,
+            "S": 1
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": 1,
+              "R": -2,
+              "S": 1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomLeft",
+        "TileKey": {
+          "Q": -1,
+          "R": -1,
+          "S": 2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomLeft",
+          "TileKey": {
+            "Q": -1,
+            "R": -1,
+            "S": 2
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": -2,
+            "R": 0,
+            "S": 2
+          },
+          {
+            "Q": -1,
+            "R": 0,
+            "S": 1
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomLeft",
+            "TileKey": {
+              "Q": -1,
+              "R": -1,
+              "S": 2
+            }
+          },
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": -2,
+              "R": 0,
+              "S": 2
+            }
+          },
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": -1,
+              "R": 0,
+              "S": 1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopRight",
+        "TileKey": {
+          "Q": -1,
+          "R": 2,
+          "S": -1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopRight",
+          "TileKey": {
+            "Q": -1,
+            "R": 2,
+            "S": -1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": -1,
+            "R": 1,
+            "S": 0
+          },
+          {
+            "Q": 0,
+            "R": 1,
+            "S": -1
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": -1,
+              "R": 2,
+              "S": -1
+            }
+          },
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": -1,
+              "R": 1,
+              "S": 0
+            }
+          },
+          {
+            "BuildingPosition": "Left",
+            "TileKey": {
+              "Q": 0,
+              "R": 1,
+              "S": -1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Left",
+        "TileKey": {
+          "Q": -2,
+          "R": 2,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Left",
+          "TileKey": {
+            "Q": -2,
+            "R": 2,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "Left",
+            "TileKey": {
+              "Q": -2,
+              "R": 2,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Right",
+        "TileKey": {
+          "Q": 2,
+          "R": 0,
+          "S": -2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Right",
+          "TileKey": {
+            "Q": 2,
+            "R": 0,
+            "S": -2
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": 2,
+              "R": 0,
+              "S": -2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Left",
+        "TileKey": {
+          "Q": 2,
+          "R": -1,
+          "S": -1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Left",
+          "TileKey": {
+            "Q": 2,
+            "R": -1,
+            "S": -1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 1,
+            "R": 0,
+            "S": -1
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "Left",
+            "TileKey": {
+              "Q": 2,
+              "R": -1,
+              "S": -1
+            }
+          },
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": 1,
+              "R": 0,
+              "S": -1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Left",
+        "TileKey": {
+          "Q": 1,
+          "R": 1,
+          "S": -2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Left",
+          "TileKey": {
+            "Q": 1,
+            "R": 1,
+            "S": -2
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 0,
+            "R": 1,
+            "S": -1
+          },
+          {
+            "Q": 0,
+            "R": 2,
+            "S": -2
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "Left",
+            "TileKey": {
+              "Q": 1,
+              "R": 1,
+              "S": -2
+            }
+          },
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": 0,
+              "R": 1,
+              "S": -1
+            }
+          },
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": 0,
+              "R": 2,
+              "S": -2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomRight",
+        "TileKey": {
+          "Q": -1,
+          "R": 1,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomRight",
+          "TileKey": {
+            "Q": -1,
+            "R": 1,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": -1,
+              "R": 1,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopLeft",
+        "TileKey": {
+          "Q": -1,
+          "R": 2,
+          "S": -1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopLeft",
+          "TileKey": {
+            "Q": -1,
+            "R": 2,
+            "S": -1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": -2,
+            "R": 2,
+            "S": 0
+          },
+          {
+            "Q": -1,
+            "R": 1,
+            "S": 0
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": -1,
+              "R": 2,
+              "S": -1
+            }
+          },
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": -2,
+              "R": 2,
+              "S": 0
+            }
+          },
+          {
+            "BuildingPosition": "BottomLeft",
+            "TileKey": {
+              "Q": -1,
+              "R": 1,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomLeft",
+        "TileKey": {
+          "Q": 1,
+          "R": 0,
+          "S": -1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomLeft",
+          "TileKey": {
+            "Q": 1,
+            "R": 0,
+            "S": -1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 0,
+            "R": 1,
+            "S": -1
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomLeft",
+            "TileKey": {
+              "Q": 1,
+              "R": 0,
+              "S": -1
+            }
+          },
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": 0,
+              "R": 1,
+              "S": -1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Left",
+        "TileKey": {
+          "Q": 2,
+          "R": 0,
+          "S": -2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Left",
+          "TileKey": {
+            "Q": 2,
+            "R": 0,
+            "S": -2
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "Left",
+            "TileKey": {
+              "Q": 2,
+              "R": 0,
+              "S": -2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Left",
+        "TileKey": {
+          "Q": -1,
+          "R": -1,
+          "S": 2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Left",
+          "TileKey": {
+            "Q": -1,
+            "R": -1,
+            "S": 2
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": -2,
+            "R": 0,
+            "S": 2
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "Left",
+            "TileKey": {
+              "Q": -1,
+              "R": -1,
+              "S": 2
+            }
+          },
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": -2,
+              "R": 0,
+              "S": 2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Left",
+        "TileKey": {
+          "Q": 0,
+          "R": 1,
+          "S": -1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Left",
+          "TileKey": {
+            "Q": 0,
+            "R": 1,
+            "S": -1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": -1,
+            "R": 1,
+            "S": 0
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "Left",
+            "TileKey": {
+              "Q": 0,
+              "R": 1,
+              "S": -1
+            }
+          },
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": -1,
+              "R": 1,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomRight",
+        "TileKey": {
+          "Q": -1,
+          "R": 0,
+          "S": 1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomRight",
+          "TileKey": {
+            "Q": -1,
+            "R": 0,
+            "S": 1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": -1,
+            "R": 1,
+            "S": 0
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": -1,
+              "R": 0,
+              "S": 1
+            }
+          },
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": -1,
+              "R": 1,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopLeft",
+        "TileKey": {
+          "Q": 2,
+          "R": -1,
+          "S": -1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopLeft",
+          "TileKey": {
+            "Q": 2,
+            "R": -1,
+            "S": -1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 2,
+            "R": -2,
+            "S": 0
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": 2,
+              "R": -1,
+              "S": -1
+            }
+          },
+          {
+            "BuildingPosition": "BottomLeft",
+            "TileKey": {
+              "Q": 2,
+              "R": -2,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopLeft",
+        "TileKey": {
+          "Q": 1,
+          "R": 1,
+          "S": -2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopLeft",
+          "TileKey": {
+            "Q": 1,
+            "R": 1,
+            "S": -2
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 0,
+            "R": 1,
+            "S": -1
+          },
+          {
+            "Q": 1,
+            "R": 0,
+            "S": -1
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": 1,
+              "R": 1,
+              "S": -2
+            }
+          },
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": 0,
+              "R": 1,
+              "S": -1
+            }
+          },
+          {
+            "BuildingPosition": "BottomLeft",
+            "TileKey": {
+              "Q": 1,
+              "R": 0,
+              "S": -1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Right",
+        "TileKey": {
+          "Q": -2,
+          "R": 1,
+          "S": 1
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Right",
+          "TileKey": {
+            "Q": -2,
+            "R": 1,
+            "S": 1
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": -1,
+            "R": 0,
+            "S": 1
+          },
+          {
+            "Q": -1,
+            "R": 1,
+            "S": 0
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": -2,
+              "R": 1,
+              "S": 1
+            }
+          },
+          {
+            "BuildingPosition": "BottomLeft",
+            "TileKey": {
+              "Q": -1,
+              "R": 0,
+              "S": 1
+            }
+          },
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": -1,
+              "R": 1,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "Right",
+        "TileKey": {
+          "Q": -2,
+          "R": 2,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "Right",
+          "TileKey": {
+            "Q": -2,
+            "R": 2,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": -2,
+              "R": 2,
+              "S": 0
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopRight",
+        "TileKey": {
+          "Q": -1,
+          "R": -1,
+          "S": 2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopRight",
+          "TileKey": {
+            "Q": -1,
+            "R": -1,
+            "S": 2
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopRight",
+            "TileKey": {
+              "Q": -1,
+              "R": -1,
+              "S": 2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopLeft",
+        "TileKey": {
+          "Q": 1,
+          "R": -1,
+          "S": 0
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopLeft",
+          "TileKey": {
+            "Q": 1,
+            "R": -1,
+            "S": 0
+          }
+        },
+        "ConnectedTiles": [
+          {
+            "Q": 0,
+            "R": -1,
+            "S": 1
+          },
+          {
+            "Q": 1,
+            "R": -2,
+            "S": 1
+          }
+        ],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": 1,
+              "R": -1,
+              "S": 0
+            }
+          },
+          {
+            "BuildingPosition": "Right",
+            "TileKey": {
+              "Q": 0,
+              "R": -1,
+              "S": 1
+            }
+          },
+          {
+            "BuildingPosition": "BottomLeft",
+            "TileKey": {
+              "Q": 1,
+              "R": -2,
+              "S": 1
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "BottomRight",
+        "TileKey": {
+          "Q": -2,
+          "R": 0,
+          "S": 2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "BottomRight",
+          "TileKey": {
+            "Q": -2,
+            "R": 0,
+            "S": 2
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "BottomRight",
+            "TileKey": {
+              "Q": -2,
+              "R": 0,
+              "S": 2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ],
+    [
+      {
+        "BuildingPosition": "TopLeft",
+        "TileKey": {
+          "Q": 0,
+          "R": -2,
+          "S": 2
+        }
+      },
+      {
+        "BuildingKey": {
+          "BuildingPosition": "TopLeft",
+          "TileKey": {
+            "Q": 0,
+            "R": -2,
+            "S": 2
+          }
+        },
+        "ConnectedTiles": [],
+        "Aliases": [
+          {
+            "BuildingPosition": "TopLeft",
+            "TileKey": {
+              "Q": 0,
+              "R": -2,
+              "S": 2
+            }
+          }
+        ],
+        "PipCount": 0,
+        "OwnerId": null,
+        "State": "Empty"
+      }
+    ]
+  ],
+  "CurrentPlayerId": "joe@longshotdev.com",
+  "PlayerOrder": [],
+  "GameState": "AddingPlayers",
+  "CreatorId": "joe@longshotdev.com",
+  "BaronTile": {
+    "Q": 2,
+    "R": -1,
+    "S": -1
+  },
+  "CanUndo": true,
+  "ShuffleCount": 1,
+  "GameIndex": 1,
+  "GameType": "Regular"
+}

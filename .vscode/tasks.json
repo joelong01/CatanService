@@ -4,7 +4,7 @@
         {
             "type": "shell",
             "label": "cargo make build",
-            "command": "cargo",
+            "command": "cargo fmt && cargo",
             "args": [
                 "make",
                 "build"

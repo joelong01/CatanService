@@ -1,9 +1,12 @@
 #![allow(dead_code)]
+use crate::full_info;
+use crate::middleware::environment_mw::CATAN_ENV;
+use crate::user_service::users::validate_jwt_token;
 use actix::prelude::*;
 use actix::{Actor, StreamHandler};
-use actix_web::error::{ErrorUnauthorized, ErrorInternalServerError};
+use actix_web::error::{ErrorInternalServerError, ErrorUnauthorized};
 use actix_web::http::header::HeaderMap;
-use actix_web::web::{Query, Payload};
+use actix_web::web::{Payload, Query};
 use actix_web::{Error, HttpRequest, HttpResponse};
 use actix_web_actors::ws;
 use lazy_static::lazy_static;
@@ -11,23 +14,20 @@ use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use crate::middleware::authn_mw::is_token_valid;
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
 // The user context struct, you can define it based on your requirements
 pub struct UserContext {
-    player_id: String,
+    user_id: String,
     client_address: Recipient<WebSocketMessage>,
-
 }
 
 impl UserContext {
     // Add any other methods and fields as needed
 
     // Method to send a message to the user's WebSocket
-    
 }
 
 // Define a custom message type for sending messages to the WebSocket actor
@@ -47,9 +47,9 @@ lazy_static! {
 }
 #[derive(Debug, Clone)]
 pub struct CatanWebSocket {
-    pub player_id: String,
+    pub user_id: String,
     pub hb: Instant,
-    pub client_address: Option<Recipient<WebSocketMessage>>
+    pub client_address: Option<Recipient<WebSocketMessage>>,
 }
 
 impl Actor for CatanWebSocket {
@@ -63,7 +63,7 @@ impl Actor for CatanWebSocket {
 
         // Acquire a write lock to add the user to the LOBBY
         let mut lobby = LOBBY.write();
-        lobby.insert(self.player_id.clone(), self.clone());
+        lobby.insert(self.user_id.clone(), self.clone());
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
@@ -71,21 +71,25 @@ impl Actor for CatanWebSocket {
 
         // Acquire a write lock to remove the user from the LOBBY
         let mut lobby = LOBBY.write();
-        lobby.remove(&self.player_id);
+        lobby.remove(&self.user_id);
     }
 }
 
 impl CatanWebSocket {
-    pub fn new (player_id: String) -> Self {
+    pub fn new(user_id: String) -> Self {
         Self {
-            player_id,
+            user_id,
             hb: Instant::now(),
-            client_address: None
+            client_address: None,
         }
     }
 
     fn send_message(&self, message: &str) -> Result<(), ()> {
-        let _ = self.client_address.as_ref().unwrap().send(WebSocketMessage(message.to_owned()));
+        let _ = self
+            .client_address
+            .as_ref()
+            .unwrap()
+            .send(WebSocketMessage(message.to_owned()));
         Ok(())
     }
 
@@ -102,23 +106,23 @@ impl CatanWebSocket {
     }
 
     // Function to send a message to the user's WebSocket
-    pub fn send_client_message(player_id: &str, message: &str) -> Result<(), String> {
+    pub fn send_client_message(user_id: &str, message: &str) -> Result<(), String> {
         // Acquire a read lock to access the LOBBY
         let lobby = LOBBY.read();
 
         // Get the UserContext from the LOBBY
-        if let Some(client_ws) = lobby.get(player_id) {
+        if let Some(client_ws) = lobby.get(user_id) {
             // Send the message to the user's WebSocket
             if let Err(_) = client_ws.send_message(message) {
                 // If there was an error sending the message, return an error
-                Err(format!("Failed to send message to user: {}", player_id))
+                Err(format!("Failed to send message to user: {}", user_id))
             } else {
                 // Message sent successfully
                 Ok(())
             }
         } else {
             // User not found in the LOBBY
-            Err(format!("User not connected: {}", player_id))
+            Err(format!("User not connected: {}", user_id))
         }
     }
 }
@@ -151,7 +155,7 @@ pub fn dump_headers(headers: &HeaderMap) {
         let value_str = value.to_str().unwrap_or("Invalid UTF-8");
 
         // Log the name and values of the header
-        log::info!("Header Name: {:?}, Value: {:?}", name, value_str);
+        full_info!("Header Name: {:?}, Value: {:?}", name, value_str);
     }
 }
 
@@ -167,7 +171,7 @@ pub async fn ws_bootstrap(
         .to_string();
 
     // Validate the token and extract claims
-    let claims = match is_token_valid(&token) {
+    let claims = match validate_jwt_token(&token, &CATAN_ENV.login_secret_key) {
         Some(claims) => claims.claims,
         None => return Err(ErrorUnauthorized("No Authorization Parameter")),
     };
@@ -185,10 +189,9 @@ pub async fn ws_bootstrap(
                 .content_type("application/json")
                 .json(response_body))
         }
-        Err(err) => {
-            Err(ErrorInternalServerError(format!(
-                "WebSocket connection failed: {:?}", err
-            )))
-        }
+        Err(err) => Err(ErrorInternalServerError(format!(
+            "WebSocket connection failed: {:?}",
+            err
+        ))),
     }
 }

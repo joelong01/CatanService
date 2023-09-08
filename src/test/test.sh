@@ -10,6 +10,8 @@ AUTH_SERVER_URI="https://localhost:8080/auth/api/v1"
 NO_AUTH_SERVER_URI="https://localhost:8080/api/v1"
 declare VERBOSE
 VERBOSE=false
+TEST_HEADER="x-is-test"
+PASSWORD_HEADER="x-password"
 
 # Functions to echo information in red/yellow/green
 function echo_error() {
@@ -77,17 +79,20 @@ function setup_tests() {
   echo ""
   echo_warning "Start setup_tests"
 
-  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location --request POST "$NO_AUTH_SERVER_URI/users/setup")
+  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location --request POST "$NO_AUTH_SERVER_URI/test/setup")
   check_response "$status" 401 "setup, no test header"
 
-  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location --request POST "$NO_AUTH_SERVER_URI/users/setup" -H 'is_test: true')
+  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location --request POST "$NO_AUTH_SERVER_URI/test/setup" -H "$TEST_HEADER: true")
+  if [[ "$status" == 201 || "$status" == 202 ]]; then
+    status=200
+  fi
   check_response "$status" 200 "setup with test header"
 }
 function list_users() {
   echo ""
   echo_warning "Start list_users"
-  
-  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location "$AUTH_SERVER_URI/auth/users" -H 'is_test: true')
+
+  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location "$AUTH_SERVER_URI/auth/users" -H "$TEST_HEADER: true")
   check_response "$status" 401 "no Authorization Header" "looking for users. negative test"
 }
 function register_users() {
@@ -95,12 +100,10 @@ function register_users() {
   echo_warning "Start register_users"
 
   status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location "$NO_AUTH_SERVER_URI/users/register" \
-    --header 'is_test: true' \
-    --header 'X-Password: 1223very long password!' \
+    --header "$TEST_HEADER: true" \
+    --header "$PASSWORD_HEADER: 1223very long password!" \
     --header 'Content-Type: application/json' \
     --data-raw '{
-    "id": "",
-    "userProfile": {
         "email": "testi@example.com",
         "firstName": "Doug ",
         "lastName": "Smith",
@@ -111,17 +114,14 @@ function register_users() {
         "gamesPlayed": 10,
         "gamesWon": 1,
         "textColor": "#000000"
-    }
 }')
   id=$(jq .id <tmp.txt)
   check_response "$status" 200 "registering user"
   status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location "$NO_AUTH_SERVER_URI/users/register" \
-    --header 'is_test: true' \
-    --header 'X-Password: 1223very long password!' \
+    --header "$TEST_HEADER: true" \
+    --header "$PASSWORD_HEADER: 1223very long password!" \
     --header 'Content-Type: application/json' \
     --data-raw '{
-    "id": "",
-    "userProfile": {
         "email": "testi@example.com",
         "firstName": "Doug ",
         "lastName": "Smith",
@@ -132,7 +132,6 @@ function register_users() {
         "gamesPlayed": 10,
         "gamesWon": 1,
         "textColor": "#000000"
-    }
 }')
 
   check_response "$status" 409 "second registration"
@@ -142,7 +141,7 @@ function test_login() {
   echo_warning "Start test_login"
   status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location "$NO_AUTH_SERVER_URI/users/login" \
     --header 'Content-Type: application/json' \
-    --header 'is_test: true' \
+    --header "$TEST_HEADER: true" \
     --data-raw '{
     "username":"test@example.com",
     "password": "long_password"
@@ -151,7 +150,7 @@ function test_login() {
   check_response "$status" 404 "bad password"
 
   status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location "$NO_AUTH_SERVER_URI/users/login" \
-    --header 'is_test: true' \
+    --header "$TEST_HEADER: true" \
     --header 'Content-Type: application/json' \
     --data-raw '{
     "username":"testi@example.com",
@@ -167,15 +166,15 @@ function test_find_users() {
   echo_warning "Start test_find_users"
   status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location "$AUTH_SERVER_URI/users" \
     --header "Authorization: $token" \
-    --header 'is_test: true')
+    --header "$TEST_HEADER: true")
   check_response "$status" 200 "authenticated get all users"
 
   id=$(jq -r '.[0].id' <tmp.txt)
-  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location "$AUTH_SERVER_URI/users/$id" -H 'is_test: true')
+  status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location "$AUTH_SERVER_URI/users/$id" -H "$TEST_HEADER: true")
   check_response "$status" 401 "unauthenticated find one user"
 
   status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location "$AUTH_SERVER_URI/users/$id" \
-    --header 'is_test: true' \
+    --header "$TEST_HEADER: true" \
     --header "Authorization: $token")
 
   check_response "$status" 200 "authenticated find one user"
@@ -185,16 +184,16 @@ function test_delete_users() {
   echo ""
   echo_warning "Start test_delete_users"
   status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location --request DELETE "$AUTH_SERVER_URI/users/$id" \
-    --header 'is_test: true')
+    --header "$TEST_HEADER: true")
   check_response "$status" 401 "unauthenticated delete"
 
   status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location --request DELETE "$AUTH_SERVER_URI/users/unique_id1184292312312321" \
-    --header 'is_test: true' \
+    --header "$TEST_HEADER: true" \
     --header "Authorization: $token")
   check_response "$status" 401 "authenticated delete of somebody else"
 
   status=$(curl -k -s -w "%{http_code}" -o tmp.txt --location --request DELETE "$AUTH_SERVER_URI/users/$id" \
-    --header 'is_test: true' \
+    --header "$TEST_HEADER: true" \
     --header "Authorization: $token")
 
   check_response "$status" 200 "authenticated delete"

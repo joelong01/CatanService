@@ -7,10 +7,12 @@ use crate::games_service::catan_games::traits::game_state_machine_trait::{
 };
 use crate::games_service::harbors::harbor_enums::HarborType;
 use crate::games_service::player::calculated_state::{CalculatedState, ResourceCount};
-use crate::games_service::shared::game_enums::{Direction, GamePhase, GameState};
+use crate::games_service::shared::game_enums::{
+    CatanGames, Direction, GameAction, GamePhase, GameState, GameType,
+};
 use crate::games_service::{
     buildings::{building::Building, building_enums::BuildingPosition, building_key::BuildingKey},
-    catan_games::traits::{game_info_trait::GameInfoTrait, game_trait::CatanGame},
+    catan_games::traits::{game_info_trait::GameInfoTrait, game_trait::GameTrait},
     game,
     harbors::{harbor::Harbor, harbor_key::HarborKey},
     player::player::Player,
@@ -18,7 +20,7 @@ use crate::games_service::{
     tiles::{self, tile::Tile, tile_enums::TileResource, tile_key::TileKey},
 };
 
-use crate::shared::models::{ClientUser, GameError};
+use crate::shared::models::{ClientUser, GameError, ServiceResponse};
 use crate::shared::{models::PersistUser, utility::get_id};
 
 use actix_web::Resource;
@@ -35,7 +37,7 @@ use super::game_info::{RegularGameInfo, REGULAR_GAME_INFO};
 
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "PascalCase")]
 pub struct RegularGame {
     pub id: String,
     #[serde_as(as = "Vec<(_, _)>")]
@@ -50,10 +52,13 @@ pub struct RegularGame {
     pub buildings: HashMap<BuildingKey, Building>,
     pub current_player_id: String,
     pub player_order: Vec<String>,
-    pub state_data: StateData,
+    pub game_state: GameState,
     pub creator_id: String,
     pub baron_tile: TileKey,
-    pub can_undo: bool
+    pub can_undo: bool,
+    pub shuffle_count: u32,
+    pub game_index: u32,
+    pub game_type: CatanGames,
 }
 
 impl RegularGame {
@@ -90,8 +95,8 @@ impl RegularGame {
         let buildings = Self::setup_buildings(&mut tiles);
 
         let mut players = HashMap::new();
-        let player_id = creator.id.clone();
-        players.insert(player_id.clone(), player);
+        let user_id = creator.id.clone();
+        players.insert(user_id.clone(), player);
 
         let harbors: HashMap<HarborKey, Harbor> = game_info
             .harbor_data()
@@ -106,13 +111,44 @@ impl RegularGame {
             harbors,
             roads,
             buildings,
-            current_player_id: player_id.clone(),
+            current_player_id: user_id.clone(),
             player_order: vec![],
-            state_data: StateData::new(GameState::AddingPlayers),
-            creator_id: player_id.clone(),
+            game_state: GameState::AddingPlayers,
+            creator_id: user_id.clone(),
             baron_tile: TileKey::new(0, 0, 0),
-            can_undo: true
+            can_undo: true,
+            shuffle_count: 1,
+            game_index: 1,
+            game_type: CatanGames::Regular,
         }
+    }
+
+    /**
+     *  clone the game, add the user, and return the clone.  presumably it will be added to the undo_stack
+     *  so that the operation can be undone by simply going to the previous game struct
+     */
+
+    pub fn add_user(&self, profile: &ClientUser) -> Result<Self, ServiceResponse> {
+        if self.players.contains_key(&profile.id) {
+            return Err(ServiceResponse::new_bad_id("user_id already exists", &profile.id));
+        }
+
+        let mut clone = self.clone();
+        let player = {
+            Player {
+                user_data: profile.clone(),
+                roads: vec![],
+                buildings: vec![],
+                harbors: vec![],
+                targets: vec![],
+                resource_count: ResourceCount::default(),
+                good_rolls: 0,
+                bad_rolls: 0,
+                state: CalculatedState::default(),
+            }
+        };
+        clone.players.insert(profile.id.clone(), player);
+        Ok(clone)
     }
 
     /// Sets up the game tiles according to the provided game information.
@@ -284,10 +320,7 @@ impl RegularGame {
             .iter()
             .map(|tile| tile.current_resource.clone())
             .collect();
-        let mut rolls: Vec<u32> = tiles
-            .iter()
-            .map(|tile| tile.roll)
-            .collect();
+        let mut rolls: Vec<u32> = tiles.iter().map(|tile| tile.roll).collect();
 
         shuffle_vector(&mut resources);
         shuffle_vector(&mut rolls);
@@ -367,7 +400,7 @@ impl RegularGame {
     }
 }
 
-impl<'a> CatanGame<'a> for RegularGame {
+impl<'a> GameTrait<'a> for RegularGame {
     type Players = &'a Vec<Player>;
     type Tiles = &'a mut HashMap<TileKey, Tile>;
     type GameInfoType = RegularGameInfo;
@@ -406,10 +439,10 @@ impl<'a> CatanGame<'a> for RegularGame {
             .expect("How did the player ID not be in the list?");
 
         let next_player_index = (current_player_index + 1) % self.player_order.len();
-        let next_player_id = &self.player_order[next_player_index];
-        self.current_player_id = next_player_id.to_owned();
+        let next_user_id = &self.player_order[next_player_index];
+        self.current_player_id = next_user_id.to_owned();
         self.players
-            .get(next_player_id)
+            .get(next_user_id)
             .expect("Player should be in the map")
             .clone()
     }
@@ -499,17 +532,111 @@ impl<'a> CatanGame<'a> for RegularGame {
     fn set_player_order(&mut self, id_order: Vec<String>) -> Result<(), GameError> {
         // Check if the number of players matches the number of IDs in id_order
         if self.players.len() != id_order.len() {
-            return Err(GameError::PlayerMismatch);
+            return Err(GameError::BadActionData(format!(
+                "games has {} players and order has {} players",
+                self.players.len(),
+                id_order.len()
+            )));
         }
         let order = id_order.clone();
         for id in order {
             if !self.players.contains_key(&id) {
-                return Err(GameError::IdNotFoundInOrder);
+                return Err(GameError::BadId(format!("{} not in players", id)));
             }
         }
         self.player_order = id_order.clone();
         self.current_player_id = id_order[0].clone();
         Ok(())
+    }
+
+    fn valid_actions(&self, can_redo: bool) -> Vec<GameAction> {
+        let mut actions = Vec::new();
+        if can_redo {
+            actions.push(GameAction::Redo);
+        }
+        match self.game_state {
+            GameState::AddingPlayers => {
+                let len = self.players.len();
+                if len < self.max_players() {
+                    // if you get to max, there won't be a way to add another player
+                    actions.push(GameAction::AddPlayer);
+                };
+
+                if len >= self.min_players() {
+                    actions.push(GameAction::Next);
+                }
+            }
+            GameState::ChoosingBoard => {
+                actions.push(GameAction::Next);
+                actions.push(GameAction::NewBoard);
+            },
+            GameState::SettingPlayerOrder => {
+                actions.push(GameAction::Next);
+                actions.push(GameAction::SetOrder);
+            },
+            GameState::AllocateResourceForward => {
+                actions.push(GameAction::Next);
+                actions.push(GameAction::Build);
+            },
+            GameState::AllocateResourceReverse => todo!(),
+            GameState::WaitingForRoll => todo!(),
+            GameState::MustMoveBaron => todo!(),
+            GameState::BuyingAndTrading => todo!(),
+            GameState::Supplemental => todo!(),
+            GameState::GameOver => todo!(),
+        }
+        actions
+    }
+
+    fn current_state(&self) -> GameState {
+        self.game_state
+    }
+
+    fn get_next_state(&self) -> GameState {
+        let state =
+            match self.game_state {
+                GameState::AddingPlayers => GameState::ChoosingBoard,
+                GameState::ChoosingBoard => GameState::SettingPlayerOrder,
+                GameState::SettingPlayerOrder => GameState::AllocateResourceForward,
+                GameState::AllocateResourceForward => {
+                    if self.current_player_id
+                        == *self.player_order.last().expect(
+                            "We can't be in the allocation state with an empty list of players",
+                        )
+                    {
+                        GameState::AllocateResourceReverse
+                    } else {
+                        GameState::AllocateResourceForward
+                    }
+                }
+                GameState::AllocateResourceReverse => {
+                    if self.current_player_id
+                        == *self.player_order.first().expect(
+                            "We can't be in the allocation state with an empty list of players",
+                        )
+                    {
+                        GameState::AllocateResourceReverse
+                    } else {
+                        GameState::WaitingForRoll
+                    }
+                }
+                GameState::WaitingForRoll => todo!(),
+                GameState::MustMoveBaron => todo!(),
+                GameState::BuyingAndTrading => todo!(),
+                GameState::Supplemental => todo!(),
+                GameState::GameOver => todo!(),
+            };
+
+        state
+    }
+    ///
+    /// the state of the game is immutable, so when we set the gamestate, we clone the game first, set the state, and
+    /// return the clone.  We assume this is called from the next() handler, which has validated that next is the right
+    /// state
+    fn set_next_state(&self) -> Result<RegularGame, GameError> {
+        let mut clone = self.clone();
+        clone.game_state = self.get_next_state();
+        Ok(clone)
     }
 }
 

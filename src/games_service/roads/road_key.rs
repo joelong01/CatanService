@@ -6,7 +6,7 @@ use std::fmt;
 
 // RoadKey struct
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "PascalCase")]
 pub struct RoadKey {
     tile_key: TileKey,    // the tile coordinates that Direction is relative to
     direction: Direction, // the direction that represents the side of the tile that the road is on
@@ -30,8 +30,8 @@ impl fmt::Display for RoadKey {
             serde_json::to_string(&self.tile_key).map_err(|_| fmt::Error)?
         )
     }
-}#
-[cfg(test)]
+}
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::games_service::tiles::tile_key::TileKey;

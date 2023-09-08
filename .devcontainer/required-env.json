@@ -4,40 +4,34 @@
     },
     "secrets": [
         {
-            "environmentVariable": "COSMOS_ACCOUNT_NAME",
-            "description": "the Cosmosdb account name",
+            "environmentVariable": "HOST_NAME",
+            "description": "the DNS name for the application",
             "shellscript": "",
-            "default": "players-account"
+            "default": "localhost:8080"
         },
         {
             "environmentVariable": "AZURE_RESOURCE_GROUP",
-            "description": "the Azure Resource Group for the app:",
+            "description": "the Azure Resource Group for the app",
             "shellscript": "",
-            "default": "CosmosDb_test"
-        },
-        {
-            "environmentVariable": "COSMOS_AUTH_TOKEN",
-            "description": "the Cosmosdb authentication token (look for 'Keys' in the Azure Portal)",
-            "shellscript": ".devcontainer/get_cosmos_auth_token.sh",
             "default": ""
         },
         {
-            "environmentVariable": "SSL_KEY_FILE",
-            "description": "the file containing the SSL key",
-            "shellscript": ".devcontainer/generate_ssl_cert.sh",
-            "default": "$HOME/catan_ssl_key.pem"
-        },
-        {
-            "environmentVariable": "SSL_CERT_FILE",
-            "description": "the file containing the SSL certificate",
-            "shellscript": ".devcontainer/generate_ssl_cert.sh",
-            "default": "$HOME/catan_ssl_cert.pem"
-        },
-        {
-            "environmentVariable": "LOGIN_SECRET_KEY",
-            "description": "the secret key used for login",
-            "shellscript": ".devcontainer/secret_key.sh",
+            "environmentVariable": "KEV_VAULT_NAME",
+            "description": "the name of the keyvault used by the app",
+            "shellscript": "",
             "default": ""
+        },
+        {
+            "environmentVariable": "COSMOS_ACCOUNT_NAME",
+            "description": "the Cosmosdb account name",
+            "shellscript": "",
+            "default": "user-cosmos-account"
+        },
+        {
+            "environmentVariable": "COSMOS_DATABASE_NAME",
+            "description": "the name of the User database",
+            "shellscript": "",
+            "default": "Users-db"
         },
         {
             "environmentVariable": "RUST_LOG",
@@ -46,22 +40,66 @@
             "default": "actix_web=trace,actix_server=trace,rust=trace"
         },
         {
-            "environmentVariable": "CATAN_USER_DATABASE_NAME",
-            "description": "the name of the User database",
+            "environmentVariable": "TEST_PHONE_NUMBER",
+            "description": "the phone number to use in tests (*to*)",
             "shellscript": "",
-            "default": "Users-db"
+            "default": ""
         },
         {
-            "environmentVariable": "CATAN_USER_CONTAINER_NAME",
-            "description": "the name of the User container",
-            "shellscript": "",
-            "default": "User-Container"
+            "environmentVariable": "SERVICE_PHONE_NUMBER",
+            "description": "the phone number that the service uses (*from*)",
+            "shellscript": "./get_azure_info.sh --phone-number",
+            "default": ""
         },
+        {
+            "environmentVariable": "TEST_EMAIL",
+            "description": "the *to* email to use in tests",
+            "shellscript": "",
+            "default": ""
+        },
+        {
+            "environmentVariable": "SERVICE_FROM_EMAIL",
+            "description": "the Service *from* email",
+            "shellscript": "",
+            "default": ""
+        },
+        {
+            "environmentVariable": "COSMOS_AUTH_TOKEN",
+            "description": "the Cosmosdb authentication token (look for 'Keys' in the Azure Portal)",
+            "shellscript": "./get_azure_info.sh --cosmos-token",
+            "default": ""
+        },
+        {
+            "environmentVariable": "SSL_KEY_FILE",
+            "description": "the file containing the SSL key",
+            "shellscript": "./generate_ssl_cert.sh",
+            "default": "$HOME/catan_ssl_key.pem"
+        },
+        {
+            "environmentVariable": "SSL_CERT_FILE",
+            "description": "the file containing the SSL certificate",
+            "shellscript": "./generate_ssl_cert.sh",
+            "default": "$HOME/catan_ssl_cert.pem"
+        },
+        {
+            "environmentVariable": "LOGIN_SECRET_KEY",
+            "description": "the secret key used for login",
+            "shellscript": "./get_azure_info.sh --login-secret-key",
+            "default": ""
+        },
+        {
+            "environmentVariable": "VALIDATION_SECRET_KEY",
+            "description": "the secret key used for email validation",
+            "shellscript": "./get_azure_info.sh --validation-secret-key",
+            "default": ""
+        },
+        
         {
             "environmentVariable": "AZURE_COMMUNICATION_CONNECTION_STRING",
             "description": "the azure communication connection string",
-            "shellscript": ".devcontainer/get_azure_email_info.sh",
+            "shellscript": "./get_azure_info.sh --comm-string",
             "default": ""
         }
+        
     ]
 }

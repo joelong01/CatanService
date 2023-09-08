@@ -1,5 +1,5 @@
 {
-  "name": "Rust Development",
+"name": "Rust Development",
   "image": "rust",
   "customizations": {
     "vscode": {

@@ -1,26 +1,21 @@
 #![allow(dead_code)]
 
-use std::any::Any;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    games_service::shared::game_enums::{GameAction, GamePhase, GameState},
-    shared::models::GameError,
-};
+use crate::games_service::shared::game_enums::{GameAction, GamePhase, GameState};
+
 /// this trait should hold the transitions from one state to the next.  it does not operate on the concrete
 /// state of the Game -- that should be done in the Game itself (for seperation of concerns reasons)
-pub trait StateMachineTrait {
+pub(crate) trait StateMachineTrait {
     fn current_state(&self) -> StateData;
-    fn set_current_state(&mut self, game_state: GameState);
-    fn next_state(
-        &mut self,
-        action_data: Option<&dyn Any>,
-    ) -> Result<GameState, GameError>;
+    fn set_current_state(&mut self, game_state: GameState) -> Vec<GameAction>;
+    fn next_state(&self) -> GameState;
+
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "PascalCase")]
 pub struct StateData {
     game_state: GameState,
 }
@@ -45,29 +40,35 @@ impl StateData {
         };
         phase
     }
-
+    //
+    //  these are the "generic" actions that should apply to all games.
+    //  the concreate Game will then call this and override the answer based on game state
     pub fn actions(&self) -> Vec<GameAction> {
+        let mut actions = vec![
+        GameAction::Next,
+        GameAction::Undo];
         match self.game_state {
-            GameState::AddingPlayers => vec![
-                GameAction::AddPlayer,
-                GameAction::RemovePlayer,
-                GameAction::Done,
-            ],
-            GameState::ChoosingBoard => vec![GameAction::NewBoard, GameAction::Done],
-            GameState::SettingPlayerOrder => vec![GameAction::Done, GameAction::SetOrder],
-            GameState::AllocateResourceForward => vec![GameAction::Done, GameAction::Build],
-            GameState::AllocateResourceReverse => vec![GameAction::Done, GameAction::Build],
-            GameState::WaitingForRoll => vec![GameAction::Done, GameAction::Roll],
-            GameState::MustMoveBaron => vec![GameAction::Done, GameAction::MoveBaron],
-            GameState::BuyingAndTrading => vec![
-                GameAction::Done,
-                GameAction::Trade,
+            GameState::AddingPlayers => actions.push(GameAction::AddPlayer),
+               
+            GameState::ChoosingBoard => actions.push(GameAction::NewBoard),
+               
+            GameState::SettingPlayerOrder => actions.push(GameAction::SetOrder),
+            GameState::AllocateResourceForward => actions.push(GameAction::Build),
+            GameState::AllocateResourceReverse => actions.push(GameAction::Build),
+            GameState::WaitingForRoll => actions.push( GameAction::Roll),
+            GameState::MustMoveBaron => {
+               actions = vec![GameAction::MoveBaron, GameAction::Undo, GameAction::Redo];
+            },
+            GameState::BuyingAndTrading => actions.append(
+                &mut vec![GameAction::Trade,
                 GameAction::Buy,
-                GameAction::Build,
-            ],
+                GameAction::Build],
+            ),
             GameState::Supplemental => {
-                vec![GameAction::Done, GameAction::Buy, GameAction::Build]
+                actions.append(&mut vec![GameAction::Buy, GameAction::Build]);
             }
+            GameState::GameOver => todo!(),
         }
+        actions
     }
 }

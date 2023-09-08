@@ -44,7 +44,10 @@ function get_real_path() {
 }
 
 # a this is a config file in json format where we use jq to find/store settings
-REQUIRED_REPO_ENV_VARS=$(get_real_path "required-env.json")
+# we pushd to the directory that has the script -- so it needs to be in the same directory as $0 (collect_env.sh)
+REQUIRED_REPO_ENV_VARS="./required-env.json"
+
+#this is where we put the environment variables to be loaded by the shell
 LOCAL_REQUIRED_ENV_FILE="$HOME/.localDevEnv.sh"
 USE_GITHUB_USER_SECRETS=$(jq -r '.options.useGitHubUserSecrets' "$REQUIRED_REPO_ENV_VARS" 2>/dev/null)
 
@@ -63,22 +66,29 @@ USE_GITHUB_USER_SECRETS=$(jq -r '.options.useGitHubUserSecrets' "$REQUIRED_REPO_
 #
 function collect_env() {
     # Parse the JSON input
-    local json_array # renamed $1: a json array of secrets (environmentVariable, description, and shellscript)
-    local length     # the length of the json array
-    json_array=$1
-    length=$(echo "$json_array" | jq '. | length')
+    local json_array
+    local length # the length of the json array
+    local value
+    local environmentVariable # the name of the environment variable
+    local description
+    local shellscript # a shellscript that will provide information to the user to collect the needed value
+    local default
 
+    json_array=$(jq '.secrets' "$REQUIRED_REPO_ENV_VARS")
+    length=$(echo "$json_array" | jq 'length')
     # Iterate through the array
     for ((i = 0; i < length; i++)); do
         # Extract JSON properties
-        local environmentVariable # the name of the environment variable
-        local description
-        local shellscript # a shellscript that will provide information to the user to collect the needed value
-        local default
         environmentVariable=$(echo "$json_array" | jq -r ".[$i].environmentVariable")
         description=$(echo "$json_array" | jq -r ".[$i].description")
-        shellscript=$(echo "$json_array" | jq -r ".[$i].shellscript")
+        shellscript_line=$(echo "$json_array" | jq -r ".[$i].shellscript")
         default=$(echo "$json_array" | jq -r ".[$i].default")
+
+        # Get the script name by extracting everything before the first space
+        shellscript="${shellscript_line%% *}"
+
+        # Get the arguments by extracting everything after the first space
+        script_args="${shellscript_line#* }"
 
         # check to make sure that if shellscript is set that the file exists
         if [[ -n "$shellscript" && ! -f "$shellscript" ]]; then
@@ -87,8 +97,9 @@ function collect_env() {
             echo_error "Note:  \$PWD=$PWD"
             continue
         fi
+
         # Check if the environment variable is set in the local secrets file
-        local value
+
         value=$(grep "^$environmentVariable=" "$LOCAL_REQUIRED_ENV_FILE" 2>/dev/null | sed 's/^[^=]*=//')
         value="${value%\"}" # Remove trailing quote
         value="${value#\"}" # Remove leading quote
@@ -96,15 +107,21 @@ function collect_env() {
         if [[ -n "$value" ]]; then
             # Get the value from the secret_entry
             # Set the environment variable with the key and value from the file
-            export "$environmentVariable=$value"
+            export "$environmentVariable"="$value"
+
         else
             if [[ -n "$shellscript" ]]; then
+                # make sure the file is executable
+                chmod +x "$shellscript"
                 # If shellscript is not empty, source it
                 #shellcheck disable=SC1090
-                source "$shellscript"
-            else
+                source "$shellscript" "$script_args"
+                eval "value=\$$environmentVariable"
+
+            fi
+            if [[ -z "$value" ]]; then #if the script doesn't set the value, prompt for it.
                 # If shellscript is empty, prompt the user for the value using the description and the default
-                echo -n "Enter $description: $default"
+                echo -n "Enter $description ($default): "
                 read -r value
 
                 # Set the environment variable to the value entered
@@ -126,6 +143,18 @@ function collect_env() {
 # $1 contains a JSON array
 
 function build_set_env_script() {
+
+    # load the secrets file to get the array of secrets
+    local json_array # a json array of secrets loaded from the $REQUIRED_REPO_ENV_VARS file
+    local toWrite=""
+    local environmentVariable
+    local description
+    local val # the value of the environment variable
+
+    local length # the length of the json array
+
+    json_array=$(jq '.secrets' "$REQUIRED_REPO_ENV_VARS")
+
     # found a bug in the VS Code shell beautify where making this a string that gets appended to
     # breaks the formatting. this form does not.
     cat <<EOF >"$LOCAL_REQUIRED_ENV_FILE"
@@ -135,13 +164,7 @@ if [[ \$CODESPACES == true ]]; then
   return 0
 fi
 EOF
-    local toWrite=""
-    local environmentVariable
-    local description
-    local val        # the value of the environment variable
-    local json_array # renamed $1: a json array of secrets (environmentVariable, description, and shellscript)
-    local length     # the length of the json array
-    json_array=$1
+
     length=$(echo "$json_array" | jq '. | length')
     # Iterate through the array
     for ((i = 0; i < length; i++)); do
@@ -225,7 +248,6 @@ function save_in_codespaces() {
 #   2. reconstruct and overwrite the $LOCAL_REQUIRED_ENV_FILE
 #   3. source the $LOCAL_REQUIRED_ENV_FILE
 function update_vars {
-
     # check the last modified date of the env file file and if it is gt the last modified time of the config file
     # we have no work to do
     local local_file_modified
@@ -259,23 +281,15 @@ function update_vars {
         login_to_github
     fi
 
-    # load the secrets file to get the array of secrets
-    local json_env_array # a json array of secrets loaded from the $REQUIRED_REPO_ENV_VARS file
-
-    json_env_array=$(jq '.secrets' "$REQUIRED_REPO_ENV_VARS")
-
     # iterate through the JSON and get values for each secret
     # when this returns each secret will have an environment variable set
-    collect_env "$json_env_array"
 
-    # build, save, and source the local secrets script
-    build_set_env_script "$json_env_array"
+    collect_env
+    build_set_env_script
 
-    # if the user wants to use codespaces secrets, iterate through the json array
-    # and store the secret in CodeSpaces user secrets, adding the current repo
-    if [[ "$USE_GITHUB_USER_SECRETS" == "true" ]]; then
-        save_in_codespaces "$json_env_array"
-    fi
+
+
+    #TODO:  if you want to support codespace -- add the call to update the secrets here
 
 }
 
@@ -376,8 +390,14 @@ help)
     ;;
 update)
     echo_info "running update"
+    devcontainer_dir="$(dirname "$0")"
+    pushd "$devcontainer_dir" >/dev/null ||
+        {
+            echo_error "Unable to change directory to $(dirname "$REQUIRED_REPO_ENV_VARS")"
+            exit
+        }
     update_vars
-
+    popd >/dev/null || exit
     ;;
 setup)
     initial_setup
@@ -388,7 +408,6 @@ reset)
     rm "$SSL_KEY_FILE" 2>/dev/null
     rm "$SSL_CERT_FILE" 2>/dev/null
     update_vars
-    # code for resetting the terminal goes here
     ;;
 *)
     echo "Invalid option: $1"

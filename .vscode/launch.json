@@ -4,14 +4,14 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+    
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Cargo test",
+            "name": "Cargo launch",
             "cargo": {
                 "args": [
-                    "test",
-                    "--no-run",
+                    "build",
                     "--lib"
                 ]
             },
@@ -20,18 +20,19 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Cargo test",
+            "name": "Debug full_game_test",
             "cargo": {
                 "args": [
                     "test",
-                    "--no-run",
-                    "--bin catan_service"
+                    "--no-run", 
+                    "--bin=catan_service"
+
                 ]
             },
-
-            "args": ["--test", "<test_name>"],
+            "program": "${cargo:program}",
+            "args": ["full_game_test"],
+            "cwd": "${workspaceFolder}"
         },
-        
         {
             "type": "bashdb",
             "request": "launch",
@@ -88,6 +89,5 @@
             "args": [],
             "cwd": "${workspaceFolder}"
         }
-          
     ]
 }
