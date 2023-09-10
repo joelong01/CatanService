@@ -3,16 +3,16 @@ use crate::{
     middleware::environment_mw::RequestContext,
     shared::{
         header_extractor::HeadersExtractor,
-        models::{GameError, ResponseType, ServiceResponse, UserProfile},
+        models::{GameError, ResponseType, ServiceResponse, UserProfile, ClientUser},
     },
 };
 use actix_web::{
     web::{self},
-    HttpResponse, Responder,
+    HttpResponse, Responder, http::Error,
 };
 use reqwest::StatusCode;
 
-use super::users::{login, register, setup};
+use super::users::{login, register, verify_cosmosdb};
 
 /**
  * Handlers for the "user" service.
@@ -22,11 +22,12 @@ use super::users::{login, register, setup};
  */
 
 // Set up the service
-pub async fn setup_handler(request_context: RequestContext) -> HttpResponse {
-    setup(&request_context)
-        .await
-        .map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
+pub async fn verify_handler(request_context: RequestContext) -> HttpResponse {
+    let result = verify_cosmosdb(&request_context).await;
+    match result {
+        Ok(sr) => sr.to_http_response(),
+        Err(e) => e.to_http_response()
+    }
 }
 
 // Register a new user
@@ -79,12 +80,39 @@ pub async fn get_profile_handler(
 pub async fn find_user_by_id_handler(
     id: web::Path<String>,
     request_context: RequestContext,
-) -> HttpResponse {
-    super::users::find_user_by_id(&id, &request_context)
-        .await
-        .map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
+) -> Result<HttpResponse, Error> {
+    match request_context.database.find_user_by_id(&id).await {
+        Ok(option) => {
+            match option {
+                Some(user) => {
+                    let service_response = ServiceResponse::new(
+                        "",
+                        StatusCode::OK,
+                        ResponseType::ClientUser(ClientUser::from_persist_user(&user)),
+                        GameError::NoError(String::default()),
+                    );
+                    Ok(service_response.to_http_response())
+                }, 
+                None => {
+                    // Handle the case where the user is not found.
+                    // You can modify this based on how you want to handle a missing user.
+                    let service_response = ServiceResponse::new(
+                        "",
+                        StatusCode::NOT_FOUND,
+                        ResponseType::NoData, // Assuming ClientUser has a default instance or you could use another placeholder
+                        GameError::NoError(String::default()),
+                    );
+                    Ok(service_response.to_http_response())
+                }
+            }
+        },
+        Err(service_response) => {
+            Ok(service_response.to_http_response())
+        }
+    }
 }
+
+
 
 // Delete user
 pub async fn delete_handler(
@@ -99,11 +127,8 @@ pub async fn delete_handler(
         .unwrap_or_else(|sr| sr.to_http_response())
 }
 
-pub async fn validate_email(
-    token: web::Path<String>,
-    request_context: RequestContext,
-) -> HttpResponse {
-    super::users::validate_email(&token, &request_context)
+pub async fn validate_email(token: web::Path<String>) -> HttpResponse {
+    super::users::validate_email(&token)
         .await
         .map(|sr| sr.to_http_response())
         .unwrap_or_else(|sr| sr.to_http_response())
@@ -114,7 +139,7 @@ pub fn create_http_response(status_code: StatusCode, message: &str, body: &str) 
         message,
         status_code,
         ResponseType::Todo(body.to_string()),
-        GameError::HttpError,
+        GameError::HttpError(status_code),
     );
     match status_code {
         StatusCode::OK => HttpResponse::Ok().json(response),
@@ -150,5 +175,3 @@ pub async fn send_phone_code_handler(
         .map(|sr| sr.to_http_response())
         .unwrap_or_else(|sr| sr.to_http_response())
 }
-
-

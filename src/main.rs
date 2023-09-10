@@ -11,10 +11,17 @@ mod test;
 mod user_service;
 
 use actix_web::{web, HttpResponse, HttpServer, Scope};
+
 use games_service::actions::action_handlers;
 use games_service::long_poller::long_poller_handler::long_poll_handler;
+use shared::models::ServiceResponse;
+
+use std::env;
 use std::net::ToSocketAddrs;
 
+use crate::azure_setup::azure_wrapper::verify_or_create_account;
+use crate::azure_setup::azure_wrapper::verify_or_create_collection;
+use crate::azure_setup::azure_wrapper::verify_or_create_database;
 use crate::games_service::lobby::lobby_handlers;
 use games_service::game_handlers;
 use lazy_static::lazy_static;
@@ -58,9 +65,14 @@ async fn main() -> std::io::Result<()> {
     print!("ssl key file {:#?}\n", CATAN_ENV.ssl_key_location);
     print!("ssl cert file {:#?}\n", CATAN_ENV.ssl_cert_location);
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    let args: Vec<String> = env::args().collect();
 
-   let (ip_address, port) = get_host_ip_and_port();
-    
+    if args.len() > 1 && args[1] == "--setup" {
+        setup_cosmos().expect("Setup failed and the app cannot continue.");
+    }
+
+    let (ip_address, port) = get_host_ip_and_port();
+
     println!("Binding to IP: {}:{}", ip_address, port);
 
     //
@@ -80,6 +92,44 @@ async fn main() -> std::io::Result<()> {
         .bind_openssl(format!("{}:{}", ip_address, port), builder)?
         .run()
         .await
+}
+
+ fn setup_cosmos() -> Result<(), ServiceResponse> {
+    verify_or_create_account(
+        &CATAN_ENV.resource_group,
+        &CATAN_ENV.cosmos_account,
+        &CATAN_ENV.azure_location,
+    )?;
+
+    verify_or_create_database(
+        &CATAN_ENV.cosmos_account,
+        &CATAN_ENV.cosmos_database_name,
+        &CATAN_ENV.resource_group,
+    )?;
+    let test_db_name = CATAN_ENV.cosmos_database_name.to_string() + "-test";
+    verify_or_create_database(
+        &CATAN_ENV.cosmos_account,
+        &test_db_name,
+        &CATAN_ENV.resource_group,
+    )?;
+
+    for collection in &CATAN_ENV.cosmos_collections {
+        verify_or_create_collection(
+            &CATAN_ENV.cosmos_account,
+            &CATAN_ENV.cosmos_database_name,
+            &collection,
+            &CATAN_ENV.resource_group,
+        )?;
+
+        let test_name = collection.clone() + "-test";
+        verify_or_create_collection(
+            &CATAN_ENV.cosmos_account,
+            &test_db_name,
+            &test_name,
+            &CATAN_ENV.resource_group,
+        )?;
+    }
+    Ok(())
 }
 
 /**
@@ -112,7 +162,7 @@ async fn get_version() -> HttpResponse {
  *
  * - Test Setup:
  *   - A special endpoint used only for testing purposes to set up test data.
- *   - URL: `https://localhost:8080/api/v1/test/setup`
+ *   - URL: `https://localhost:8080/api/v1/test/verify_service`
  *   - Method: `POST`
  */
 fn create_unauthenticated_service() -> Scope {
@@ -124,7 +174,7 @@ fn create_unauthenticated_service() -> Scope {
                 web::post().to(user_handlers::register_handler),
             )
             .route("/users/login", web::post().to(user_handlers::login_handler))
-            .route("/test/setup", web::post().to(user_handlers::setup_handler)) /* TEST ONLY */
+            .route("/test/verify_service", web::post().to(user_handlers::verify_handler)) /* TEST ONLY */
             .route(
                 "/users/validate_email/{token}",
                 web::get().to(user_handlers::validate_email),
@@ -159,8 +209,14 @@ fn user_service() -> Scope {
             "/{id}",
             web::get().to(user_handlers::find_user_by_id_handler),
         )
-        .route("/phone/validate/{code}", web::post().to(user_handlers::validate_phone_handler))
-        .route("/phone/send_code", web::post().to(user_handlers::send_phone_code_handler))
+        .route(
+            "/phone/validate/{code}",
+            web::post().to(user_handlers::validate_phone_handler),
+        )
+        .route(
+            "/phone/send_code",
+            web::post().to(user_handlers::send_phone_code_handler),
+        )
 }
 
 /**
@@ -282,12 +338,12 @@ pub async fn init_env_logger(min_level: LevelFilter, cosmos_log_level: LevelFilt
 mod tests {
     use crate::{
         create_test_service,
-        setup_test,
         games_service::game_container::game_messages::GameHeader,
         init_env_logger,
-        middleware::environment_mw::{TestContext, RequestContext, CATAN_ENV},
-     
-        shared::models::{ClientUser, ServiceResponse, UserProfile}, user_service::users::{register, login, setup},
+        middleware::environment_mw::{RequestContext, TestContext, CATAN_ENV},
+        setup_test,
+        shared::models::{ClientUser, ServiceResponse, UserProfile},
+        user_service::users::{login, register, verify_cosmosdb}, setup_cosmos,
     };
 
     use actix_web::{http::header, test};
@@ -421,7 +477,7 @@ mod tests {
         let mut app = create_test_service!();
 
         let request = test::TestRequest::post()
-            .uri("/api/v1/test/setup")
+            .uri("/api/v1/test/verify_service")
             .to_request();
 
         let response = test::call_service(&mut app, request).await;
@@ -446,7 +502,7 @@ mod tests {
         let mut profile = UserProfile::new_test_user();
         profile.phone_number = CATAN_ENV.test_phone_number.clone();
         // setup
-        let _response = setup(&request_context).await;
+        let _response = verify_cosmosdb(&request_context).await;
 
         let sr = register("password", &profile, &request_context)
             .await
@@ -483,4 +539,10 @@ mod tests {
         let response = test::call_service(&mut app, req).await;
         assert_eq!(response.status(), 200);
     }
+    #[actix_rt::test]
+    async fn test_setup() {
+        init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Trace).await;
+        setup_cosmos().expect("can't continue if setup fails!");
+    }
+
 }

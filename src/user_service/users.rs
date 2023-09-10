@@ -2,7 +2,6 @@
 #![allow(unused_variables)]
 
 use rand::{Rng, RngCore};
-use std::sync::atomic::{AtomicBool, Ordering};
 use url::form_urlencoded;
 
 use crate::azure_setup::azure_wrapper::{
@@ -13,8 +12,6 @@ use crate::azure_setup::azure_wrapper::{
  * this module implements the WebApi to create the database/collection, list all the users, and to create/find/delete
  * a User document in CosmosDb
  */
-use crate::cosmos_db::cosmosdb::UserDb;
-use crate::cosmos_db::mocked_db::TestDb;
 use crate::{full_info, trace_function};
 
 use crate::games_service::long_poller::long_poller::LongPoller;
@@ -28,14 +25,9 @@ use bcrypt::{hash, verify};
 use jsonwebtoken::{
     decode, encode, Algorithm, DecodingKey, EncodingKey, Header, TokenData, Validation,
 };
-use lazy_static::lazy_static;
-use reqwest::StatusCode;
-use tokio::sync::Mutex;
 
-lazy_static! {
-    static ref DB_SETUP: AtomicBool = AtomicBool::new(false);
-    static ref SETUP_LOCK: Mutex<()> = Mutex::new(());
-}
+use reqwest::StatusCode;
+
 /**
  * this sets up CosmosDb to make the sample run. the only prereq is the secrets set in
  * .devconainter/required-secrets.json, this API will call setupdb. this just calls the setupdb api and deals with errors
@@ -44,7 +36,7 @@ lazy_static! {
  * the users database will be created out of band and this path is just for test users.
  */
 
-pub async fn setup(context: &RequestContext) -> Result<ServiceResponse, ServiceResponse> {
+pub async fn verify_cosmosdb(context: &RequestContext) -> Result<ServiceResponse, ServiceResponse> {
     trace_function!("setup");
     let use_cosmos_db = match &context.test_context {
         Some(tc) => tc.use_cosmos_db,
@@ -53,7 +45,7 @@ pub async fn setup(context: &RequestContext) -> Result<ServiceResponse, ServiceR
                 "Test Header must be set",
                 StatusCode::UNAUTHORIZED,
                 ResponseType::NoData,
-                GameError::HttpError,
+                GameError::HttpError(StatusCode::UNAUTHORIZED),
             ))
         }
     };
@@ -65,13 +57,13 @@ pub async fn setup(context: &RequestContext) -> Result<ServiceResponse, ServiceR
                 &format!("account {} does not exist", context.env.cosmos_account),
                 StatusCode::NOT_FOUND,
                 ResponseType::NoData,
-                GameError::HttpError,
+                GameError::HttpError(StatusCode::NOT_FOUND),
             ));
         }
 
         if cosmos_database_exists(
             &context.env.cosmos_account,
-            &context.env.cosmos_database,
+            &context.env.cosmos_database_name,
             &context.env.resource_group,
         )
         .is_err()
@@ -79,17 +71,20 @@ pub async fn setup(context: &RequestContext) -> Result<ServiceResponse, ServiceR
             return Err(ServiceResponse::new(
                 &format!(
                     "account {} does exists, but database {} does not",
-                    context.env.cosmos_account, context.env.cosmos_database
+                    context.env.cosmos_account, context.env.cosmos_database_name
                 ),
                 StatusCode::NOT_FOUND,
                 ResponseType::NoData,
-                GameError::HttpError,
+                GameError::HttpError(StatusCode::NOT_FOUND),
             ));
         }
+
+       
+
         for collection in &context.env.cosmos_collections {
             let collection_exists = cosmos_collection_exists(
                 &context.env.cosmos_account,
-                &context.env.cosmos_database,
+                &context.env.cosmos_database_name,
                 &collection,
                 &context.env.resource_group,
             );
@@ -97,63 +92,24 @@ pub async fn setup(context: &RequestContext) -> Result<ServiceResponse, ServiceR
             if collection_exists.is_err() {
                 let error_message = format!(
                     "account {} exists, database {} exists, but {} does not",
-                    context.env.cosmos_account, context.env.cosmos_database, collection
+                    context.env.cosmos_account, context.env.cosmos_database_name, collection
                 );
 
                 return Err(ServiceResponse::new(
                     &error_message,
                     StatusCode::NOT_FOUND,
                     ResponseType::NoData,
-                    GameError::HttpError,
+                    GameError::HttpError(StatusCode::NOT_FOUND),
                 ));
             }
         }
-
-        return Ok(ServiceResponse::new(
-            "already exists",
-            StatusCode::ACCEPTED,
-            ResponseType::NoData,
-            GameError::NoError,
-        ));
     }
-
-    if DB_SETUP.load(Ordering::Relaxed) {
-        return Ok(ServiceResponse::new(
-            "already exists",
-            StatusCode::ACCEPTED,
-            ResponseType::NoData,
-            GameError::NoError,
-        ));
-    }
-
-    let _lock_guard = SETUP_LOCK.lock().await;
-
-    if DB_SETUP.load(Ordering::Relaxed) {
-        return Ok(ServiceResponse::new(
-            "already exists",
-            StatusCode::ACCEPTED,
-            ResponseType::NoData,
-            GameError::NoError,
-        ));
-    }
-
-    match TestDb::setupdb().await {
-        Ok(..) => {
-            DB_SETUP.store(true, Ordering::Relaxed);
-            return Ok(ServiceResponse::new(
-                "created",
-                StatusCode::CREATED,
-                ResponseType::NoData,
-                GameError::NoError,
-            ));
-        }
-        Err(e) => Err(ServiceResponse::new(
-            "Bad Request",
-            StatusCode::BAD_REQUEST,
-            ResponseType::ErrorInfo(format!("{:#?}", e)),
-            GameError::HttpError,
-        )),
-    }
+    Ok(ServiceResponse::new(
+        "already exists",
+        StatusCode::ACCEPTED,
+        ResponseType::NoData,
+        GameError::NoError(String::default()),
+    ))
 }
 
 /// Registers a new user by hashing the provided password and creating a `PersistUser` record in the database.
@@ -173,15 +129,16 @@ pub async fn register(
     profile_in: &UserProfile,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    if internal_find_user("Email", &profile_in.email, request_context)
-        .await
-        .is_ok()
+    if let Some(_) = request_context
+        .database
+        .find_user_by_email(&profile_in.email)
+        .await?
     {
-        return Err(ServiceResponse::new(
+        return Ok(ServiceResponse::new(
             "User already exists",
             StatusCode::CONFLICT,
             ResponseType::NoData,
-            GameError::HttpError,
+            GameError::HttpError(StatusCode::CONFLICT),
         ));
     }
 
@@ -194,7 +151,7 @@ pub async fn register(
                 "Error Hashing Password",
                 StatusCode::INTERNAL_SERVER_ERROR,
                 ResponseType::ErrorInfo(err_message.to_owned()),
-                GameError::HttpError,
+                GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
             ));
         }
     };
@@ -205,43 +162,10 @@ pub async fn register(
     // ignore the game stats passed in by the client and create a new one
     persist_user.user_profile.games_played = Some(0);
     persist_user.user_profile.games_won = Some(0);
-    internal_update_user(&persist_user, &request_context).await
-}
-
-async fn internal_update_user(
-    persist_user: &PersistUser,
-    request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
-    // Create the database connection
-    if request_context.use_cosmos_db() {
-        let userdb = UserDb::new(&request_context).await;
-
-        // Save the user record to the database
-        match userdb.update_or_create_user(persist_user.clone()).await {
-            Ok(..) => Ok(ServiceResponse::new(
-                "created",
-                StatusCode::CREATED,
-                ResponseType::ClientUser(ClientUser::from_persist_user(persist_user)),
-                GameError::NoError,
-            )),
-            Err(e) => {
-                return Err(ServiceResponse::new(
-                    "Bad Request",
-                    StatusCode::BAD_REQUEST,
-                    ResponseType::ErrorInfo(format!("{:#?}", e)),
-                    GameError::HttpError,
-                ))
-            }
-        }
-    } else {
-        TestDb::update_or_create_user(&persist_user).await.unwrap();
-        Ok(ServiceResponse::new(
-            "created",
-            StatusCode::CREATED,
-            ResponseType::ClientUser(ClientUser::from_persist_user(persist_user)),
-            GameError::NoError,
-        ))
-    }
+    request_context
+        .database
+        .update_or_create_user(&persist_user)
+        .await
 }
 
 /**
@@ -257,7 +181,22 @@ pub async fn login(
     password: &str,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    let user = internal_find_user("Email", username, request_context).await?;
+    let user = match request_context
+        .database
+        .find_user_by_email(username)
+        .await?
+    {
+        Some(u) => u,
+        None => {
+            return Ok(ServiceResponse {
+                message: format!("email {} no found", username),
+                status: StatusCode::NOT_FOUND,
+                response_type: ResponseType::NoData,
+                game_error: GameError::NoError(String::default()),
+            });
+        }
+    };
+
     let password_hash: String = match user.password_hash {
         Some(p) => p,
         None => {
@@ -265,7 +204,7 @@ pub async fn login(
                 "user document does not contain a password hash",
                 StatusCode::INTERNAL_SERVER_ERROR,
                 ResponseType::NoData,
-                GameError::HttpError,
+                GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
             ));
         }
     };
@@ -277,7 +216,7 @@ pub async fn login(
                 &format!("Error from bcrypt library: {:#?}", e),
                 StatusCode::INTERNAL_SERVER_ERROR,
                 ResponseType::NoData,
-                GameError::HttpError,
+                GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
             ));
         }
     };
@@ -297,7 +236,7 @@ pub async fn login(
                     "",
                     StatusCode::OK,
                     ResponseType::Token(token),
-                    GameError::NoError,
+                    GameError::NoError(String::default()),
                 ))
             }
             Err(e) => {
@@ -305,7 +244,7 @@ pub async fn login(
                     "Error Hashing token",
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ResponseType::ErrorInfo(format!("{:#?}", e)),
-                    GameError::HttpError,
+                    GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
                 ));
             }
         }
@@ -314,7 +253,7 @@ pub async fn login(
             "invalid password",
             StatusCode::UNAUTHORIZED,
             ResponseType::NoData,
-            GameError::HttpError,
+            GameError::HttpError(StatusCode::UNAUTHORIZED),
         ));
     }
 }
@@ -362,89 +301,52 @@ pub fn validate_jwt_token(token: &str, secret_key: &str) -> Option<TokenData<Cla
 pub async fn list_users(
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    if request_context.use_cosmos_db() {
-        let userdb = UserDb::new(&request_context).await;
+    // Get list of users
+    match request_context.database.list().await {
+        Ok(users) => {
+            let client_users: Vec<ClientUser> = users
+                .iter()
+                .map(|user| ClientUser::from_persist_user(&user))
+                .collect();
 
-        // Get list of users
-        match userdb.list().await {
-            Ok(users) => {
-                let client_users: Vec<ClientUser> = users
-                    .iter()
-                    .map(|user| ClientUser::from_persist_user(&user))
-                    .collect();
-
-                Ok(ServiceResponse::new(
-                    "",
-                    StatusCode::OK,
-                    ResponseType::ClientUsers(client_users),
-                    GameError::NoError,
-                ))
-            }
-            Err(err) => {
-                return Err(ServiceResponse::new(
-                    "",
-                    StatusCode::NOT_FOUND,
-                    ResponseType::ErrorInfo(format!("Failed to retrieve user list: {}", err)),
-                    GameError::HttpError,
-                ));
-            }
+            Ok(ServiceResponse::new(
+                "",
+                StatusCode::OK,
+                ResponseType::ClientUsers(client_users),
+                GameError::NoError(String::default()),
+            ))
         }
-    } else {
-        let client_users: Vec<ClientUser> = TestDb::list()
-            .await
-            .unwrap()
-            .iter()
-            .map(|user| ClientUser::from_persist_user(&user))
-            .collect();
-
-        Ok(ServiceResponse::new(
-            "",
-            StatusCode::OK,
-            ResponseType::ClientUsers(client_users),
-            GameError::NoError,
-        ))
+        Err(err) => {
+            return Err(ServiceResponse::new(
+                "",
+                StatusCode::NOT_FOUND,
+                ResponseType::ErrorInfo(format!("Failed to retrieve user list: {}", err)),
+                GameError::HttpError(StatusCode::NOT_FOUND),
+            ));
+        }
     }
 }
 pub async fn get_profile(
     user_id: &str,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    let user = internal_find_user("id", user_id, request_context).await?;
-
+    let user = match request_context.database.find_user_by_id(user_id).await? {
+        Some(u) => u,
+        None => {
+            return Ok(ServiceResponse {
+                message: format!("id {} not found", user_id),
+                status: StatusCode::NOT_FOUND,
+                response_type: ResponseType::NoData,
+                game_error: GameError::NoError(String::default()),
+            });
+        }
+    };
     Ok(ServiceResponse::new(
         "",
         StatusCode::OK,
         ResponseType::ClientUser(ClientUser::from_persist_user(&user)),
-        GameError::NoError,
+        GameError::NoError(String::default()),
     ))
-}
-
-pub async fn find_user_by_id(
-    id: &str,
-    request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
-    get_profile(id, request_context).await
-}
-
-pub async fn internal_find_user(
-    prop: &str,
-    val: &str,
-    request_context: &RequestContext,
-) -> Result<PersistUser, ServiceResponse> {
-    if request_context.use_mock_db() {
-        if prop == "id" {
-            return TestDb::find_user_by_id(val).await;
-        } else {
-            return TestDb::find_user_by_email(val).await;
-        }
-    }
-
-    let userdb = UserDb::new(request_context).await;
-    if prop == "id" {
-        userdb.find_user_by_id(val).await
-    } else {
-        userdb.find_user_by_email(val).await
-    }
 }
 
 pub async fn delete(
@@ -460,30 +362,25 @@ pub async fn delete(
             "you can only delete yourself",
             StatusCode::UNAUTHORIZED,
             ResponseType::NoData,
-            GameError::HttpError,
+            GameError::HttpError(StatusCode::UNAUTHORIZED),
         ));
     }
 
-    let result;
-    if request_context.use_cosmos_db() {
-        let userdb = UserDb::new(&request_context).await;
-        result = userdb.delete_user(&id_path).await
-    } else {
-        result = TestDb::delete_user(&id_path).await;
-    }
+    let result = request_context.database.delete_user(&id_path).await;
+
     match result {
         Ok(..) => Ok(ServiceResponse::new(
             &format!("deleted user with id: {}", id_path),
             StatusCode::OK,
             ResponseType::NoData,
-            GameError::NoError,
+            GameError::NoError(String::default()),
         )),
         Err(err) => {
             return Err(ServiceResponse::new(
                 "failed to delete user",
                 StatusCode::BAD_REQUEST,
                 ResponseType::NoData,
-                GameError::HttpError,
+                GameError::HttpError(StatusCode::BAD_REQUEST),
             ))
         }
     }
@@ -494,36 +391,41 @@ pub async fn delete(
 /// get the profile
 /// mark the email as validated
 /// save the profile
-pub async fn validate_email(
-    token: &str,
-    request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
+pub async fn validate_email(token: &str) -> Result<ServiceResponse, ServiceResponse> {
     trace_function!("validate_email");
     let decoded_token = form_urlencoded::parse(token.as_bytes())
         .map(|(key, _)| key)
         .collect::<Vec<_>>()
         .join("");
 
-    if let Some(claims) =
-        validate_jwt_token(&decoded_token, &request_context.env.validation_secret_key)
-    {
+    if let Some(claims) = validate_jwt_token(&decoded_token, &CATAN_ENV.validation_secret_key) {
         // Extract the id and sub from the claims
         let id = &claims.claims.id;
         let email = &claims.claims.sub;
         //
         //  we have to embed the TestContext in the claim because we come through a GET from a URL where
         //  we can't add headers.
-        let mut ctx = request_context.clone();
-        ctx.test_context = claims.claims.test_context;
-        let mut user = internal_find_user("id", &claims.claims.id, &ctx).await?;
+        let request_context = RequestContext::new(claims.claims.test_context, &CATAN_ENV);
+        let mut user = match request_context.database.find_user_by_id(id).await? {
+            Some(u) => u,
+            None => {
+                return Ok(ServiceResponse {
+                    message: format!("id {} not found", id),
+                    status: StatusCode::NOT_FOUND,
+                    response_type: ResponseType::NoData,
+                    game_error: GameError::NoError(String::default()),
+                });
+            }
+        };
+
         user.validated_email = true;
-        return internal_update_user(&user, &ctx).await;
+        request_context.database.update_or_create_user(&user).await
     } else {
         return Err(ServiceResponse::new(
             "unauthorized",
             StatusCode::UNAUTHORIZED,
             ResponseType::NoData,
-            GameError::HttpError,
+            GameError::HttpError(StatusCode::UNAUTHORIZED),
         ));
     }
 }
@@ -575,13 +477,13 @@ pub fn send_validation_email(
             "sent",
             StatusCode::OK,
             ResponseType::Url(url),
-            GameError::NoError,
+            GameError::NoError(String::default()),
         )),
         Err(e) => Err(ServiceResponse::new(
             "Error sending email",
             reqwest::StatusCode::INTERNAL_SERVER_ERROR,
             ResponseType::ErrorInfo(e),
-            GameError::HttpError,
+            GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
         )),
     }
 }
@@ -595,30 +497,41 @@ pub async fn send_phone_code(
     user_id: &str,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    let mut persist_user = internal_find_user("id", user_id, request_context).await?;
     let code = rand::thread_rng().gen_range(100_000..=999_999);
+    internal_send_phone_code(user_id, code, request_context).await
+}
+///
+/// I have the send_phone_code() and the internal_send_phone_code() so that i can test internal_send_phone_code() in an
+/// automated way (by having the test create the code and pass it in and then pass it to validate_phone())
+async fn internal_send_phone_code(
+    user_id: &str,
+    code: i32,
+    request_context: &RequestContext,
+) -> Result<ServiceResponse, ServiceResponse> {
+    let mut persist_user = match request_context.database.find_user_by_id(user_id).await? {
+        Some(u) => u,
+        None => {
+            return Ok(ServiceResponse {
+                message: format!("id {} not found", user_id),
+                status: StatusCode::NOT_FOUND,
+                response_type: ResponseType::NoData,
+                game_error: GameError::NoError(String::default()),
+            });
+        }
+    };
+
     persist_user.phone_code = Some(code.to_string());
-    internal_update_user(&persist_user, &request_context).await?;
+    request_context
+        .database
+        .update_or_create_user(&persist_user)
+        .await?;
     let msg = format!(
         "This is your 6 digit code for the Catan Service. \
                    If You did not request this code, ignore this message. \
                    code: {}",
         code
     );
-    match send_text_message(&persist_user.user_profile.phone_number, &msg) {
-        Ok(_) => Ok(ServiceResponse::new(
-            "sent",
-            StatusCode::OK,
-            ResponseType::Token(code.to_string()),
-            GameError::NoError,
-        )),
-        Err(e) => Err(ServiceResponse::new(
-            "Error sending email",
-            reqwest::StatusCode::INTERNAL_SERVER_ERROR,
-            ResponseType::ErrorInfo(e),
-            GameError::HttpError,
-        )),
-    }
+    send_text_message(&persist_user.user_profile.phone_number, &msg)
 }
 
 /// Validates a phone code for a given user.
@@ -641,20 +554,32 @@ pub async fn validate_phone(
     code: &str,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    // Attempt to find the user with the provided ID.
-    let mut persist_user = internal_find_user("id", user_id, request_context).await?;
+    let mut persist_user = match request_context.database.find_user_by_id(user_id).await? {
+        Some(u) => u,
+        None => {
+            return Ok(ServiceResponse {
+                message: format!("id {} not found", user_id),
+                status: StatusCode::NOT_FOUND,
+                response_type: ResponseType::NoData,
+                game_error: GameError::NoError(String::default()),
+            });
+        }
+    };
 
     match &persist_user.phone_code {
         // If the stored code matches the provided code, validate the phone.
         Some(c) if c.to_string() == code => {
             persist_user.validated_phone = true;
             persist_user.phone_code = None;
-            internal_update_user(&persist_user, request_context).await?;
+            request_context
+                .database
+                .update_or_create_user(&persist_user)
+                .await?;
             Ok(ServiceResponse::new(
                 "validated",
                 StatusCode::OK,
                 ResponseType::NoData,
-                GameError::NoError,
+                GameError::NoError(String::default()),
             ))
         }
         // Handle all other cases (mismatch or missing code) as errors.
@@ -662,11 +587,10 @@ pub async fn validate_phone(
             "incorrect code.  request a new one",
             reqwest::StatusCode::BAD_REQUEST,
             ResponseType::NoData,
-            GameError::HttpError,
+            GameError::HttpError(StatusCode::BAD_REQUEST),
         )),
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -688,19 +612,21 @@ mod tests {
         let mut profile = UserProfile::new_test_user();
         profile.phone_number = CATAN_ENV.test_phone_number.clone();
         // setup
-        let response = setup(&request_context).await;
+        let response = verify_cosmosdb(&request_context).await;
 
         let sr = register("password", &profile, &request_context)
             .await
             .expect("this should work");
         let client_user = sr.get_client_user().expect("This should be a client user");
-        let sr = send_phone_code(&client_user.id, &request_context)
+        let code = 12345;
+        let sr = internal_send_phone_code(&client_user.id, code, &request_context)
             .await
             .expect("text message should be sent!");
 
-        let code = sr.get_token().expect("this should be a number!");
         log::trace!("code is: {}", code);
-        let sr = validate_phone(&client_user.id, &code, &request_context).await.expect("validation to work");
+        let sr = validate_phone(&client_user.id, &format!("{}", code), &request_context)
+            .await
+            .expect("validation to work");
         assert_eq!(sr.status, StatusCode::OK);
     }
 
@@ -714,7 +640,7 @@ mod tests {
         let mut profile = UserProfile::new_test_user();
         profile.email = CATAN_ENV.test_email.clone();
         // setup
-        let response = setup(&request_context).await;
+        let response = verify_cosmosdb(&request_context).await;
 
         let sr = register("password", &profile, &request_context)
             .await
@@ -743,24 +669,31 @@ mod tests {
 
     // Test the login function
     #[tokio::test]
-    async fn test_login_mocked_and_cosmos() {
-        test_login(true).await;
+    async fn test_login_mocked() {
+        init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Trace).await;
         test_login(false).await;
+    }
+
+    #[tokio::test]
+    async fn test_login_cosmos() {
+        init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
+        test_login(true).await;
     }
 
     async fn test_login(use_cosmos: bool) {
         let request_context = RequestContext::test_default(use_cosmos);
         let profile = UserProfile::new_test_user();
         // setup
-        let response = setup(&request_context).await;
-
+        let response = verify_cosmosdb(&request_context).await;
+        assert!(response.is_ok());
         // Register the user first
-        let sr = register("password", &profile, &request_context)
-            .await
-            .expect("this should work");
+        let result = register("password", &profile, &request_context).await;
+        assert!(result.is_ok());
+        let sr = result.unwrap();
         let client_user = sr.get_client_user().expect("This should be a client user");
-
-        let user = internal_find_user("email", &client_user.user_profile.email, &request_context)
+        request_context
+            .database
+            .find_user_by_email(&client_user.user_profile.email)
             .await
             .expect("we just put this here!");
 

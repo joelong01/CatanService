@@ -108,7 +108,7 @@ impl LongPoller {
             "",
             StatusCode::OK,
             ResponseType::ServiceMessage(message.clone()),
-            GameError::NoError,
+            GameError::NoError(String::default()),
         );
 
         // Collect the senders and check for missing users
@@ -145,7 +145,7 @@ impl LongPoller {
                 "",
                 StatusCode::OK,
                 ResponseType::NoData,
-                GameError::NoError,
+                GameError::NoError(String::default()),
             ))
         } else {
             Err(ServiceResponse::new(

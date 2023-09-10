@@ -89,7 +89,7 @@ impl ServiceProxy {
                             "unknown error",
                             StatusCode::INTERNAL_SERVER_ERROR,
                             ResponseType::NoData,
-                            GameError::HttpError,
+                            GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
                         )
                     });
 
@@ -100,7 +100,7 @@ impl ServiceProxy {
                     "reqwest error",
                     StatusCode::SERVICE_UNAVAILABLE,
                     ResponseType::ErrorInfo(format!("{:#?}", reqwest_error)),
-                    GameError::HttpError,
+                    GameError::HttpError(StatusCode::SERVICE_UNAVAILABLE),
                 );
                 error_response
             }
@@ -143,7 +143,7 @@ impl ServiceProxy {
                             "unknown error",
                             StatusCode::INTERNAL_SERVER_ERROR,
                             ResponseType::NoData,
-                            GameError::HttpError,
+                            GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
                         )
                     });
 
@@ -154,7 +154,7 @@ impl ServiceProxy {
                     "reqwest error",
                     StatusCode::SERVICE_UNAVAILABLE,
                     ResponseType::ErrorInfo(format!("{:#?}", reqwest_error)),
-                    GameError::HttpError,
+                    GameError::HttpError(StatusCode::SERVICE_UNAVAILABLE),
                 );
                 error_response
             }
@@ -163,7 +163,7 @@ impl ServiceProxy {
 
     pub async fn setup(&self) -> ServiceResponse {
         let headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
-        let url = "/api/v1/test/setup";
+        let url = "/api/v1/test/verify_service";
         let sr = self.post::<()>(url, headers, None).await;
         sr
     }

@@ -6,20 +6,24 @@ use actix_web::HttpResponse;
  */
 use azure_data_cosmos::CosmosEntity;
 use reqwest::StatusCode;
-
+use serde::de::{self, Deserializer, Visitor};
+use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 use strum_macros::Display;
 
+use std::collections::HashMap;
 use std::{
     env, fmt,
+    fmt::Display,
+    fmt::Formatter,
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
-    fmt::Display, fmt::Formatter,
 };
 use tokio::sync::{mpsc, RwLock};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 
+use crate::macros::convert_status_code;
 use crate::{
     games_service::{
         catan_games::games::regular::regular_game::RegularGame,
@@ -31,7 +35,7 @@ use crate::{
 
 use super::utility::get_id;
 
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Debug)]
 pub enum GameError {
     MissingData(String),
     BadActionData(String),
@@ -42,14 +46,171 @@ pub enum GameError {
     TooFewPlayers(usize),
     TooManyPlayers(usize),
     ReqwestError(String),
-    NoError,
-    HttpError,
+    NoError(String),
+    HttpError(reqwest::StatusCode),
+    AzError(String),
+    SerdeError(serde_json::Error),
+    AzureCoreError(azure_core::Error),
 }
+impl PartialEq for GameError {
+    fn eq(&self, other: &Self) -> bool {
+        use GameError::*;
+        match (self, other) {
+            (MissingData(a), MissingData(b)) => a == b,
+            (BadActionData(a), BadActionData(b)) => a == b,
+            (SerdeError(a), SerdeError(b)) => a.to_string() == b.to_string(),
+
+            (BadId(a), BadId(b)) => a == b,
+
+            (ChannelError(a), ChannelError(b)) => a == b,
+
+            (AlreadyExists(a), AlreadyExists(b)) => a == b,
+
+            (ActionError(a), ActionError(b)) => a == b,
+
+            (TooFewPlayers(a), TooFewPlayers(b)) => a == b,
+
+            (TooManyPlayers(a), TooManyPlayers(b)) => a == b,
+
+            (ReqwestError(a), ReqwestError(b)) => a == b,
+
+            (HttpError(a), HttpError(b)) => a == b,
+
+            (AzError(a), AzError(b)) => a == b,
+
+            (AzureCoreError(a), AzureCoreError(b)) => {
+                format!("{:#?}", a) == format!("{:#?}", b) // this is likely not a good idea...
+            }
+            _ => false,
+        }
+    }
+}
+impl Clone for GameError {
+    fn clone(&self) -> Self {
+        match self {
+            GameError::MissingData(s) => GameError::MissingData(s.clone()),
+            GameError::BadActionData(s) => GameError::BadActionData(s.clone()),
+            GameError::BadId(s) => GameError::BadId(s.clone()),
+            GameError::ChannelError(s) => GameError::ChannelError(s.clone()),
+            GameError::AlreadyExists(s) => GameError::AlreadyExists(s.clone()),
+            GameError::ActionError(s) => GameError::ActionError(s.clone()),
+            GameError::TooFewPlayers(n) => GameError::TooFewPlayers(*n),
+            GameError::TooManyPlayers(n) => GameError::TooManyPlayers(*n),
+            GameError::ReqwestError(s) => GameError::ReqwestError(s.clone()),
+            GameError::NoError(s) => GameError::NoError(s.clone()),
+            GameError::HttpError(status) => GameError::HttpError(*status),
+            GameError::AzError(s) => GameError::AzError(s.clone()),
+            GameError::SerdeError(err) => {
+                // Example of converting serde error to string and back.
+                // This is lossy!
+                let err_str = err.to_string();
+                GameError::SerdeError(
+                    serde_json::from_str::<serde_json::Value>(&err_str).unwrap_err(),
+                )
+            }
+            GameError::AzureCoreError(_) => {
+                // Here you might need a similar approach as with the serde error
+                // if azure_core::Error doesn't have a direct clone mechanism.
+                // For the purpose of this example, we'll just panic.
+                panic!("AzureCoreError cannot be cloned directly")
+            }
+        }
+    }
+}
+
+impl Eq for GameError {}
+
+// we need a From<> for each error type we add to use the error propagation ?
 impl From<reqwest::Error> for GameError {
     fn from(err: reqwest::Error) -> Self {
         GameError::ReqwestError(format!("{:#?}", err))
     }
 }
+
+impl From<serde_json::Error> for GameError {
+    fn from(err: serde_json::Error) -> Self {
+        GameError::SerdeError(err)
+    }
+}
+
+impl From<azure_core::Error> for GameError {
+    fn from(err: azure_core::Error) -> Self {
+        GameError::AzureCoreError(err)
+    }
+}
+
+impl From<std::io::Error> for GameError {
+    fn from(err: std::io::Error) -> Self {
+        GameError::AzError(format!("{:#?}", err))
+    }
+}
+
+impl std::error::Error for GameError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            GameError::SerdeError(e) => Some(e),
+            GameError::AzureCoreError(e) => Some(e),
+
+            _ => None,
+        }
+    }
+}
+
+impl Serialize for GameError {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            GameError::HttpError(status_code) => serializer.serialize_u16(status_code.as_u16()),
+            GameError::SerdeError(e) => serializer.serialize_str(&format!("{:#?}", e)),
+            GameError::AzureCoreError(e) => serializer.serialize_str(&format!("{:#?}", e)),
+            GameError::MissingData(msg)
+            | GameError::BadActionData(msg)
+            | GameError::BadId(msg)
+            | GameError::ChannelError(msg)
+            | GameError::AlreadyExists(msg)
+            | GameError::ActionError(msg)
+            | GameError::NoError(msg)
+            | GameError::AzError(msg) => serializer.serialize_str(msg),
+            GameError::TooFewPlayers(count) | GameError::TooManyPlayers(count) => {
+                serializer.serialize_u64(*count as u64)
+            }
+            GameError::ReqwestError(r_err) => serializer.serialize_str(r_err),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for GameError {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct GameErrorVisitor;
+
+        impl<'de> Visitor<'de> for GameErrorVisitor {
+            type Value = GameError;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a valid GameError representation")
+            }
+
+            fn visit_u16<E>(self, value: u16) -> Result<GameError, E>
+            where
+                E: de::Error,
+            {
+                // If we receive a u16, assume it's an HTTP status code.
+                Ok(GameError::HttpError(
+                    reqwest::StatusCode::from_u16(value).map_err(de::Error::custom)?,
+                ))
+            }
+        }
+
+        // Use the visitor for deserialization
+        deserializer.deserialize_any(GameErrorVisitor)
+    }
+}
+
 impl fmt::Display for GameError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -66,8 +227,11 @@ impl fmt::Display for GameError {
             GameError::TooFewPlayers(s) => write!(f, "Min Players {}", s),
             GameError::TooManyPlayers(c) => write!(f, "Max Players {}", c),
             GameError::ReqwestError(c) => write!(f, "ReqwestError error: {}", c),
-            GameError::NoError => write!(f, "Success!"),
-            GameError::HttpError => write!(f, "HttpError. see StatusCode"),
+            GameError::NoError(s) => write!(f, "Success!: {}", s),
+            GameError::HttpError(code) => write!(f, "HttpError. {:#?}", code),
+            GameError::AzError(e) => write!(f, "AzError: {:#?}", e),
+            GameError::SerdeError(e) => write!(f, "Serde Error: {:#?}", e),
+            GameError::AzureCoreError(e) => write!(f, "Azure Core error: {:#?}", e),
         }
     }
 }
@@ -134,7 +298,7 @@ impl PersistUser {
         Self {
             id: get_id(),
             partition_key: 1,
-            password_hash: Some(hash.to_owned()),
+            password_hash: Some(hash.clone()),
             user_profile: profile.clone(),
             validated_email: false,
             validated_phone: false,
@@ -297,6 +461,8 @@ pub enum ResponseType {
     SupportedGames(Vec<CatanGames>),
     SendMessageError(Vec<(String, GameError)>),
     ServiceMessage(CatanMessage),
+    AzError(String),
+    SerdeError(String),
 }
 
 /**
@@ -320,6 +486,51 @@ impl Display for ServiceResponse {
     }
 }
 
+impl From<GameError> for ServiceResponse {
+    fn from(err: GameError) -> Self {
+        let (message, status, response_type) = match &err {
+            GameError::SerdeError(e) => (
+                format!("Serde error: {}", e),
+                reqwest::StatusCode::BAD_REQUEST,
+                ResponseType::ErrorInfo(format!("Serde error: {:#?}", e)),
+            ),
+            GameError::AzureCoreError(e) => {
+                let status_code = match e.as_http_error() {
+                    Some(http_err) => convert_status_code(http_err.status()),
+                    None => reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+                };
+
+                (
+                    format!("Azure error: {}", e),
+                    status_code,
+                    ResponseType::ErrorInfo(format!("Azure error: {:#?}", e)),
+                )
+            }
+            GameError::ReqwestError(e) => {
+                let error_msg = e.clone();
+                (
+                    error_msg.clone(),
+                    reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+                    ResponseType::ErrorInfo(error_msg),
+                )
+            }
+            // ... Add handling for other error variants...
+            _ => (
+                format!("Unknown error"),
+                reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+                ResponseType::ErrorInfo("Unknown error".into()),
+            ),
+        };
+
+        ServiceResponse {
+            message,
+            status,
+            response_type,
+            game_error: err,
+        }
+    }
+}
+
 impl ServiceResponse {
     pub fn new(
         message: &str,
@@ -340,7 +551,7 @@ impl ServiceResponse {
             message: msg.to_owned(),
             status: StatusCode::OK,
             response_type: ResponseType::NoData,
-            game_error: GameError::NoError,
+            game_error: GameError::NoError(String::default()),
         }
     }
 
@@ -484,7 +695,7 @@ pub struct ConfigEnvironmentVariables {
 
     pub cosmos_token: String,
     pub cosmos_account: String,
-    pub cosmos_database: String,
+    pub cosmos_database_name: String,
     pub cosmos_collections: Vec<String>,
 
     pub ssl_key_location: String,
@@ -499,60 +710,62 @@ pub struct ConfigEnvironmentVariables {
 
     pub test_email: String,
     pub service_email: String,
-}
 
+    pub name_value_map: HashMap<String, String>,
+}
+fn insert_env_to_map(name_map: &mut HashMap<String, String>, env_var_name: &str) -> Result<String> {
+    let value = env::var(env_var_name).expect(&format!(
+        "{} not found in environment - unable to continue",
+        env_var_name
+    ));
+    name_map.insert(value.clone(), format!("${}", env_var_name));
+    Ok(value)
+}
 impl ConfigEnvironmentVariables {
     pub fn load_from_env() -> Result<Self> {
-        let resource_group = env::var("AZURE_RESOURCE_GROUP")
-            .context("AZURE_RESOURCE_GROUP not found in environment")?;
+        let mut name_map = HashMap::new();
 
-        let kv_name =
-            env::var("KEV_VAULT_NAME").context("KEV_VAULT_NAME not found in environment")?;
+        let resource_group = insert_env_to_map(&mut name_map, "AZURE_RESOURCE_GROUP")?;
+        let kv_name = insert_env_to_map(&mut name_map, "KEV_VAULT_NAME")?;
+        let cosmos_token = insert_env_to_map(&mut name_map, "COSMOS_AUTH_TOKEN")?;
+        let cosmos_account = insert_env_to_map(&mut name_map, "COSMOS_ACCOUNT_NAME")?;
+        let cosmos_database = insert_env_to_map(&mut name_map, "COSMOS_DATABASE_NAME")?;
+        let ssl_key_location = insert_env_to_map(&mut name_map, "SSL_KEY_FILE")?;
+        let ssl_cert_location = insert_env_to_map(&mut name_map, "SSL_CERT_FILE")?;
+        let login_secret_key = insert_env_to_map(&mut name_map, "LOGIN_SECRET_KEY")?;
+        let validation_secret_key = insert_env_to_map(&mut name_map, "VALIDATION_SECRET_KEY")?;
+        let rust_log = insert_env_to_map(&mut name_map, "RUST_LOG")?;
+        let test_phone_number = insert_env_to_map(&mut name_map, "TEST_PHONE_NUMBER")?;
+        let service_phone_number = insert_env_to_map(&mut name_map, "SERVICE_PHONE_NUMBER")?;
+        let test_email = insert_env_to_map(&mut name_map, "TEST_EMAIL")?;
+        let service_email = insert_env_to_map(&mut name_map, "SERVICE_FROM_EMAIL")?;
+        let location = insert_env_to_map(&mut name_map, "AZURE_LOCATION")?;
 
-        let cosmos_token =
-            env::var("COSMOS_AUTH_TOKEN").context("COSMOS_AUTH_TOKEN not found in environment")?;
-        let cosmos_account = env::var("COSMOS_ACCOUNT_NAME")
-            .context("COSMOS_ACCOUNT_NAME not found in environment")?;
-
-        let cosmos_database = env::var("COSMOS_DATABASE_NAME")
-            .context("COSMOS_DATABASE_NAME not found in environment")?;
-
-        let ssl_key_location =
-            env::var("SSL_KEY_FILE").context("SSL_KEY_FILE not found in environment")?;
-        let ssl_cert_location =
-            env::var("SSL_CERT_FILE").context("SSL_CERT_FILE not found in environment")?;
-        let login_secret_key =
-            env::var("LOGIN_SECRET_KEY").context("LOGIN_SECRET_KEY not found in environment")?;
-
-        let validation_secret_key = env::var("VALIDATION_SECRET_KEY")
-            .context("VALIDATION_SECRET_KEY not found in environment")?;
-
-        let rust_log = env::var("RUST_LOG").context("RUST_LOG not found in environment")?;
-        let test_phone_number =
-            env::var("TEST_PHONE_NUMBER").context("TEST_PHONE_NUMBER not found in environment")?;
-        let service_phone_number = env::var("SERVICE_PHONE_NUMBER")
-            .context("SERVICE_PHONE_NUMBER not found in environment")?;
-
-        let test_email = env::var("TEST_EMAIL").context("TEST_EMAIL not found in environment")?;
-        let service_email = env::var("SERVICE_FROM_EMAIL")
-            .context("SERVICE_FROM_EMAIL not found in environment")?;
         Ok(Self {
             resource_group,
             kv_name,
             test_phone_number,
             service_phone_number,
-            azure_location: "West US 3".to_owned(),
+            azure_location: location,
             cosmos_token,
             cosmos_account,
             ssl_key_location,
             ssl_cert_location,
             login_secret_key,
             validation_secret_key,
-            cosmos_database,
-            cosmos_collections: vec!["Users-Collection".to_owned(), "GameCollection".to_owned()],
+            cosmos_database_name: cosmos_database,
+            cosmos_collections: vec![
+                "Users-Collection".to_string(),
+                "Game-Collection".to_string(),
+                "Profile-Collection".to_string(),
+                "Users-Collection-test".to_string(),
+                "Game-Collection-test".to_string(),
+                "Profile-Collection-test".to_string(),
+            ],
             rust_log,
             test_email,
             service_email,
+            name_value_map: name_map.clone(),
         })
     }
 
@@ -563,7 +776,7 @@ impl ConfigEnvironmentVariables {
         log::info!("ssl_cert_location: {}", self.ssl_cert_location);
         log::info!("login_secret_key: {}", self.login_secret_key);
         log::info!("validation_secret_key: {}", self.validation_secret_key);
-        log::info!("database_name: {}", self.cosmos_database);
+        log::info!("database_name: {}", self.cosmos_database_name);
         log::info!("rust_log: {}", self.rust_log);
         log::info!("kv_name: {}", self.kv_name);
         log::info!("test_phone_number: {}", self.test_phone_number);
@@ -580,8 +793,15 @@ impl Default for ConfigEnvironmentVariables {
             ssl_cert_location: String::default(),
             login_secret_key: String::default(),
             validation_secret_key: String::default(),
-            cosmos_database: "Users-Database".to_owned(),
-            cosmos_collections: vec!["Users-Collection".to_owned(), "GameCollection".to_owned()],
+            cosmos_database_name: "Users-Database".to_owned(),
+            cosmos_collections: vec![
+                "Users-Collection".to_string(),
+                "Game-Collection".to_string(),
+                "Profile-Collection".to_string(),
+                "Users-Collection-test".to_string(),
+                "Game-Collection-test".to_string(),
+                "Profile-Collection-test".to_string(),
+            ],
             rust_log: "actix_web=trace,actix_server=trace,rust=trace".to_owned(),
             kv_name: String::default(),
             test_phone_number: String::default(),
@@ -590,6 +810,7 @@ impl Default for ConfigEnvironmentVariables {
             service_phone_number: String::default(),
             test_email: String::default(),
             service_email: String::default(),
+            name_value_map: HashMap::<String, String>::new(),
         }
     }
 }

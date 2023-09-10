@@ -3,8 +3,8 @@ use crate::{
         game_container::game_messages::{CatanMessage, GameCreatedData},
         long_poller::long_poller::LongPoller,
     },
+    middleware::environment_mw::RequestContext,
     shared::models::{ClientUser, GameError, ResponseType, ServiceResponse},
-    user_service::users::internal_find_user, middleware::environment_mw::RequestContext,
 };
 
 use reqwest::StatusCode;
@@ -32,7 +32,7 @@ pub async fn shuffle_game(game_id: &str) -> Result<ServiceResponse, ServiceRespo
             "shuffled",
             StatusCode::OK,
             ResponseType::Game(new_game),
-            GameError::NoError,
+            GameError::NoError(String::default()),
         )),
         Err(e) => {
             let err_message = format!("GameContainer::push_game error: {:#?}", e);
@@ -40,7 +40,7 @@ pub async fn shuffle_game(game_id: &str) -> Result<ServiceResponse, ServiceRespo
                 "Error Hashing Password",
                 StatusCode::INTERNAL_SERVER_ERROR,
                 ResponseType::ErrorInfo(err_message.to_owned()),
-                GameError::HttpError,
+                GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
             ));
         }
     }
@@ -56,7 +56,7 @@ pub async fn new_game(
     user_id: &str,
     is_test: bool,
     test_game: Option<RegularGame>,
-    req_context: RequestContext,
+    request_context: RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
     if game_type != CatanGames::Regular {
         return Err(ServiceResponse::new(
@@ -66,8 +66,11 @@ pub async fn new_game(
             GameError::MissingData(String::default()),
         ));
     }
-
-    let user = internal_find_user("id", user_id, &req_context).await?;
+    let user = request_context
+        .database
+        .find_user_by_id(user_id)
+        .await?
+        .expect("this is an authenticated call.  find_user_by_id cannot fail");
 
     //
     //  "if it is a test game and the game has been passed in, use it.  otherwise create a new game and shuffle"
@@ -125,7 +128,7 @@ pub async fn new_game(
         "shuffled",
         StatusCode::OK,
         ResponseType::Game(game),
-        GameError::NoError,
+        GameError::NoError(String::default()),
     ))
 }
 
@@ -134,6 +137,6 @@ pub async fn supported_games() -> Result<ServiceResponse, ServiceResponse> {
         "shuffled",
         StatusCode::OK,
         ResponseType::SupportedGames(vec![CatanGames::Regular]),
-        GameError::NoError,
+        GameError::NoError(String::default()),
     ))
 }

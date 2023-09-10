@@ -16,6 +16,12 @@
             "default": ""
         },
         {
+            "environmentVariable": "AZURE_LOCATION",
+            "description": "the location for your Azure Datacenter",
+            "shellscript": "",
+            "default": "uswest3"
+        },
+        {
             "environmentVariable": "KEV_VAULT_NAME",
             "description": "the name of the keyvault used by the app",
             "shellscript": "",

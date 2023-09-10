@@ -1,4 +1,6 @@
 #![allow(dead_code)]
+use crate::cosmos_db::cosmosdb::{UserDb, UserDbTrait};
+use crate::cosmos_db::mocked_db::TestDb;
 use crate::games_service::game_container::game_messages::GameHeader;
 use crate::shared::models::ConfigEnvironmentVariables;
 /**
@@ -9,13 +11,12 @@ use crate::shared::models::ConfigEnvironmentVariables;
  */
 use actix_service::{Service, Transform};
 use actix_web::dev::Payload;
-use actix_web::{HttpMessage, FromRequest, HttpRequest};
 use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error};
+use actix_web::{FromRequest, HttpMessage, HttpRequest};
+use futures::future::{ok, Ready};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::task::{Context, Poll};
-use futures::future::{ok, Ready};
-
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 #[serde(rename_all = "PascalCase")]
@@ -23,12 +24,9 @@ pub struct TestContext {
     pub use_cosmos_db: bool,
 }
 
-
 impl TestContext {
     pub fn new(use_cosmos_db: bool) -> Self {
-        Self {
-            use_cosmos_db,
-        }
+        Self { use_cosmos_db }
     }
     pub fn as_json(use_cosmos: bool) -> String {
         let tc = TestContext {
@@ -37,20 +35,41 @@ impl TestContext {
         serde_json::to_string(&tc).unwrap()
     }
 }
-#[derive(Clone)]
+
 pub struct RequestContext {
     pub env: ConfigEnvironmentVariables,
     pub test_context: Option<TestContext>,
+    pub database: Box<dyn UserDbTrait>,
 }
+
+impl Clone for RequestContext {
+    fn clone(&self) -> Self {
+        log::error!("Cloning Request Context");
+        RequestContext::new(self.test_context.clone(), &CATAN_ENV) 
+    }
+}
+
 
 impl RequestContext {
     pub fn new(
         test_context: Option<TestContext>,
         catan_env: &'static ConfigEnvironmentVariables,
     ) -> Self {
+
+        let database: Box<dyn UserDbTrait> = match test_context.clone() {
+            Some(context) => {
+                if context.use_cosmos_db {
+                    Box::new(UserDb::new(true, catan_env))
+                } else {
+                    Box::new(TestDb::new())
+                }
+            }
+            None => Box::new(UserDb::new(false, catan_env)),
+        };
         RequestContext {
             env: catan_env.clone(), // Clone the read-only environment data
-            test_context,
+            test_context: test_context.clone(),
+            database,
         }
     }
 
@@ -65,22 +84,21 @@ impl RequestContext {
     pub fn use_mock_db(&self) -> bool {
         match self.test_context.clone() {
             Some(ctx) => !ctx.use_cosmos_db,
-            None => false
+            None => false,
         }
     }
 
     pub fn use_cosmos_db(&self) -> bool {
         match self.test_context.clone() {
             Some(b) => b.use_cosmos_db,
-            None => true
+            None => true,
         }
-        
     }
 
     pub fn database_name(&self) -> String {
         match self.test_context.clone() {
-            Some(_) => format!("{}-test", self.env.cosmos_database),
-            None => self.env.cosmos_database.clone()
+            Some(_) => format!("{}-test", self.env.cosmos_database_name),
+            None => self.env.cosmos_database_name.clone(),
         }
     }
 }
@@ -97,11 +115,11 @@ impl FromRequest for RequestContext {
             ok(RequestContext {
                 env: CATAN_ENV.clone(), // Clone the environment variables
                 test_context: None,
+                database: Box::new(UserDb::new(false, &CATAN_ENV))
             })
         }
     }
 }
-
 
 // load the environment variables once and only once the first time they are accessed (which is in main() in this case)
 lazy_static! {
@@ -153,14 +171,13 @@ where
                 .ok()
                 .and_then(|value| serde_json::from_str::<TestContext>(value).ok())
         });
-    
+
         // Create RequestContext by combining environment and test context
         let request_context = RequestContext::new(test_context, &CATAN_ENV);
-    
+
         // Attach the RequestContext to the request's extensions
         req.extensions_mut().insert(request_context);
-    
+
         self.service.call(req)
     }
-    
 }
