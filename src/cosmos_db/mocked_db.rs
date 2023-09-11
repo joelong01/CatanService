@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{shared::models::{GameError, PersistUser, ResponseType, ServiceResponse, ClientUser}, log_return_bad_id};
+use crate::{shared::{shared_models::{GameError, ResponseType, ServiceResponse, ClientUser}, service_models::PersistUser}, log_return_bad_id};
 use async_trait::async_trait;
 use log::trace;
 use reqwest::StatusCode;
@@ -89,7 +89,7 @@ async fn update_or_create_user(&self, user: &PersistUser) -> Result<ServiceRespo
 mod tests {
     use crate::{
         cosmos_db::cosmosdb::test_db_e2e,
-        middleware::environment_mw::RequestContext,
+        middleware::request_context_mw::RequestContext,
     };
 
     #[tokio::test]

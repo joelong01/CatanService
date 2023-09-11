@@ -4,7 +4,7 @@ use actix_web::HttpResponse;
 /**
  * this is the module where I define the structures needed for the data in Cosmos
  */
-use azure_data_cosmos::CosmosEntity;
+
 use reqwest::StatusCode;
 use serde::de::{self, Deserializer, Visitor};
 use serde::ser::Serializer;
@@ -17,24 +17,23 @@ use std::{
     fmt::Display,
     fmt::Formatter,
     sync::Arc,
-    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tokio::sync::{mpsc, RwLock};
 
 use anyhow::Result;
 
 use crate::macros::convert_status_code;
-use crate::{
-    games_service::{
+use crate::games_service::{
         catan_games::games::regular::regular_game::RegularGame,
         game_container::game_messages::CatanMessage,
         shared::game_enums::{CatanGames, GameAction},
-    },
-    middleware::environment_mw::TestContext,
-};
+    };
 
-use super::utility::get_id;
+use super::service_models::PersistUser;
 
+
+//
+//  this also supports Eq, PartialEq, Clone, Serialize, and Deserialize via custom implementation
 #[derive(Debug)]
 pub enum GameError {
     MissingData(String),
@@ -236,81 +235,7 @@ impl fmt::Display for GameError {
     }
 }
 
-/**
- *  Every CosmosDb document needs to define the partition_key.  In Rust we do this via this trait.
- */
-impl CosmosEntity for PersistUser {
-    type Entity = u64;
 
-    fn partition_key(&self) -> Self::Entity {
-        self.partition_key
-    }
-}
-
-/**
- * this is the document stored in cosmosdb.  the "id" field and the "partition_key" field are "special" in that the
- * system needs them. if id is not specified, cosmosdb will create a guid for the id (and create an 'id' field), You
- * can partition on any value, but it should be something that works well with the partion scheme that cosmos uses.
- * for this sample, we assume the db size is small, so we just partion on a number that the sample always sets to 1
- * note:  you don't want to use camelCase or PascalCase for this as you need to be careful about how 'id' and 'partionKey'
- * are spelled and capitalized
- */
-
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
-
-pub struct PersistUser {
-    pub id: String, // not set by client
-    #[serde(rename = "partitionKey")]
-    pub partition_key: u64, // the cosmos client seems to care about the spelling of both id and partitionKey
-    pub password_hash: Option<String>, // when it is pulled from Cosmos, the hash is set
-    pub validated_email: bool,         // has the mail been validated?
-    pub validated_phone: bool,         // has the phone number been validated?
-    pub user_profile: UserProfile,
-    pub phone_code: Option<String>,
-}
-
-impl PersistUser {
-    pub fn new() -> Self {
-        Self {
-            id: get_id(),
-            partition_key: 1,
-            password_hash: None,
-            user_profile: UserProfile::default(),
-            validated_email: false,
-            validated_phone: false,
-            phone_code: None,
-        }
-    }
-}
-impl PersistUser {
-    pub fn from_client_user(client_user: &ClientUser, hash: String) -> Self {
-        Self {
-            id: client_user.id.clone(),
-            partition_key: 1,
-            password_hash: Some(hash.to_owned()),
-            user_profile: client_user.user_profile.clone(),
-            validated_email: false,
-            validated_phone: false,
-            phone_code: None,
-        }
-    }
-    pub fn from_user_profile(profile: &UserProfile, hash: String) -> Self {
-        Self {
-            id: get_id(),
-            partition_key: 1,
-            password_hash: Some(hash.clone()),
-            user_profile: profile.clone(),
-            validated_email: false,
-            validated_phone: false,
-            phone_code: None,
-        }
-    }
-}
-impl Default for PersistUser {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 ///
 /// Connected users are must be actively connected to the system and particpate in long_polling
 /// LocalUsers do not, and instead get messages on the creators thread.  Only local users for the creater
@@ -431,36 +356,7 @@ impl ClientUser {
         }
     }
 }
-// DO NOT ADD A #[serde(rename_all = "PascalCase")] macro to this struct!
-// it will throw an error and you'll spend hours figuring out why it doesn't work - the rust bcrypt library cares about
-// capitalization and enforces standard claim names
-#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct Claims {
-    pub id: String,
-    pub sub: String,
-    pub exp: usize,
-    pub test_context: Option<TestContext>,
-}
 
-impl Claims {
-    pub fn new(
-        id: &str,
-        email: &str,
-        duration_secs: u64,
-        test_context: &Option<TestContext>,
-    ) -> Self {
-        let exp = ((SystemTime::now() + Duration::from_secs(duration_secs))
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs()) as usize;
-        Self {
-            id: id.to_owned(),
-            sub: email.to_owned(),
-            exp,
-            test_context: test_context.clone(),
-        }
-    }
-}
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Display)]
 pub enum ResponseType {
@@ -703,10 +599,12 @@ where
  *  holds them so that they are more convinient to use
  */
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ConfigEnvironmentVariables {
+pub struct ServiceConfig {
     pub resource_group: String,
     pub kv_name: String,
     pub azure_location: String,
+
+    pub admin_email: String,
 
     pub cosmos_token: String,
     pub cosmos_account: String,
@@ -736,7 +634,7 @@ fn insert_env_to_map(name_map: &mut HashMap<String, String>, env_var_name: &str)
     name_map.insert(value.clone(), format!("${}", env_var_name));
     Ok(value)
 }
-impl ConfigEnvironmentVariables {
+impl ServiceConfig {
     pub fn load_from_env() -> Result<Self> {
         let mut name_map = HashMap::new();
 
@@ -755,7 +653,7 @@ impl ConfigEnvironmentVariables {
         let test_email = insert_env_to_map(&mut name_map, "TEST_EMAIL")?;
         let service_email = insert_env_to_map(&mut name_map, "SERVICE_FROM_EMAIL")?;
         let location = insert_env_to_map(&mut name_map, "AZURE_LOCATION")?;
-
+        let admin_email = insert_env_to_map(&mut name_map, "ADMIN_EMAIL")?;
         Ok(Self {
             resource_group,
             kv_name,
@@ -781,6 +679,7 @@ impl ConfigEnvironmentVariables {
             test_email,
             service_email,
             name_value_map: name_map.clone(),
+            admin_email,
         })
     }
 
@@ -797,9 +696,10 @@ impl ConfigEnvironmentVariables {
         log::info!("test_phone_number: {}", self.test_phone_number);
         log::info!("test_email: {}", self.test_email);
         log::info!("service_mail: {}", self.service_email);
+        log::info!("admin_email: {}", self.admin_email)
     }
 }
-impl Default for ConfigEnvironmentVariables {
+impl Default for ServiceConfig {
     fn default() -> Self {
         Self {
             cosmos_token: String::default(),
@@ -826,6 +726,7 @@ impl Default for ConfigEnvironmentVariables {
             test_email: String::default(),
             service_email: String::default(),
             name_value_map: HashMap::<String, String>::new(),
+            admin_email: String::default()
         }
     }
 }

@@ -9,8 +9,8 @@ use crate::{
         shared::game_enums::GameAction,
     },
     log_thread_info,
-    shared::models::ClientUser,
-    trace_thread_info, wait_for_message, middleware::environment_mw::TestContext,
+    shared::shared_models::ClientUser,
+    trace_thread_info, wait_for_message, middleware::request_context_mw::TestContext,
 };
 use crate::{
     games_service::shared::game_enums::CatanGames, shared::proxy::ServiceProxy,

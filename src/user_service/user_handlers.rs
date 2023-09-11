@@ -1,14 +1,15 @@
 use crate::{
     get_header_value,
-    middleware::environment_mw::RequestContext,
+    middleware::request_context_mw::RequestContext,
     shared::{
         header_extractor::HeadersExtractor,
-        models::{GameError, ResponseType, ServiceResponse, UserProfile, ClientUser},
+        shared_models::{ClientUser, GameError, ResponseType, ServiceResponse, UserProfile},
     },
 };
 use actix_web::{
+    http::Error,
     web::{self},
-    HttpResponse, Responder, http::Error,
+    HttpResponse, Responder,
 };
 use reqwest::StatusCode;
 
@@ -26,7 +27,7 @@ pub async fn verify_handler(request_context: RequestContext) -> HttpResponse {
     let result = verify_cosmosdb(&request_context).await;
     match result {
         Ok(sr) => sr.to_http_response(),
-        Err(e) => e.to_http_response()
+        Err(e) => e.to_http_response(),
     }
 }
 
@@ -65,12 +66,8 @@ pub async fn list_users_handler(request_context: RequestContext) -> HttpResponse
 }
 
 // Get user profile
-pub async fn get_profile_handler(
-    request_context: RequestContext,
-    headers: HeadersExtractor,
-) -> HttpResponse {
-    let user_id = get_header_value!(user_id, headers);
-    super::users::get_profile(&user_id, &request_context)
+pub async fn get_profile_handler(request_context: RequestContext) -> HttpResponse {
+    super::users::get_profile(&request_context)
         .await
         .map(|sr| sr.to_http_response())
         .unwrap_or_else(|sr| sr.to_http_response())
@@ -78,9 +75,13 @@ pub async fn get_profile_handler(
 
 // Find user by ID
 pub async fn find_user_by_id_handler(
-    id: web::Path<String>,
     request_context: RequestContext,
 ) -> Result<HttpResponse, Error> {
+    let id = request_context
+        .claims
+        .expect("auth_mw should have added this or rejected the call")
+        .id
+        .clone();
     match request_context.database.find_user_by_id(&id).await {
         Ok(option) => {
             match option {
@@ -92,7 +93,7 @@ pub async fn find_user_by_id_handler(
                         GameError::NoError(String::default()),
                     );
                     Ok(service_response.to_http_response())
-                }, 
+                }
                 None => {
                     // Handle the case where the user is not found.
                     // You can modify this based on how you want to handle a missing user.
@@ -105,23 +106,17 @@ pub async fn find_user_by_id_handler(
                     Ok(service_response.to_http_response())
                 }
             }
-        },
-        Err(service_response) => {
-            Ok(service_response.to_http_response())
         }
+        Err(service_response) => Ok(service_response.to_http_response()),
     }
 }
 
-
-
 // Delete user
 pub async fn delete_handler(
-    id: web::Path<String>,
     request_context: RequestContext,
-    headers: HeadersExtractor,
 ) -> HttpResponse {
-    let user_id = get_header_value!(user_id, headers);
-    super::users::delete(&id, &user_id, &request_context)
+   
+    super::users::delete(&request_context)
         .await
         .map(|sr| sr.to_http_response())
         .unwrap_or_else(|sr| sr.to_http_response())
@@ -154,12 +149,12 @@ pub fn create_http_response(status_code: StatusCode, message: &str, body: &str) 
 }
 
 pub async fn validate_phone_handler(
-    headers: HeadersExtractor,
+  
     code: web::Path<String>,
     request_context: RequestContext,
 ) -> HttpResponse {
-    let user_id = get_header_value!(user_id, headers);
-    super::users::validate_phone(&user_id, &code, &request_context)
+
+    super::users::validate_phone(&code, &request_context)
         .await
         .map(|sr| sr.to_http_response())
         .unwrap_or_else(|sr| sr.to_http_response())

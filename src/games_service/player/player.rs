@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 use serde::{Deserialize, Serialize};
 
-use crate::shared::models::ClientUser;
+use crate::shared::shared_models::ClientUser;
 
 use crate::games_service::{
     buildings::building::Building, harbors::harbor::Harbor, roads::road::Road,

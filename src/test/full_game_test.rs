@@ -5,19 +5,19 @@ pub mod test {
     #![allow(unused_variables)]
     use crate::{
         games_service::shared::game_enums::CatanGames,
-        shared::{proxy::ServiceProxy, models::UserType},
+        shared::{proxy::ServiceProxy, shared_models::UserType},
         test::{
             client0::{Handler0, save_game, load_game, TEST_GAME_LOC},
             client1::Handler1,
             client2::Handler2,
             test_structs::{init_test_logger, ClientThreadHandler, HOST_URL},
-        }, middleware::environment_mw::TestContext,
+        }, middleware::request_context_mw::TestContext,
     };
 
     use std::{
         os::unix::thread,
         sync::Arc,
-        time::{Duration, Instant},
+        time::{Duration, Instant}, env,
     };
 
     use crate::{
@@ -30,7 +30,7 @@ pub mod test {
             shared::game_enums::GameState,
         },
         setup_test,
-        shared::models::{ClientUser, ServiceResponse, UserProfile},
+        shared::shared_models::{ClientUser, ServiceResponse, UserProfile},
         trace_thread_info,
     };
     use crate::{games_service::game_container::game_messages::ErrorData, init_env_logger};
@@ -253,7 +253,7 @@ pub mod test {
                 first_name: first_names[i].into(),
                 last_name: last_names[i].into(),
                 display_name: format!("{}:({})", first_names[i].clone(), i),
-                phone_number: crate::middleware::environment_mw::CATAN_ENV.test_phone_number.to_owned(),
+                phone_number: crate::middleware::request_context_mw::SERVICE_CONFIG.test_phone_number.to_owned(),
                 picture_url: "https://example.com/photo.jpg".into(),
                 foreground_color: "#000000".into(),
                 background_color: "#FFFFFF".into(),
@@ -273,4 +273,7 @@ pub mod test {
 
         test_users
     }
+
+    
+
 }

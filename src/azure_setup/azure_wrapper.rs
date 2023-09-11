@@ -24,12 +24,13 @@ use crate::init_env_logger;
 use crate::log_and_return_azure_core_error;
 use crate::log_return_bad_request;
 use crate::log_return_serde_error;
-use crate::middleware::environment_mw::TestContext;
-use crate::middleware::environment_mw::CATAN_ENV;
-use crate::shared::models::Claims;
-use crate::shared::models::GameError;
-use crate::shared::models::ResponseType;
-use crate::shared::models::ServiceResponse;
+use crate::middleware::request_context_mw::TestContext;
+use crate::middleware::request_context_mw::SERVICE_CONFIG;
+use crate::shared::service_models::Claims;
+use crate::shared::service_models::Role;
+use crate::shared::shared_models::GameError;
+use crate::shared::shared_models::ResponseType;
+use crate::shared::shared_models::ServiceResponse;
 use crate::trace_function;
 use crate::user_service::users::create_jwt_token;
 use crate::user_service::users::generate_jwt_key;
@@ -704,7 +705,7 @@ pub fn print_cmd(args: &[&str]) -> String {
 
         // Replace environment variable values with their variable names
         let arg = &mut cmd_str[i];
-        for (value, env_name) in CATAN_ENV.name_value_map.iter() {
+        for (value, env_name) in SERVICE_CONFIG.name_value_map.iter() {
             // This will replace all occurrences of the value with the corresponding environment variable name
             *arg = arg.replace(value, &format!("{}", env_name));
         }
@@ -850,7 +851,7 @@ pub fn get_secret(keyvault_name: &str, secret_name: &str) -> Result<String, Serv
 
 /// Sends a text message using Azure Communication Services.
 ///
-/// The sender phone number is fetched from CATAN_ENV's `service_phone_number`.
+/// The sender phone number is fetched from SERVICE_CONFIG's `service_phone_number`.
 /// It's required to have AZURE_COMMUNICATION_CONNECTION_STRING set as an environment variable.
 ///
 /// # Arguments
@@ -873,7 +874,7 @@ pub fn send_text_message(to: &str, msg: &str) -> Result<ServiceResponse, Service
         "sms",
         "send",
         "--sender",
-        &CATAN_ENV.service_phone_number,
+        &SERVICE_CONFIG.service_phone_number,
         "--recipient",
         to,
         "--message",
@@ -1008,7 +1009,7 @@ pub fn send_text_message_test() {
             log::LevelFilter::Info,
             log::LevelFilter::Error,
         ));
-    send_text_message(&CATAN_ENV.test_phone_number, "this is a test")
+    send_text_message(&SERVICE_CONFIG.test_phone_number, "this is a test")
         .expect("text message should be sent");
 }
 
@@ -1021,8 +1022,8 @@ pub fn send_email_test() {
             log::LevelFilter::Error,
         ));
     send_email(
-        &CATAN_ENV.test_email,
-        &CATAN_ENV.service_email,
+        &SERVICE_CONFIG.test_email,
+        &SERVICE_CONFIG.service_email,
         "this is a test",
         "test email",
     )
@@ -1054,7 +1055,7 @@ pub fn cleanup_randomized_resource_groups() {
 pub fn azure_resources_integration_test() {
     let randomize_end_of_name = &format!("{}", rand::thread_rng().gen_range(100_000..=999_999));
     let resource_group = "test-resource-group-".to_owned() + randomize_end_of_name;
-    let location = &CATAN_ENV.azure_location;
+    let location = &SERVICE_CONFIG.azure_location;
     let kv_name = std::env::var("KEV_VAULT_NAME").expect("KEV_VAULT_NAME not found in environment");
     let cosmos_account_name = "test-cosmos-account-".to_owned() + randomize_end_of_name;
     let database_name = "test-cosmos-database-".to_owned() + randomize_end_of_name;
@@ -1158,6 +1159,7 @@ pub fn rotate_login_keys() {
         "test_id",
         "test@email.com",
         24 * 60 * 60,
+        &vec![Role::Admin],
         &Some(test_context),
     );
     let token =
@@ -1191,12 +1193,12 @@ fn database_exits() {
             log::LevelFilter::Error,
         ));
 
-    let exists = cosmos_account_exists(&CATAN_ENV.cosmos_account, &CATAN_ENV.resource_group)
+    let exists = cosmos_account_exists(&SERVICE_CONFIG.cosmos_account, &SERVICE_CONFIG.resource_group)
         .expect("should work");
 
     assert!(exists);
 
-    let exists = cosmos_account_exists(&CATAN_ENV.cosmos_account, "TEST-RG-2193472304723089487")
+    let exists = cosmos_account_exists(&SERVICE_CONFIG.cosmos_account, "TEST-RG-2193472304723089487")
         .expect("should work - but not exist");
 
     assert!(!exists);
@@ -1207,18 +1209,18 @@ fn database_exits() {
     assert!(!exists);
 
     let exists = cosmos_database_exists(
-        &CATAN_ENV.cosmos_account,
-        &CATAN_ENV.cosmos_database_name,
-        &CATAN_ENV.resource_group,
+        &SERVICE_CONFIG.cosmos_account,
+        &SERVICE_CONFIG.cosmos_database_name,
+        &SERVICE_CONFIG.resource_group,
     )
     .expect("should work");
 
     assert!(exists);
 
     let exists = cosmos_database_exists(
-        &CATAN_ENV.cosmos_account,
+        &SERVICE_CONFIG.cosmos_account,
         "Very-Bad-Db-name",
-        &CATAN_ENV.resource_group,
+        &SERVICE_CONFIG.resource_group,
     )
     .expect("should work - but no exist");
 

@@ -15,7 +15,7 @@ use futures::{
 
 use reqwest::header::{HeaderName, HeaderValue};
 
-use super::environment_mw::CATAN_ENV;
+use super::request_context_mw::SERVICE_CONFIG;
 
 // AuthenticationMiddlewareFactory serves as a factory to create instances of AuthenticationMiddleware
 // which is the actual middleware component. It implements the Transform trait required by
@@ -77,20 +77,14 @@ where
         match auth_header {
             Some(header_value) => {
                 let token_str = header_value.to_str().unwrap_or("").replace("Bearer ", "");
-                if let Some(claims) = validate_jwt_token(&token_str, &CATAN_ENV.login_secret_key) {
+                if let Some(claims) = validate_jwt_token(&token_str, &SERVICE_CONFIG.login_secret_key) {
                     // Extract the id and sub from the claims
-                    let id = &claims.claims.id;
-                    let sub = &claims.claims.sub;
+                    let claims_json = serde_json::to_string(&claims.claims).expect("serialization of claims cannot fail");
+                    req.headers_mut().insert(
+                        HeaderName::from_static(GameHeader::ROLES),
+                        HeaderValue::from_str(&claims_json).unwrap(),
+                    );
 
-                    // Insert the id and sub into the headers
-                    req.headers_mut().insert(
-                        HeaderName::from_static(GameHeader::USER_ID),
-                        HeaderValue::from_str(id).unwrap(),
-                    );
-                    req.headers_mut().insert(
-                        HeaderName::from_static(GameHeader::EMAIL),
-                        HeaderValue::from_str(sub).unwrap(),
-                    );
                 } else {
                     log_thread_info!("auth_mw", "rejected call: {:#?}", req.request());
                     let fut = err(ErrorUnauthorized("Unauthorized"));

@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 use crate::full_info;
-use crate::middleware::environment_mw::CATAN_ENV;
+use crate::middleware::request_context_mw::SERVICE_CONFIG;
 use crate::user_service::users::validate_jwt_token;
 use actix::prelude::*;
 use actix::{Actor, StreamHandler};
@@ -171,7 +171,7 @@ pub async fn ws_bootstrap(
         .to_string();
 
     // Validate the token and extract claims
-    let claims = match validate_jwt_token(&token, &CATAN_ENV.login_secret_key) {
+    let claims = match validate_jwt_token(&token, &SERVICE_CONFIG.login_secret_key) {
         Some(claims) => claims.claims,
         None => return Err(ErrorUnauthorized("No Authorization Parameter")),
     };

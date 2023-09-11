@@ -4,7 +4,7 @@ use crate::{
     games_service::{
         catan_games::games::regular::regular_game::RegularGame, player::player::Player, shared::game_enums::{GameAction, GameState},
     },
-    shared::models::{ClientUser, GameError},
+    shared::shared_models::{ClientUser, GameError},
 };
 
 use std::{
@@ -20,7 +20,7 @@ use crate::games_service::{
     shared::game_enums::Direction,
     tiles::{tile::Tile, tile_key::TileKey},
 };
-use crate::shared::models::PersistUser;
+use crate::shared::service_models::PersistUser;
 
 use super::game_info_trait::GameInfoTrait;
 

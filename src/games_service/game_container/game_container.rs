@@ -6,7 +6,7 @@ use crate::{
         catan_games::games::regular::regular_game::RegularGame,
         long_poller::long_poller::LongPoller,
     },
-    shared::models::{ClientUser, GameError, ResponseType, ServiceResponse},
+    shared::shared_models::{ClientUser, GameError, ResponseType, ServiceResponse},
 
 };
 

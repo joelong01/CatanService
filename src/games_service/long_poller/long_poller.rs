@@ -8,7 +8,7 @@ use tokio::sync::{mpsc, Mutex, RwLock};
 use crate::{
     games_service::game_container::game_messages::{CatanMessage, GameStatus},
     log_thread_info,
-    shared::models::{ClientUser, GameError, ResponseType, ServiceResponse, UserProfile},
+    shared::shared_models::{ClientUser, GameError, ResponseType, ServiceResponse, UserProfile},
 };
 //
 //  this is a map of "waiters" - holding all the state necessary for a Long Poller to wait on a thread

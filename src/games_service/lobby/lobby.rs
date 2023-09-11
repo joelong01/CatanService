@@ -9,8 +9,8 @@ use crate::{
         },
         long_poller::long_poller::LongPoller,
     },
-    middleware::environment_mw::RequestContext,
-    shared::models::{ClientUser, GameError, ResponseType, ServiceResponse},
+    middleware::request_context_mw::RequestContext,
+    shared::shared_models::{ClientUser, GameError, ResponseType, ServiceResponse},
 };
 
 pub async fn get_lobby() -> Result<ServiceResponse, ServiceResponse> {

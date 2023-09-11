@@ -1,16 +1,17 @@
 #![allow(dead_code)]
 use crate::{
     log_and_return_azure_core_error, log_return_unexpected_server_error,
-    shared::models::{
-        ClientUser, ConfigEnvironmentVariables, GameError, PersistUser, ResponseType,
+    shared::shared_models::{
+        ClientUser, ServiceConfig, GameError, ResponseType,
     },
+    shared::service_models::PersistUser
 };
 use std::collections::HashMap;
 
 /**
  *  this is the class that calls directly to CosmosDb --
  */
-use crate::{log_return_err, shared::models::ServiceResponse};
+use crate::{log_return_err, shared::shared_models::ServiceResponse};
 use azure_core::error::{ErrorKind, Result as AzureResult};
 use azure_data_cosmos::prelude::{
     AuthorizationToken, CollectionClient, CosmosClient, DatabaseClient, Query, QueryCrossPartition,
@@ -38,7 +39,7 @@ struct CosmosCollectionNameValues {
 static COLLECTION_NAME_VALUES: [CosmosCollectionNameValues; 3] = [
     CosmosCollectionNameValues {
         name: CosmosCollectionName::User,
-        value: "User-Collection",
+        value: "Users-Collection",
     },
     CosmosCollectionNameValues {
         name: CosmosCollectionName::Profile,
@@ -74,13 +75,13 @@ pub struct UserDb {
 }
 
 impl UserDb {
-    pub fn new(is_test: bool, catan_env: &'static ConfigEnvironmentVariables) -> Self {
-        let client = public_client(&catan_env.cosmos_account, &catan_env.cosmos_token);
+    pub fn new(is_test: bool, service_config: &'static ServiceConfig) -> Self {
+        let client = public_client(&service_config.cosmos_account, &service_config.cosmos_token);
         let database_name;
         if is_test {
-            database_name = catan_env.cosmos_database_name.clone() + "-test";
+            database_name = service_config.cosmos_database_name.clone() + "-test";
         } else {
-            database_name = catan_env.cosmos_database_name.clone();
+            database_name = service_config.cosmos_database_name.clone();
         }
 
         let database = client.database_client(database_name.clone());
@@ -348,8 +349,8 @@ mod tests {
 
     use crate::{
         init_env_logger,
-        middleware::environment_mw::{RequestContext, CATAN_ENV},
-        shared::{models::{UserProfile, UserType}, utility::get_id},
+        middleware::request_context_mw::{RequestContext, SERVICE_CONFIG},
+        shared::{shared_models::{UserProfile, UserType}, service_models::Role},
         user_service::users::verify_cosmosdb,
     };
 
@@ -477,7 +478,7 @@ mod tests {
             let password_hash = hash(&password, DEFAULT_COST).unwrap();
             let user = PersistUser {
                 partition_key: 1,
-                id: get_id(),
+                id: PersistUser::get_id(),
                 password_hash: Some(password_hash.to_owned()),
                 user_profile: UserProfile {
                     user_type: UserType::Connected,
@@ -485,17 +486,19 @@ mod tests {
                     first_name: format!("Test{}", i),
                     last_name: format!("User{}", i),
                     display_name: format!("Test User{}", i),
-                    phone_number: CATAN_ENV.test_phone_number.to_owned(),
+                    phone_number: SERVICE_CONFIG.test_phone_number.to_owned(),
                     picture_url: format!("https://example.com/pic{}.jpg", i),
                     foreground_color: format!("#00000{}", i),
                     background_color: format!("#FFFFFF{}", i),
                     text_color: format!("0000000"),
                     games_played: Some(10 * i as u16),
                     games_won: Some(5 * i as u16),
+                   
                 },
                 validated_email: false,
                 validated_phone: false,
                 phone_code: None,
+                roles: vec![Role::User, Role::TestUser]
             };
 
             users.push(user);

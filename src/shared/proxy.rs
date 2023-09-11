@@ -15,11 +15,11 @@ use crate::{
         game_container::game_messages::{GameHeader, Invitation, InvitationResponseData},
         shared::game_enums::CatanGames,
     },
-    middleware::environment_mw::TestContext,
-    shared::models::GameError,
+    middleware::request_context_mw::TestContext,
+    shared::shared_models::GameError,
 };
 
-use super::models::{ResponseType, ServiceResponse, UserProfile};
+use super::shared_models::{ResponseType, ServiceResponse, UserProfile};
 
 pub struct ServiceProxy {
     pub client: Client,

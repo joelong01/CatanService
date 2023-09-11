@@ -2,7 +2,8 @@
 use crate::cosmos_db::cosmosdb::{UserDb, UserDbTrait};
 use crate::cosmos_db::mocked_db::TestDb;
 use crate::games_service::game_container::game_messages::GameHeader;
-use crate::shared::models::ConfigEnvironmentVariables;
+use crate::shared::service_models::Claims;
+use crate::shared::shared_models::ServiceConfig;
 /**
  *  this file contains the middleware that injects ServiceContext into the Request.  The data in RequestContext is the
  *  configuration data necessary for the Service to run -- the secrets loaded from the environment, hard coded strings,
@@ -37,44 +38,47 @@ impl TestContext {
 }
 
 pub struct RequestContext {
-    pub env: ConfigEnvironmentVariables,
+    pub config: ServiceConfig,
     pub test_context: Option<TestContext>,
     pub database: Box<dyn UserDbTrait>,
+    pub claims: Option<Claims>
 }
 
 impl Clone for RequestContext {
     fn clone(&self) -> Self {
         log::error!("Cloning Request Context");
-        RequestContext::new(self.test_context.clone(), &CATAN_ENV) 
+        RequestContext::new(&self.claims, &self.test_context, &SERVICE_CONFIG) 
     }
 }
 
 
 impl RequestContext {
     pub fn new(
-        test_context: Option<TestContext>,
-        catan_env: &'static ConfigEnvironmentVariables,
+        claims: &Option<Claims>,
+        test_context: &Option<TestContext>,
+        service_config: &'static ServiceConfig,
     ) -> Self {
 
-        let database: Box<dyn UserDbTrait> = match test_context.clone() {
+        let database: Box<dyn UserDbTrait> = match test_context {
             Some(context) => {
                 if context.use_cosmos_db {
-                    Box::new(UserDb::new(true, catan_env))
+                    Box::new(UserDb::new(true, service_config))
                 } else {
                     Box::new(TestDb::new())
                 }
             }
-            None => Box::new(UserDb::new(false, catan_env)),
+            None => Box::new(UserDb::new(false, service_config)),
         };
         RequestContext {
-            env: catan_env.clone(), // Clone the read-only environment data
+            config: service_config.clone(), // Clone the read-only environment data
             test_context: test_context.clone(),
             database,
+            claims: claims.clone()
         }
     }
 
     pub fn test_default(use_cosmos: bool) -> Self {
-        RequestContext::new(Some(TestContext::new(use_cosmos)), &CATAN_ENV)
+        RequestContext::new(&None, &Some(TestContext::new(use_cosmos)), &SERVICE_CONFIG)
     }
 
     pub fn is_test(&self) -> bool {
@@ -97,8 +101,8 @@ impl RequestContext {
 
     pub fn database_name(&self) -> String {
         match self.test_context.clone() {
-            Some(_) => format!("{}-test", self.env.cosmos_database_name),
-            None => self.env.cosmos_database_name.clone(),
+            Some(_) => format!("{}-test", self.config.cosmos_database_name),
+            None => self.config.cosmos_database_name.clone(),
         }
     }
 }
@@ -113,9 +117,10 @@ impl FromRequest for RequestContext {
         } else {
             // Handle case where RequestContext is not found  - assume no test
             ok(RequestContext {
-                env: CATAN_ENV.clone(), // Clone the environment variables
+                config: SERVICE_CONFIG.clone(), // Clone the environment variables
                 test_context: None,
-                database: Box::new(UserDb::new(false, &CATAN_ENV))
+                database: Box::new(UserDb::new(false, &SERVICE_CONFIG)), 
+                claims:None
             })
         }
     }
@@ -123,8 +128,8 @@ impl FromRequest for RequestContext {
 
 // load the environment variables once and only once the first time they are accessed (which is in main() in this case)
 lazy_static! {
-    pub static ref CATAN_ENV: ConfigEnvironmentVariables =
-        ConfigEnvironmentVariables::load_from_env().unwrap();
+    pub static ref SERVICE_CONFIG: ServiceConfig =
+        ServiceConfig::load_from_env().unwrap();
 }
 pub struct RequestContextMiddleware;
 
@@ -172,8 +177,17 @@ where
                 .and_then(|value| serde_json::from_str::<TestContext>(value).ok())
         });
 
+        let claims = req.headers().get(GameHeader::CLAIMS).and_then(|claims_header| {
+            claims_header
+                .to_str()
+                .ok()
+                .and_then(|value| serde_json::from_str::<Claims>(value).ok())
+        });
+
         // Create RequestContext by combining environment and test context
-        let request_context = RequestContext::new(test_context, &CATAN_ENV);
+        let request_context = RequestContext::new(&claims, &test_context, &SERVICE_CONFIG);
+
+        // now that we know what database to talk to 
 
         // Attach the RequestContext to the request's extensions
         req.extensions_mut().insert(request_context);

@@ -14,7 +14,7 @@ use actix_web::{web, HttpResponse, HttpServer, Scope};
 
 use games_service::actions::action_handlers;
 use games_service::long_poller::long_poller_handler::long_poll_handler;
-use shared::models::ServiceResponse;
+use shared::shared_models::ServiceResponse;
 
 use std::env;
 use std::net::ToSocketAddrs;
@@ -27,7 +27,7 @@ use games_service::game_handlers;
 use lazy_static::lazy_static;
 use log::{error, LevelFilter};
 use middleware::authn_mw::AuthenticationMiddlewareFactory;
-use middleware::environment_mw::CATAN_ENV;
+use middleware::request_context_mw::SERVICE_CONFIG;
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
 use std::sync::atomic::{AtomicBool, Ordering};
 use user_service::user_handlers;
@@ -61,9 +61,9 @@ fn get_host_ip_and_port() -> (String, String) {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     // Access CATAN_SECRETS to force initialization and potentially panic.
-    print!("env_logger set with {:#?}\n", CATAN_ENV.rust_log);
-    print!("ssl key file {:#?}\n", CATAN_ENV.ssl_key_location);
-    print!("ssl cert file {:#?}\n", CATAN_ENV.ssl_cert_location);
+    print!("env_logger set with {:#?}\n", SERVICE_CONFIG.rust_log);
+    print!("ssl key file {:#?}\n", SERVICE_CONFIG.ssl_key_location);
+    print!("ssl cert file {:#?}\n", SERVICE_CONFIG.ssl_cert_location);
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let args: Vec<String> = env::args().collect();
 
@@ -79,10 +79,10 @@ async fn main() -> std::io::Result<()> {
     //  SSL support
     let mut builder = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
     builder
-        .set_private_key_file(CATAN_ENV.ssl_key_location.to_owned(), SslFiletype::PEM)
+        .set_private_key_file(SERVICE_CONFIG.ssl_key_location.to_owned(), SslFiletype::PEM)
         .unwrap();
     builder
-        .set_certificate_chain_file(CATAN_ENV.ssl_cert_location.to_owned())
+        .set_certificate_chain_file(SERVICE_CONFIG.ssl_cert_location.to_owned())
         .unwrap();
 
     //
@@ -96,37 +96,37 @@ async fn main() -> std::io::Result<()> {
 
  fn setup_cosmos() -> Result<(), ServiceResponse> {
     verify_or_create_account(
-        &CATAN_ENV.resource_group,
-        &CATAN_ENV.cosmos_account,
-        &CATAN_ENV.azure_location,
+        &SERVICE_CONFIG.resource_group,
+        &SERVICE_CONFIG.cosmos_account,
+        &SERVICE_CONFIG.azure_location,
     )?;
 
     verify_or_create_database(
-        &CATAN_ENV.cosmos_account,
-        &CATAN_ENV.cosmos_database_name,
-        &CATAN_ENV.resource_group,
+        &SERVICE_CONFIG.cosmos_account,
+        &SERVICE_CONFIG.cosmos_database_name,
+        &SERVICE_CONFIG.resource_group,
     )?;
-    let test_db_name = CATAN_ENV.cosmos_database_name.to_string() + "-test";
+    let test_db_name = SERVICE_CONFIG.cosmos_database_name.to_string() + "-test";
     verify_or_create_database(
-        &CATAN_ENV.cosmos_account,
+        &SERVICE_CONFIG.cosmos_account,
         &test_db_name,
-        &CATAN_ENV.resource_group,
+        &SERVICE_CONFIG.resource_group,
     )?;
 
-    for collection in &CATAN_ENV.cosmos_collections {
+    for collection in &SERVICE_CONFIG.cosmos_collections {
         verify_or_create_collection(
-            &CATAN_ENV.cosmos_account,
-            &CATAN_ENV.cosmos_database_name,
+            &SERVICE_CONFIG.cosmos_account,
+            &SERVICE_CONFIG.cosmos_database_name,
             &collection,
-            &CATAN_ENV.resource_group,
+            &SERVICE_CONFIG.resource_group,
         )?;
 
         let test_name = collection.clone() + "-test";
         verify_or_create_collection(
-            &CATAN_ENV.cosmos_account,
+            &SERVICE_CONFIG.cosmos_account,
             &test_db_name,
             &test_name,
-            &CATAN_ENV.resource_group,
+            &SERVICE_CONFIG.resource_group,
         )?;
     }
     Ok(())
@@ -340,9 +340,9 @@ mod tests {
         create_test_service,
         games_service::game_container::game_messages::GameHeader,
         init_env_logger,
-        middleware::environment_mw::{RequestContext, TestContext, CATAN_ENV},
+        middleware::request_context_mw::{RequestContext, TestContext, SERVICE_CONFIG},
         setup_test,
-        shared::models::{ClientUser, ServiceResponse, UserProfile, UserType},
+        shared::shared_models::{ClientUser, ServiceResponse, UserProfile, UserType},
         user_service::users::{login, register, verify_cosmosdb}, setup_cosmos,
     };
 
@@ -380,7 +380,7 @@ mod tests {
             first_name: "Test".into(),
             last_name: "User".into(),
             display_name: "TestUser".into(),
-            phone_number: crate::middleware::environment_mw::CATAN_ENV
+            phone_number: crate::middleware::request_context_mw::SERVICE_CONFIG
                 .test_phone_number
                 .to_owned(),
             picture_url: "https://example.com/photo.jpg".into(),
@@ -501,7 +501,7 @@ mod tests {
 
         let request_context = RequestContext::test_default(false);
         let mut profile = UserProfile::new_test_user();
-        profile.phone_number = CATAN_ENV.test_phone_number.clone();
+        profile.phone_number = SERVICE_CONFIG.test_phone_number.clone();
         // setup
         let _response = verify_cosmosdb(&request_context).await;
 

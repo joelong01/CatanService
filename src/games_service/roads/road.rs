@@ -2,7 +2,7 @@
 
 use crate::{
     games_service::{buildings::building_enums::BuildingPosition, shared::game_enums::Direction},
-    shared::models::ClientUser,
+    shared::shared_models::ClientUser,
 };
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};

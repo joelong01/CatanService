@@ -20,8 +20,8 @@ use crate::games_service::{
     tiles::{self, tile::Tile, tile_enums::TileResource, tile_key::TileKey},
 };
 
-use crate::shared::models::{ClientUser, GameError, ServiceResponse};
-use crate::shared::{models::PersistUser, utility::get_id};
+use crate::shared::shared_models::{ClientUser, GameError, ServiceResponse};
+use crate::shared::service_models::PersistUser;
 
 use actix_web::Resource;
 use rand::seq::SliceRandom;
@@ -105,7 +105,7 @@ impl RegularGame {
             .collect();
 
         Self {
-            id: get_id(),
+            id: PersistUser::get_id(),
             players,
             tiles,
             harbors,

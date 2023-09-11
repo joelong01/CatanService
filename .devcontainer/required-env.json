@@ -40,6 +40,30 @@
             "default": "Users-db"
         },
         {
+            "environmentVariable": "ADMIN_EMAIL",
+            "description": "the email of the admin",
+            "shellscript": "",
+            "default": ""
+        },
+        {
+            "environmentVariable": "ADMIN_PROFILE_JSON",
+            "description": "the location of a JSON doc that has the admin profile",
+            "shellscript": "",
+            "default": ""
+        },
+        {
+            "environmentVariable": "ADMIN_PASSWORD",
+            "description": "the password for the admin account",
+            "shellscript": "",
+            "default": ""
+        },
+        {
+            "environmentVariable": "TEST_USERS_JSON",
+            "description": "the location of a JSON doc that has test users",
+            "shellscript": "",
+            "default": "./test_users.json"
+        },
+        {
             "environmentVariable": "RUST_LOG",
             "description": "the settings for rust logger",
             "shellscript": "",

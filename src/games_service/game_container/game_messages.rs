@@ -19,13 +19,7 @@ pub struct Invitation {
 }
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "PascalCase")]
-pub struct GameHeader {
-    game_id: String,
-    user_id: String,
-    password: String,
-    test: String,
-    email: String,
-}
+pub struct GameHeader;
 
 impl GameHeader {
     pub const GAME_ID: &'static str = "x-game-id";
@@ -33,6 +27,8 @@ impl GameHeader {
     pub const PASSWORD: &'static str = "x-password";
     pub const TEST: &'static str = "x-test";
     pub const EMAIL: &'static str = "x-email";
+    pub const ROLES: &'static str = "x-roles";
+    pub const CLAIMS: &'static str= "x-claims";
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]

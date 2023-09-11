@@ -1,7 +1,5 @@
-use crate::{
-    get_header_value,
-    shared::header_extractor::HeadersExtractor, middleware::environment_mw::RequestContext,
-};
+use crate::
+    {shared::header_extractor::HeadersExtractor, middleware::request_context_mw::RequestContext};
 use actix_web::{
     web::{self, Path},
     HttpResponse,
@@ -34,9 +32,10 @@ pub async fn new_game(
     request_context: RequestContext
 ) -> HttpResponse {
     let game_type = game_type.into_inner();
-    let user_id = get_header_value!(user_id, headers);
+    let claims = request_context.claims.as_ref().expect("if claims can't unwrap, the call should fail in the auth middleware");
+   
     let test_game: Option<RegularGame> = test_game.map(|json_game| json_game.into_inner());
-    super::game::new_game(game_type, &user_id, headers.is_test, test_game, request_context)
+    super::game::new_game(game_type, &claims.id, headers.is_test, test_game, &request_context)
         .await
         .map(|sr| sr.to_http_response())
         .unwrap_or_else(|sr| sr.to_http_response())

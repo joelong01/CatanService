@@ -10,7 +10,7 @@ use tokio::sync::mpsc::Receiver;
 
 
 use crate::{
-    games_service::game_container::game_messages::CatanMessage, shared::models::UserProfile,
+    games_service::game_container::game_messages::CatanMessage, shared::shared_models::UserProfile,
     LOGGER_INIT, LOGGER_INIT_LOCK,
 };
 

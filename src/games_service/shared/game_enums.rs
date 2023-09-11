@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::shared::models::ClientUser;
+use crate::shared::shared_models::ClientUser;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::{fmt, str::FromStr};

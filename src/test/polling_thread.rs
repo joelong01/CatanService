@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 use crate::{
     games_service::game_container::game_messages::CatanMessage,
-    shared::{models::ClientUser, proxy::ServiceProxy},
+    shared::{shared_models::ClientUser, proxy::ServiceProxy},
     test::test_structs::HOST_URL,
-    trace_thread_info, middleware::environment_mw::TestContext,
+    trace_thread_info, middleware::request_context_mw::TestContext,
 };
 pub async fn game_poller(username: &str, tx: tokio::sync::mpsc::Sender<CatanMessage>) {
     let proxy = ServiceProxy::new(Some(TestContext{use_cosmos_db: false}), HOST_URL);

@@ -11,7 +11,7 @@ mod tests {
             shared::game_enums::{Direction, GameAction, GamePhase, GameState},
             tiles::{tile_enums::TileResource, tile_key::TileKey},
         },
-        shared::models::{ClientUser, PersistUser, UserProfile, UserType}, middleware::environment_mw::CATAN_ENV,
+        shared::shared_models::{ClientUser,  UserProfile, UserType}, middleware::request_context_mw::SERVICE_CONFIG,
     };
     use std::io::Write;
     use std::{collections::HashMap, fs::File};
@@ -193,7 +193,7 @@ mod tests {
                 first_name: "John".to_string(),
                 last_name: "Doe".to_string(),
                 display_name: "johndoe".to_string(),
-                phone_number: CATAN_ENV.test_phone_number.to_owned(),
+                phone_number: SERVICE_CONFIG.test_phone_number.to_owned(),
                 picture_url: "https://example.com/picture.jpg".to_string(),
                 foreground_color: "#000000".to_string(),
                 background_color: "#FFFFFF".to_string(),
@@ -224,7 +224,7 @@ mod tests {
                 first_name: "Doug".to_string(),
                 last_name: "Doe".to_string(),
                 display_name: "johndoe".to_string(),
-                phone_number: CATAN_ENV.test_phone_number.to_owned(),
+                phone_number: SERVICE_CONFIG.test_phone_number.to_owned(),
                 picture_url: "https://example.com/picture.jpg".to_string(),
                 foreground_color: "#000000".to_string(),
                 background_color: "#FFFFFF".to_string(),
@@ -243,7 +243,7 @@ mod tests {
                 first_name: "Sally".to_string(),
                 last_name: "Doe".to_string(),
                 display_name: "johndoe".to_string(),
-                phone_number: CATAN_ENV.test_phone_number.to_owned(),
+                phone_number: SERVICE_CONFIG.test_phone_number.to_owned(),
                 picture_url: "https://example.com/picture.jpg".to_string(),
                 foreground_color: "#000000".to_string(),
                 background_color: "#FFFFFF".to_string(),

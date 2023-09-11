@@ -6,11 +6,11 @@
 use std::time::Duration;
 
 use crate::games_service::game_container::game_messages::InvitationResponseData;
-use crate::middleware::environment_mw::TestContext;
+use crate::middleware::request_context_mw::TestContext;
 use crate::{crack_game_update, wait_for_message};
 use crate::{
     games_service::game_container::game_messages::CatanMessage, log_thread_info,
-    shared::models::ClientUser, trace_thread_info,
+    shared::shared_models::ClientUser, trace_thread_info,
 };
 use crate::{shared::proxy::ServiceProxy, test::test_structs::HOST_URL};
 

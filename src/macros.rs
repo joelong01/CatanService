@@ -140,8 +140,8 @@ pub fn convert_status_code(azure_status: azure_core::StatusCode) -> reqwest::Sta
 macro_rules! az_error_to_service_response {
     ( $cmd:expr, $stderr:expr ) => {{
         use reqwest::StatusCode;
-        use crate::shared::models::ResponseType::AzError;
-        use crate::shared::models::GameError;
+        use crate::shared::shared_models::ResponseType::AzError;
+        use crate::shared::shared_models::GameError;
 
         let msg = format!("command: {}\n Error: {:#?}", $cmd, $stderr);
         log::error!("{}", &msg);
@@ -226,7 +226,7 @@ macro_rules! create_app {
             user_service,
         };
 
-        use crate::middleware::environment_mw::RequestContextMiddleware;
+        use crate::middleware::request_context_mw::RequestContextMiddleware;
 
         App::new()
             .wrap(Logger::default())

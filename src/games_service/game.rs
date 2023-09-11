@@ -3,8 +3,8 @@ use crate::{
         game_container::game_messages::{CatanMessage, GameCreatedData},
         long_poller::long_poller::LongPoller,
     },
-    middleware::environment_mw::RequestContext,
-    shared::models::{ClientUser, GameError, ResponseType, ServiceResponse},
+    middleware::request_context_mw::RequestContext,
+    shared::shared_models::{ClientUser, GameError, ResponseType, ServiceResponse},
 };
 
 use reqwest::StatusCode;
@@ -56,7 +56,7 @@ pub async fn new_game(
     user_id: &str,
     is_test: bool,
     test_game: Option<RegularGame>,
-    request_context: RequestContext,
+    request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
     if game_type != CatanGames::Regular {
         return Err(ServiceResponse::new(

@@ -1,0 +1,72 @@
+[
+    {
+        "user_type": "Connected",
+        "email": "john.doe@example.com",
+        "first_name": "John",
+        "last_name": "Doe",
+        "display_name": "John (Test)",
+        "phone_number": "+12065551234",
+        "picture_url": "https://example.com/images/john.jpg",
+        "foreground_color": "#00000000",
+        "background_color": "#FFFFFF",
+        "text_color": "#00000000",
+        "games_played": 5,
+        "games_won": 2
+    },
+    {
+        "user_type": "Connected",
+        "email": "jane.smith@example.com",
+        "first_name": "Jane",
+        "last_name": "Smith",
+        "display_name": "Jane (Test)",
+        "phone_number": "+12065556789",
+        "picture_url": "https://example.com/images/jane.jpg",
+        "foreground_color": "#00000000",
+        "background_color": "#FFFFFF",
+        "text_color": "#00000000",
+        "games_played": 7,
+        "games_won": 5
+    },
+    {
+        "user_type": "Connected",
+        "email": "alice.jones@example.com",
+        "first_name": "Alice",
+        "last_name": "Jones",
+        "display_name": "Alice (Test)",
+        "phone_number": "+12065551235",
+        "picture_url": "https://example.com/images/alice.jpg",
+        "foreground_color": "#00000000",
+        "background_color": "#FFFFFF",
+        "text_color": "#00000000",
+        "games_played": 3,
+        "games_won": 2
+    },
+    {
+        "user_type": "Connected",
+        "email": "bob.brown@example.com",
+        "first_name": "Bob",
+        "last_name": "Brown",
+        "display_name": "Bob (Test)",
+        "phone_number": "+12065554321",
+        "picture_url": "https://example.com/images/bob.jpg",
+        "foreground_color": "#00000000",
+        "background_color": "#FFFFFF",
+        "text_color": "#00000000",
+        "games_played": 6,
+        "games_won": 4
+    },
+    {
+        "user_type": "Connected",
+        "email": "charlie.green@example.com",
+        "first_name": "Charlie",
+        "last_name": "Green",
+        "display_name": "Charlie (Test)",
+        "phone_number": "+12065553210",
+        "picture_url": "https://example.com/images/charlie.jpg",
+        "foreground_color": "#00000000",
+        "background_color": "#FFFFFF",
+        "text_color": "#00000000",
+        "games_played": 4,
+        "games_won": 3
+    }
+]

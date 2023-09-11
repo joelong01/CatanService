@@ -8,6 +8,7 @@ use crate::azure_setup::azure_wrapper::{
     cosmos_account_exists, cosmos_collection_exists, cosmos_database_exists, send_email,
     send_text_message,
 };
+use crate::shared::service_models::{Claims, PersistUser, Role};
 /**
  * this module implements the WebApi to create the database/collection, list all the users, and to create/find/delete
  * a User document in CosmosDb
@@ -16,9 +17,9 @@ use crate::{full_info, trace_function};
 
 use crate::games_service::long_poller::long_poller::LongPoller;
 
-use crate::middleware::environment_mw::{RequestContext, TestContext, CATAN_ENV};
-use crate::shared::models::{
-    Claims, ClientUser, GameError, PersistUser, ResponseType, ServiceResponse, UserProfile,
+use crate::middleware::request_context_mw::{RequestContext, TestContext, SERVICE_CONFIG};
+use crate::shared::shared_models::{
+    ClientUser, GameError, ResponseType, ServiceResponse, UserProfile,
 };
 
 use bcrypt::{hash, verify};
@@ -51,10 +52,14 @@ pub async fn verify_cosmosdb(context: &RequestContext) -> Result<ServiceResponse
     };
 
     if use_cosmos_db {
-        if cosmos_account_exists(&context.env.cosmos_account, &context.env.resource_group).is_err()
+        if cosmos_account_exists(
+            &context.config.cosmos_account,
+            &context.config.resource_group,
+        )
+        .is_err()
         {
             return Err(ServiceResponse::new(
-                &format!("account {} does not exist", context.env.cosmos_account),
+                &format!("account {} does not exist", context.config.cosmos_account),
                 StatusCode::NOT_FOUND,
                 ResponseType::NoData,
                 GameError::HttpError(StatusCode::NOT_FOUND),
@@ -62,16 +67,16 @@ pub async fn verify_cosmosdb(context: &RequestContext) -> Result<ServiceResponse
         }
 
         if cosmos_database_exists(
-            &context.env.cosmos_account,
-            &context.env.cosmos_database_name,
-            &context.env.resource_group,
+            &context.config.cosmos_account,
+            &context.config.cosmos_database_name,
+            &context.config.resource_group,
         )
         .is_err()
         {
             return Err(ServiceResponse::new(
                 &format!(
                     "account {} does exists, but database {} does not",
-                    context.env.cosmos_account, context.env.cosmos_database_name
+                    context.config.cosmos_account, context.config.cosmos_database_name
                 ),
                 StatusCode::NOT_FOUND,
                 ResponseType::NoData,
@@ -79,20 +84,18 @@ pub async fn verify_cosmosdb(context: &RequestContext) -> Result<ServiceResponse
             ));
         }
 
-       
-
-        for collection in &context.env.cosmos_collections {
+        for collection in &context.config.cosmos_collections {
             let collection_exists = cosmos_collection_exists(
-                &context.env.cosmos_account,
-                &context.env.cosmos_database_name,
+                &context.config.cosmos_account,
+                &context.config.cosmos_database_name,
                 &collection,
-                &context.env.resource_group,
+                &context.config.resource_group,
             );
 
             if collection_exists.is_err() {
                 let error_message = format!(
                     "account {} exists, database {} exists, but {} does not",
-                    context.env.cosmos_account, context.env.cosmos_database_name, collection
+                    context.config.cosmos_account, context.config.cosmos_database_name, collection
                 );
 
                 return Err(ServiceResponse::new(
@@ -142,6 +145,22 @@ pub async fn register(
         ));
     }
 
+    let mut roles = vec![Role::User];
+
+    // this lets us bootstrap the system -- my assumption is that if you can set the environment variable, then you are
+    // an admin.
+    if profile_in.email == request_context.config.admin_email {
+        if request_context.is_test() {
+            return Err(ServiceResponse::new(
+                "Should not have test context",
+                StatusCode::BAD_REQUEST,
+                ResponseType::NoData,
+                GameError::HttpError(StatusCode::BAD_REQUEST),
+            ));
+        }
+        roles.push(Role::Admin);
+    }
+
     // Hash the password
     let password_hash = match hash(&password, bcrypt::DEFAULT_COST) {
         Ok(hp) => hp,
@@ -162,6 +181,7 @@ pub async fn register(
     // ignore the game stats passed in by the client and create a new one
     persist_user.user_profile.games_played = Some(0);
     persist_user.user_profile.games_won = Some(0);
+    persist_user.roles = roles;
     request_context
         .database
         .update_or_create_user(&persist_user)
@@ -188,11 +208,11 @@ pub async fn login(
     {
         Some(u) => u,
         None => {
-            return Ok(ServiceResponse {
-                message: format!("email {} no found", username),
-                status: StatusCode::NOT_FOUND,
+            return Err(ServiceResponse {
+                message: String::default(),
+                status: StatusCode::UNAUTHORIZED,
                 response_type: ResponseType::NoData,
-                game_error: GameError::NoError(String::default()),
+                game_error: GameError::HttpError(StatusCode::UNAUTHORIZED),
             });
         }
     };
@@ -226,9 +246,10 @@ pub async fn login(
             &user.id,
             &user.user_profile.email,
             24 * 60 * 60,
+            &user.roles,
             &request_context.test_context,
         );
-        let token_result = create_jwt_token(&claims, &request_context.env.login_secret_key);
+        let token_result = create_jwt_token(&claims, &request_context.config.login_secret_key);
         match token_result {
             Ok(token) => {
                 let _ = LongPoller::add_user(&user.id, &user.user_profile).await;
@@ -327,10 +348,15 @@ pub async fn list_users(
     }
 }
 pub async fn get_profile(
-    user_id: &str,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    let user = match request_context.database.find_user_by_id(user_id).await? {
+    let user_id = request_context
+        .claims
+        .as_ref()
+        .expect("auth_mw should have added this or rejected the call")
+        .id
+        .clone();
+    let user = match request_context.database.find_user_by_id(&user_id).await? {
         Some(u) => u,
         None => {
             return Ok(ServiceResponse {
@@ -349,28 +375,19 @@ pub async fn get_profile(
     ))
 }
 
-pub async fn delete(
-    id_path: &str,
-    id_token: &str,
-    request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
-    //
-    // unwrap is ok here because our middleware put it there.
+pub async fn delete(request_context: &RequestContext) -> Result<ServiceResponse, ServiceResponse> {
+    let user_id = request_context
+        .claims
+        .as_ref()
+        .expect("auth_mw should have added this or rejected the call")
+        .id
+        .clone();
 
-    if id_path != id_token {
-        return Err(ServiceResponse::new(
-            "you can only delete yourself",
-            StatusCode::UNAUTHORIZED,
-            ResponseType::NoData,
-            GameError::HttpError(StatusCode::UNAUTHORIZED),
-        ));
-    }
-
-    let result = request_context.database.delete_user(&id_path).await;
+    let result = request_context.database.delete_user(&user_id).await;
 
     match result {
         Ok(..) => Ok(ServiceResponse::new(
-            &format!("deleted user with id: {}", id_path),
+            &format!("deleted user with id: {}", user_id),
             StatusCode::OK,
             ResponseType::NoData,
             GameError::NoError(String::default()),
@@ -398,14 +415,17 @@ pub async fn validate_email(token: &str) -> Result<ServiceResponse, ServiceRespo
         .collect::<Vec<_>>()
         .join("");
 
-    if let Some(claims) = validate_jwt_token(&decoded_token, &CATAN_ENV.validation_secret_key) {
-        // Extract the id and sub from the claims
-        let id = &claims.claims.id;
-        let email = &claims.claims.sub;
-        //
+    if let Some(claims) = validate_jwt_token(&decoded_token, &SERVICE_CONFIG.validation_secret_key)
+    {
         //  we have to embed the TestContext in the claim because we come through a GET from a URL where
         //  we can't add headers.
-        let request_context = RequestContext::new(claims.claims.test_context, &CATAN_ENV);
+        let request_context = RequestContext::new(
+            &Some(claims.claims.clone()),
+            &claims.claims.test_context,
+            &SERVICE_CONFIG,
+        );
+
+        let id = &claims.claims.id; // Borrowing here.
         let mut user = match request_context.database.find_user_by_id(id).await? {
             Some(u) => u,
             None => {
@@ -429,6 +449,7 @@ pub async fn validate_email(token: &str) -> Result<ServiceResponse, ServiceRespo
         ));
     }
 }
+
 //
 //  url is in the form of host://api/v1/users/validate_email/<token>
 pub fn get_validation_url(
@@ -437,8 +458,8 @@ pub fn get_validation_url(
     email: &str,
     test_context: &Option<TestContext>,
 ) -> String {
-    let claims = Claims::new(id, email, 60 * 10, test_context); // 10 minutes
-    let token = create_jwt_token(&claims, &CATAN_ENV.validation_secret_key)
+    let claims = Claims::new(id, email, 60 * 10, &vec![Role::Validation], test_context); // 10 minutes
+    let token = create_jwt_token(&claims, &SERVICE_CONFIG.validation_secret_key)
         .expect("Token creation should not fail");
 
     let encoded_token = form_urlencoded::byte_serialize(token.as_bytes()).collect::<String>();
@@ -468,7 +489,7 @@ pub fn send_validation_email(
     );
     let result = send_email(
         email,
-        &CATAN_ENV.service_email,
+        &SERVICE_CONFIG.service_email,
         "Please validate your email",
         &msg,
     );
@@ -550,11 +571,17 @@ async fn internal_send_phone_code(
 /// * `Ok(ServiceResponse)` if the phone code is validated successfully.
 /// * `Err(ServiceResponse)` if the code does not match or is missing.
 pub async fn validate_phone(
-    user_id: &str,
     code: &str,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    let mut persist_user = match request_context.database.find_user_by_id(user_id).await? {
+    let user_id = request_context
+        .claims
+        .as_ref()
+        .expect("auth_mw should have added this or rejected the call")
+        .id
+        .clone();
+
+    let mut persist_user = match request_context.database.find_user_by_id(&user_id).await? {
         Some(u) => u,
         None => {
             return Ok(ServiceResponse {
@@ -598,7 +625,7 @@ mod tests {
 
     use crate::{
         create_test_service, games_service::game_container::game_messages::GameHeader,
-        init_env_logger, middleware::environment_mw::CATAN_ENV, setup_test,
+        init_env_logger, middleware::request_context_mw::SERVICE_CONFIG, setup_test,
     };
 
     use super::*;
@@ -610,7 +637,7 @@ mod tests {
 
         let request_context = RequestContext::test_default(false);
         let mut profile = UserProfile::new_test_user();
-        profile.phone_number = CATAN_ENV.test_phone_number.clone();
+        profile.phone_number = SERVICE_CONFIG.test_phone_number.clone();
         // setup
         let response = verify_cosmosdb(&request_context).await;
 
@@ -624,7 +651,7 @@ mod tests {
             .expect("text message should be sent!");
 
         log::trace!("code is: {}", code);
-        let sr = validate_phone(&client_user.id, &format!("{}", code), &request_context)
+        let sr = validate_phone(&format!("{}", code), &request_context)
             .await
             .expect("validation to work");
         assert_eq!(sr.status, StatusCode::OK);
@@ -638,7 +665,7 @@ mod tests {
 
         let request_context = RequestContext::test_default(false);
         let mut profile = UserProfile::new_test_user();
-        profile.email = CATAN_ENV.test_email.clone();
+        profile.email = SERVICE_CONFIG.test_email.clone();
         // setup
         let response = verify_cosmosdb(&request_context).await;
 
@@ -721,9 +748,15 @@ mod tests {
     // Test JWT token creation and validation
     #[tokio::test]
     async fn test_jwt_token_creation_and_validation() {
-        let claims = Claims::new("user_id", "user_email@email.com", 10 * 60, &None);
-        let token = create_jwt_token(&claims, &CATAN_ENV.login_secret_key).unwrap();
-        let token_claims = validate_jwt_token(&token, &CATAN_ENV.login_secret_key);
+        let claims = Claims::new(
+            "user_id",
+            "user_email@email.com",
+            10 * 60,
+            &vec![Role::Validation],
+            &None,
+        );
+        let token = create_jwt_token(&claims, &SERVICE_CONFIG.login_secret_key).unwrap();
+        let token_claims = validate_jwt_token(&token, &SERVICE_CONFIG.login_secret_key);
         assert!(token_claims.is_some());
         let token_claims = token_claims.expect("there should be a token in here");
         assert_eq!(token_claims.claims, claims);
