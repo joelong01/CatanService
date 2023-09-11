@@ -11,7 +11,7 @@ mod tests {
             shared::game_enums::{Direction, GameAction, GamePhase, GameState},
             tiles::{tile_enums::TileResource, tile_key::TileKey},
         },
-        shared::models::{ClientUser, PersistUser, UserProfile}, middleware::environment_mw::CATAN_ENV,
+        shared::models::{ClientUser, PersistUser, UserProfile, UserType}, middleware::environment_mw::CATAN_ENV,
     };
     use std::io::Write;
     use std::{collections::HashMap, fs::File};
@@ -188,6 +188,7 @@ mod tests {
         let user = ClientUser {
             id: "1".to_owned(),
             user_profile: UserProfile {
+                user_type: UserType::Connected,
                 email: "test@example.com".to_string(),
                 first_name: "John".to_string(),
                 last_name: "Doe".to_string(),
@@ -218,6 +219,7 @@ mod tests {
         let user1 = ClientUser {
             id: "2".to_owned(),
             user_profile: UserProfile {
+                user_type: UserType::Connected,
                 email: "test@example.com".to_string(),
                 first_name: "Doug".to_string(),
                 last_name: "Doe".to_string(),
@@ -236,6 +238,7 @@ mod tests {
             id: "3".to_owned(),
 
             user_profile: UserProfile {
+                user_type: UserType::Connected,
                 email: "test@example.com".to_string(),
                 first_name: "Sally".to_string(),
                 last_name: "Doe".to_string(),

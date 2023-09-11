@@ -5,7 +5,7 @@ pub mod test {
     #![allow(unused_variables)]
     use crate::{
         games_service::shared::game_enums::CatanGames,
-        shared::proxy::ServiceProxy,
+        shared::{proxy::ServiceProxy, models::UserType},
         test::{
             client0::{Handler0, save_game, load_game, TEST_GAME_LOC},
             client1::Handler1,
@@ -248,6 +248,7 @@ pub mod test {
             trace_thread_info!("TestThread", "creating: {}", first_names[i].clone());
 
             let user_profile = UserProfile {
+                user_type: UserType::Connected,
                 email: email_names[i].into(),
                 first_name: first_names[i].into(),
                 last_name: last_names[i].into(),

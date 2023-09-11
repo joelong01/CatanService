@@ -312,11 +312,24 @@ impl Default for PersistUser {
     }
 }
 ///
+/// Connected users are must be actively connected to the system and particpate in long_polling
+/// LocalUsers do not, and instead get messages on the creators thread.  Only local users for the creater
+/// should be shown by the client
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "PascalCase")]
+ pub enum UserType {
+    Connected,
+    Local,
+
+}
+
+///
 /// UserProfile is just information about the client.  this can be as much or little information as the app needs
 /// to run
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "PascalCase")]
 pub struct UserProfile {
+    pub user_type: UserType,
     pub email: String,
     pub first_name: String,
     pub last_name: String,
@@ -332,6 +345,7 @@ pub struct UserProfile {
 impl Default for UserProfile {
     fn default() -> Self {
         UserProfile {
+            user_type: UserType::Connected,
             email: String::default(),
             first_name: String::default(),
             last_name: String::default(),
@@ -375,6 +389,7 @@ impl UserProfile {
 
         let random_name = random_string();
         UserProfile {
+            user_type: UserType::Connected,
             email: format!("{}@test.com", random_string()),
             first_name: random_name.clone(),
             last_name: random_name.clone(),

@@ -342,7 +342,7 @@ mod tests {
         init_env_logger,
         middleware::environment_mw::{RequestContext, TestContext, CATAN_ENV},
         setup_test,
-        shared::models::{ClientUser, ServiceResponse, UserProfile},
+        shared::models::{ClientUser, ServiceResponse, UserProfile, UserType},
         user_service::users::{login, register, verify_cosmosdb}, setup_cosmos,
     };
 
@@ -375,6 +375,7 @@ mod tests {
 
         // 1. Register the user
         let mut user1_profile = UserProfile {
+            user_type: UserType::Connected,
             email: "testuser@example.com".into(),
             first_name: "Test".into(),
             last_name: "User".into(),

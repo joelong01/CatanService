@@ -349,7 +349,7 @@ mod tests {
     use crate::{
         init_env_logger,
         middleware::environment_mw::{RequestContext, CATAN_ENV},
-        shared::{models::UserProfile, utility::get_id},
+        shared::{models::{UserProfile, UserType}, utility::get_id},
         user_service::users::verify_cosmosdb,
     };
 
@@ -480,6 +480,7 @@ mod tests {
                 id: get_id(),
                 password_hash: Some(password_hash.to_owned()),
                 user_profile: UserProfile {
+                    user_type: UserType::Connected,
                     email: format!("test{}@example.com", i),
                     first_name: format!("Test{}", i),
                     last_name: format!("User{}", i),
