@@ -17,7 +17,7 @@ use futures::{
 };
 
 
-use super::request_context_mw::{RequestContext, SERVICE_CONFIG};
+use super::{request_context_mw::RequestContext, service_config::SERVICE_CONFIG};
 
 // AuthenticationMiddlewareFactory serves as a factory to create instances of AuthenticationMiddleware
 // which is the actual middleware component. It implements the Transform trait required by

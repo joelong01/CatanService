@@ -3,7 +3,7 @@ use crate::cosmos_db::cosmosdb::{UserDb, UserDbTrait};
 use crate::cosmos_db::mocked_db::TestDb;
 use crate::games_service::game_container::game_messages::GameHeader;
 use crate::shared::service_models::{Claims, Role};
-use crate::shared::shared_models::ServiceConfig;
+use crate::middleware::service_config::{ServiceConfig, SERVICE_CONFIG};
 /**
  *  this file contains the middleware that injects ServiceContext into the Request.  The data in RequestContext is the
  *  configuration data necessary for the Service to run -- the secrets loaded from the environment, hard coded strings,
@@ -15,7 +15,6 @@ use actix_web::dev::Payload;
 use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error};
 use actix_web::{FromRequest, HttpMessage, HttpRequest};
 use futures::future::{ok, Ready};
-use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::task::{Context, Poll};
 
@@ -137,11 +136,7 @@ impl FromRequest for RequestContext {
     }
 }
 
-// load the environment variables once and only once the first time they are accessed (which is in main() in this case)
-lazy_static! {
-    pub static ref SERVICE_CONFIG: ServiceConfig =
-        ServiceConfig::load_from_env().unwrap();
-}
+
 pub struct RequestContextMiddleware;
 
 impl<S, B> Transform<S, ServiceRequest> for RequestContextMiddleware

@@ -27,7 +27,7 @@ use games_service::game_handlers;
 use lazy_static::lazy_static;
 use log::{error, LevelFilter};
 use middleware::authn_mw::AuthenticationMiddlewareFactory;
-use middleware::request_context_mw::SERVICE_CONFIG;
+use middleware::service_config::SERVICE_CONFIG;
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
 use std::sync::atomic::{AtomicBool, Ordering};
 use user_service::user_handlers;
@@ -344,7 +344,7 @@ mod tests {
         create_test_service,
         games_service::game_container::game_messages::GameHeader,
         init_env_logger,
-        middleware::request_context_mw::{RequestContext, TestContext, SERVICE_CONFIG},
+        middleware::{request_context_mw::{RequestContext, TestContext}, service_config::SERVICE_CONFIG},
         setup_test,
         shared::shared_models::{ClientUser, ServiceResponse, UserProfile, UserType},
         user_service::users::{login, register, verify_cosmosdb}, setup_cosmos,
@@ -384,7 +384,7 @@ mod tests {
             first_name: "Test".into(),
             last_name: "User".into(),
             display_name: "TestUser".into(),
-            phone_number: crate::middleware::request_context_mw::SERVICE_CONFIG
+            phone_number: crate::middleware::service_config::SERVICE_CONFIG
                 .test_phone_number
                 .to_owned(),
             picture_url: "https://example.com/photo.jpg".into(),

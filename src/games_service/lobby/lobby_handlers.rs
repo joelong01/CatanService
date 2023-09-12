@@ -3,8 +3,7 @@ use actix_web::{web, HttpRequest, HttpResponse};
 
 use crate::{
     games_service::game_container::game_messages::{Invitation, InvitationResponseData},
-    middleware::request_context_mw::RequestContext,
-    shared::header_extractor::HeadersExtractor,
+    middleware::{request_context_mw::RequestContext, header_extractor::HeadersExtractor}
 };
 
 pub async fn get_lobby(_req: HttpRequest) -> HttpResponse {

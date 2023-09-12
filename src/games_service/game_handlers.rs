@@ -1,5 +1,5 @@
 use crate::
-    {shared::header_extractor::HeadersExtractor, middleware::request_context_mw::RequestContext};
+   middleware::{request_context_mw::RequestContext, header_extractor::HeadersExtractor};
 use actix_web::{
     web::{self, Path},
     HttpResponse,

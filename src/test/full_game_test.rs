@@ -253,7 +253,7 @@ pub mod test {
                 first_name: first_names[i].into(),
                 last_name: last_names[i].into(),
                 display_name: format!("{}:({})", first_names[i].clone(), i),
-                phone_number: crate::middleware::request_context_mw::SERVICE_CONFIG.test_phone_number.to_owned(),
+                phone_number: crate::middleware::service_config::SERVICE_CONFIG.test_phone_number.to_owned(),
                 picture_url: "https://example.com/photo.jpg".into(),
                 foreground_color: "#000000".into(),
                 background_color: "#FFFFFF".into(),

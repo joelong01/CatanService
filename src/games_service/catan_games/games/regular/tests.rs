@@ -11,7 +11,7 @@ mod tests {
             shared::game_enums::{Direction, GameAction, GamePhase, GameState},
             tiles::{tile_enums::TileResource, tile_key::TileKey},
         },
-        shared::shared_models::{ClientUser,  UserProfile, UserType}, middleware::request_context_mw::SERVICE_CONFIG,
+        shared::shared_models::{ClientUser,  UserProfile, UserType}, middleware::service_config::SERVICE_CONFIG, 
     };
     use std::io::Write;
     use std::{collections::HashMap, fs::File};

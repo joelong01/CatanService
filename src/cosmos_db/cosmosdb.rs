@@ -2,9 +2,9 @@
 use crate::{
     log_and_return_azure_core_error, log_return_unexpected_server_error,
     shared::shared_models::{
-        ClientUser, ServiceConfig, GameError, ResponseType,
+        ClientUser, GameError, ResponseType,
     },
-    shared::service_models::PersistUser
+    shared::service_models::PersistUser, middleware::service_config::ServiceConfig
 };
 use std::collections::HashMap;
 
@@ -349,7 +349,7 @@ mod tests {
 
     use crate::{
         init_env_logger,
-        middleware::request_context_mw::{RequestContext, SERVICE_CONFIG},
+        middleware::{request_context_mw::RequestContext, service_config::SERVICE_CONFIG},
         shared::{shared_models::{UserProfile, UserType}, service_models::Role},
         user_service::users::verify_cosmosdb,
     };

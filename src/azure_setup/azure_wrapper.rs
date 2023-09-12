@@ -25,7 +25,7 @@ use crate::log_and_return_azure_core_error;
 use crate::log_return_bad_request;
 use crate::log_return_serde_error;
 use crate::middleware::request_context_mw::TestContext;
-use crate::middleware::request_context_mw::SERVICE_CONFIG;
+use crate::middleware::service_config::SERVICE_CONFIG;
 use crate::shared::service_models::Claims;
 use crate::shared::service_models::Role;
 use crate::shared::shared_models::GameError;

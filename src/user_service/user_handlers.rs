@@ -1,10 +1,7 @@
 use crate::{
     get_header_value,
-    middleware::request_context_mw::RequestContext,
-    shared::{
-        header_extractor::HeadersExtractor,
-        shared_models::{ClientUser, GameError, ResponseType, ServiceResponse, UserProfile},
-    },
+    middleware::{request_context_mw::RequestContext, header_extractor::HeadersExtractor},
+    shared::shared_models::{ClientUser, GameError, ResponseType, ServiceResponse, UserProfile},
 };
 use actix_web::{
     http::Error,
@@ -13,7 +10,7 @@ use actix_web::{
 };
 use reqwest::StatusCode;
 
-use super::users::{login, register, verify_cosmosdb, register_test_user};
+use super::users::{login, register, register_test_user, verify_cosmosdb};
 
 /**
  * Handlers for the "user" service.
@@ -50,7 +47,7 @@ pub async fn register_test_user_handler(
     headers: HeadersExtractor,
 ) -> impl Responder {
     let password = get_header_value!(password, headers);
-    
+
     register_test_user(&password, &profile_in, &request_context)
         .await
         .map(|sr| sr.to_http_response())

@@ -8,6 +8,7 @@ use crate::azure_setup::azure_wrapper::{
     cosmos_account_exists, cosmos_collection_exists, cosmos_database_exists, send_email,
     send_text_message,
 };
+use crate::middleware::service_config::SERVICE_CONFIG;
 use crate::shared::service_models::{Claims, PersistUser, Role};
 /**
  * this module implements the WebApi to create the database/collection, list all the users, and to create/find/delete
@@ -17,7 +18,7 @@ use crate::{full_info, trace_function};
 
 use crate::games_service::long_poller::long_poller::LongPoller;
 
-use crate::middleware::request_context_mw::{RequestContext, TestContext, SERVICE_CONFIG};
+use crate::middleware::request_context_mw::{RequestContext, TestContext};
 use crate::shared::shared_models::{
     ClientUser, GameError, ResponseType, ServiceResponse, UserProfile,
 };
@@ -652,7 +653,7 @@ mod tests {
 
     use crate::{
         create_test_service, games_service::game_container::game_messages::GameHeader,
-        init_env_logger, middleware::request_context_mw::SERVICE_CONFIG, setup_test,
+        init_env_logger, middleware::service_config::SERVICE_CONFIG, setup_test,
     };
 
     use super::*;

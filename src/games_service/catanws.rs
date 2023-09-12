@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 use crate::full_info;
-use crate::middleware::request_context_mw::SERVICE_CONFIG;
+use crate::middleware::service_config::SERVICE_CONFIG;
 use crate::user_service::users::validate_jwt_token;
 use actix::prelude::*;
 use actix::{Actor, StreamHandler};

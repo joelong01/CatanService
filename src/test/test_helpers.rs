@@ -3,7 +3,8 @@
 #[cfg(test)]
 pub mod test {
 
-    use crate::middleware::request_context_mw::{RequestContext, TestContext, SERVICE_CONFIG};
+    use crate::middleware::request_context_mw::{RequestContext, TestContext};
+    use crate::middleware::service_config::SERVICE_CONFIG;
     use crate::shared::shared_models::{
         ClientUser, GameError, ResponseType, ServiceResponse, UserProfile,
     };
