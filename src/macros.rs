@@ -200,7 +200,7 @@ macro_rules! setup_test {
 
         let test_context = TestContext::new($use_cosmos_db);
         let request = test::TestRequest::post()
-            .uri("/api/v1/test/verify_service")
+            .uri("/api/v1/test/verify-service")
             .append_header((header::CONTENT_TYPE, "application/json"))
             .append_header((
                 GameHeader::TEST,

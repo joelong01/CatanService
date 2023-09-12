@@ -163,7 +163,7 @@ impl ServiceProxy {
 
     pub async fn setup(&self) -> ServiceResponse {
         let headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
-        let url = "/api/v1/test/verify_service";
+        let url = "/api/v1/test/verify-service";
         let sr = self.post::<()>(url, headers, None).await;
         sr
     }

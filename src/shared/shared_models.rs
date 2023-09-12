@@ -1,36 +1,30 @@
 #![allow(dead_code)]
 
 use actix_web::HttpResponse;
+use azure_core::error::ErrorKind;
 /**
  * this is the module where I define the structures needed for the data in Cosmos
  */
-
 use reqwest::StatusCode;
-use serde::de::{self, Deserializer, Visitor};
-use serde::ser::Serializer;
+use serde::de::{self, Deserializer, Error, Visitor};
+use serde::ser::{SerializeStruct, Serializer};
 use serde::{Deserialize, Serialize};
 use strum_macros::Display;
 
 use std::collections::HashMap;
-use std::{
-    env, fmt,
-    fmt::Display,
-    fmt::Formatter,
-    sync::Arc,
-};
+use std::{env, fmt, fmt::Display, fmt::Formatter, sync::Arc};
 use tokio::sync::{mpsc, RwLock};
 
 use anyhow::Result;
 
-use crate::macros::convert_status_code;
 use crate::games_service::{
-        catan_games::games::regular::regular_game::RegularGame,
-        game_container::game_messages::CatanMessage,
-        shared::game_enums::{CatanGames, GameAction},
-    };
+    catan_games::games::regular::regular_game::RegularGame,
+    game_container::game_messages::CatanMessage,
+    shared::game_enums::{CatanGames, GameAction},
+};
+use crate::macros::convert_status_code;
 
 use super::service_models::PersistUser;
-
 
 //
 //  this also supports Eq, PartialEq, Clone, Serialize, and Deserialize via custom implementation
@@ -160,23 +154,67 @@ impl Serialize for GameError {
     where
         S: Serializer,
     {
+        let mut state = serializer.serialize_struct("GameError", 2)?;
         match self {
-            GameError::HttpError(status_code) => serializer.serialize_u16(status_code.as_u16()),
-            GameError::SerdeError(e) => serializer.serialize_str(&format!("{:#?}", e)),
-            GameError::AzureCoreError(e) => serializer.serialize_str(&format!("{:#?}", e)),
-            GameError::MissingData(msg)
-            | GameError::BadActionData(msg)
-            | GameError::BadId(msg)
-            | GameError::ChannelError(msg)
-            | GameError::AlreadyExists(msg)
-            | GameError::ActionError(msg)
-            | GameError::NoError(msg)
-            | GameError::AzError(msg) => serializer.serialize_str(msg),
-            GameError::TooFewPlayers(count) | GameError::TooManyPlayers(count) => {
-                serializer.serialize_u64(*count as u64)
+            GameError::HttpError(status_code) => {
+                state.serialize_field("type", "HttpError")?;
+                state.serialize_field("value", &status_code.as_u16())?;
             }
-            GameError::ReqwestError(r_err) => serializer.serialize_str(r_err),
+            GameError::NoError(msg) => {
+                state.serialize_field("type", "NoError")?;
+                state.serialize_field("value", msg)?;
+            }
+            GameError::MissingData(msg) => {
+                state.serialize_field("type", "MissingData")?;
+                state.serialize_field("value", msg)?;
+            }
+            GameError::BadActionData(msg) => {
+                state.serialize_field("type", "BadActionData")?;
+                state.serialize_field("value", msg)?;
+            }
+            GameError::BadId(msg) => {
+                state.serialize_field("type", "BadId")?;
+                state.serialize_field("value", msg)?;
+            }
+            GameError::ChannelError(msg) => {
+                state.serialize_field("type", "ChannelError")?;
+                state.serialize_field("value", msg)?;
+            }
+            GameError::AlreadyExists(msg) => {
+                state.serialize_field("type", "AlreadyExists")?;
+                state.serialize_field("value", msg)?;
+            }
+            GameError::ActionError(msg) => {
+                state.serialize_field("type", "ActionError")?;
+                state.serialize_field("value", msg)?;
+            }
+            GameError::ReqwestError(msg) => {
+                state.serialize_field("type", "ReqwestError")?;
+                state.serialize_field("value", msg)?;
+            }
+            GameError::AzError(msg) => {
+                state.serialize_field("type", "AzError")?;
+                state.serialize_field("value", msg)?;
+            }
+            GameError::TooFewPlayers(count) => {
+                state.serialize_field("type", "TooFewPlayers")?;
+                state.serialize_field("value", count)?;
+            }
+            GameError::TooManyPlayers(count) => {
+                state.serialize_field("type", "TooManyPlayers")?;
+                state.serialize_field("value", count)?;
+            }
+            GameError::SerdeError(e) => {
+                state.serialize_field("type", "SerdeError")?;
+                state.serialize_field("value", &format!("{:#?}", e))?;
+            }
+            GameError::AzureCoreError(e) => {
+                state.serialize_field("type", "AzureCoreError")?;
+                state.serialize_field("value", &format!("{:#?}", e))?;
+            }
         }
+        
+        state.end()
     }
 }
 
@@ -191,22 +229,79 @@ impl<'de> Deserialize<'de> for GameError {
             type Value = GameError;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("a valid GameError representation")
+                formatter.write_str("a struct representing GameError")
             }
 
-            fn visit_u16<E>(self, value: u16) -> Result<GameError, E>
+            fn visit_map<V>(self, mut map: V) -> Result<GameError, V::Error>
             where
-                E: de::Error,
+                V: de::MapAccess<'de>,
             {
-                // If we receive a u16, assume it's an HTTP status code.
-                Ok(GameError::HttpError(
-                    reqwest::StatusCode::from_u16(value).map_err(de::Error::custom)?,
-                ))
+                let mut error_type: Option<String> = None;
+                let mut value: Option<String> = None;
+
+                while let Some(key) = map.next_key::<String>()? {
+                    if key == "type" {
+                        error_type = map.next_value()?;
+                    } else if key == "value" {
+                        value = map.next_value()?;
+                    }
+                }
+
+                match (error_type, value) {
+                    (Some(ref t), Some(ref v)) if t == "HttpError" => {
+                        let code = v.parse::<u16>().map_err(de::Error::custom)?;
+                        Ok(GameError::HttpError(
+                            reqwest::StatusCode::from_u16(code).map_err(de::Error::custom)?,
+                        ))
+                    }
+                    (Some(ref t), Some(ref v)) if t == "NoError" => {
+                        Ok(GameError::NoError(v.clone()))
+                    }
+                    (Some(ref t), Some(ref v)) if t == "MissingData" => {
+                        Ok(GameError::MissingData(v.clone()))
+                    }
+                    (Some(ref t), Some(ref v)) if t == "BadActionData" => {
+                        Ok(GameError::BadActionData(v.clone()))
+                    }
+                    (Some(ref t), Some(ref v)) if t == "BadId" => Ok(GameError::BadId(v.clone())),
+                    (Some(ref t), Some(ref v)) if t == "ChannelError" => {
+                        Ok(GameError::ChannelError(v.clone()))
+                    }
+                    (Some(ref t), Some(ref v)) if t == "AlreadyExists" => {
+                        Ok(GameError::AlreadyExists(v.clone()))
+                    }
+                    (Some(ref t), Some(ref v)) if t == "ActionError" => {
+                        Ok(GameError::ActionError(v.clone()))
+                    }
+                    (Some(ref t), Some(ref v)) if t == "ReqwestError" => {
+                        Ok(GameError::ReqwestError(v.clone()))
+                    }
+                    (Some(ref t), Some(ref v)) if t == "AzError" => {
+                        Ok(GameError::AzError(v.clone()))
+                    }
+                    (Some(ref t), Some(ref v)) if t == "SerdeError" => {
+                        Ok(GameError::SerdeError(serde_json::Error::custom(v.clone())))
+                    } // This is a placeholder. Actual deserialization might be more involved.
+                    (Some(ref t), Some(ref v)) if t == "AzureCoreError" => {
+                        Ok(GameError::AzureCoreError(azure_core::Error::new(
+                            ErrorKind::Other,
+                            v.clone(),
+                        )))
+                    } // This is a placeholder. Actual deserialization might be more involved.
+                    (Some(ref t), Some(ref v)) if t == "TooFewPlayers" => {
+                        let count = v.parse::<usize>().map_err(de::Error::custom)?;
+                        Ok(GameError::TooFewPlayers(count))
+                    }
+                    (Some(ref t), Some(ref v)) if t == "TooManyPlayers" => {
+                        let count = v.parse::<usize>().map_err(de::Error::custom)?;
+                        Ok(GameError::TooManyPlayers(count))
+                    }
+                    _ => Err(de::Error::missing_field("type or value")),
+                }
             }
         }
 
-        // Use the visitor for deserialization
-        deserializer.deserialize_any(GameErrorVisitor)
+        deserializer.deserialize_map(GameErrorVisitor)
     }
 }
 
@@ -235,17 +330,15 @@ impl fmt::Display for GameError {
     }
 }
 
-
 ///
 /// Connected users are must be actively connected to the system and particpate in long_polling
 /// LocalUsers do not, and instead get messages on the creators thread.  Only local users for the creater
 /// should be shown by the client
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "PascalCase")]
- pub enum UserType {
+pub enum UserType {
     Connected,
     Local,
-
 }
 
 ///
@@ -356,7 +449,6 @@ impl ClientUser {
         }
     }
 }
-
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Display)]
 pub enum ResponseType {
@@ -484,8 +576,9 @@ impl ServiceResponse {
     }
 
     pub fn to_http_response(&self) -> HttpResponse {
-        let status_code = self.status;
-        let response = HttpResponse::build(status_code).json(self);
+        let serialized = serde_json::to_string(self).expect("Failed to serialize ServiceResponse");
+
+        let response = HttpResponse::build(self.status).body(serialized);
         response
     }
 
@@ -726,7 +819,7 @@ impl Default for ServiceConfig {
             test_email: String::default(),
             service_email: String::default(),
             name_value_map: HashMap::<String, String>::new(),
-            admin_email: String::default()
+            admin_email: String::default(),
         }
     }
 }

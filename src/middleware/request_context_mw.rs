@@ -2,7 +2,7 @@
 use crate::cosmos_db::cosmosdb::{UserDb, UserDbTrait};
 use crate::cosmos_db::mocked_db::TestDb;
 use crate::games_service::game_container::game_messages::GameHeader;
-use crate::shared::service_models::Claims;
+use crate::shared::service_models::{Claims, Role};
 use crate::shared::shared_models::ServiceConfig;
 /**
  *  this file contains the middleware that injects ServiceContext into the Request.  The data in RequestContext is the
@@ -76,7 +76,9 @@ impl RequestContext {
             claims: claims.clone()
         }
     }
-
+    pub fn set_claims(&mut self, claims: &Claims) {
+        self.claims = Some(claims.clone());
+    }
     pub fn test_default(use_cosmos: bool) -> Self {
         RequestContext::new(&None, &Some(TestContext::new(use_cosmos)), &SERVICE_CONFIG)
     }
@@ -105,6 +107,15 @@ impl RequestContext {
             None => self.config.cosmos_database_name.clone(),
         }
     }
+
+    pub fn is_caller_in_role(&self, role: Role) -> bool {
+        match self.claims.clone() {
+            Some(c) => c.roles.contains(&role),
+            None => false
+        }
+       
+    }
+
 }
 impl FromRequest for RequestContext {
     type Error = Error;
@@ -177,17 +188,12 @@ where
                 .and_then(|value| serde_json::from_str::<TestContext>(value).ok())
         });
 
-        let claims = req.headers().get(GameHeader::CLAIMS).and_then(|claims_header| {
-            claims_header
-                .to_str()
-                .ok()
-                .and_then(|value| serde_json::from_str::<Claims>(value).ok())
-        });
+        
 
-        // Create RequestContext by combining environment and test context
-        let request_context = RequestContext::new(&claims, &test_context, &SERVICE_CONFIG);
+        // Create RequestContext  - RequestContext runs *before* auth_mw, so claims are always None here
+        let request_context = RequestContext::new(&None, &test_context, &SERVICE_CONFIG);
 
-        // now that we know what database to talk to 
+        // now we know what database to talk to!
 
         // Attach the RequestContext to the request's extensions
         req.extensions_mut().insert(request_context);

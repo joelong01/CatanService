@@ -13,7 +13,7 @@ use actix_web::{
 };
 use reqwest::StatusCode;
 
-use super::users::{login, register, verify_cosmosdb};
+use super::users::{login, register, verify_cosmosdb, register_test_user};
 
 /**
  * Handlers for the "user" service.
@@ -39,6 +39,19 @@ pub async fn register_handler(
 ) -> impl Responder {
     let password = get_header_value!(password, headers);
     register(&password, &profile_in, &request_context)
+        .await
+        .map(|sr| sr.to_http_response())
+        .unwrap_or_else(|sr| sr.to_http_response())
+}
+
+pub async fn register_test_user_handler(
+    profile_in: web::Json<UserProfile>,
+    request_context: RequestContext,
+    headers: HeadersExtractor,
+) -> impl Responder {
+    let password = get_header_value!(password, headers);
+    
+    register_test_user(&password, &profile_in, &request_context)
         .await
         .map(|sr| sr.to_http_response())
         .unwrap_or_else(|sr| sr.to_http_response())
@@ -112,10 +125,7 @@ pub async fn find_user_by_id_handler(
 }
 
 // Delete user
-pub async fn delete_handler(
-    request_context: RequestContext,
-) -> HttpResponse {
-   
+pub async fn delete_handler(request_context: RequestContext) -> HttpResponse {
     super::users::delete(&request_context)
         .await
         .map(|sr| sr.to_http_response())
@@ -149,11 +159,9 @@ pub fn create_http_response(status_code: StatusCode, message: &str, body: &str) 
 }
 
 pub async fn validate_phone_handler(
-  
     code: web::Path<String>,
     request_context: RequestContext,
 ) -> HttpResponse {
-
     super::users::validate_phone(&code, &request_context)
         .await
         .map(|sr| sr.to_http_response())

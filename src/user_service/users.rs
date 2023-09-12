@@ -115,21 +115,10 @@ pub async fn verify_cosmosdb(context: &RequestContext) -> Result<ServiceResponse
     ))
 }
 
-/// Registers a new user by hashing the provided password and creating a `PersistUser` record in the database.
-///
-/// # Arguments
-///
-/// * `profile_in` - UserProfile object
-/// * `data` - `ServiceEnvironmentContext` data.
-/// * `is_test` - test header set?
-/// & `pwd_header_val` - the Option<> for the HTTP header containing the passwrod
-///
-/// # Returns
-/// Body contains a ClientUser (an id + profile)
-/// Returns an ServiceResponse indicating the success or failure of the registration process.
-pub async fn register(
+async fn internal_register_user(
     password: &str,
     profile_in: &UserProfile,
+    roles: &mut Vec<Role>,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
     if let Some(_) = request_context
@@ -137,17 +126,14 @@ pub async fn register(
         .find_user_by_email(&profile_in.email)
         .await?
     {
-        return Ok(ServiceResponse::new(
+        return Err(ServiceResponse::new(
             "User already exists",
             StatusCode::CONFLICT,
             ResponseType::NoData,
             GameError::HttpError(StatusCode::CONFLICT),
         ));
     }
-
-    let mut roles = vec![Role::User];
-
-    // this lets us bootstrap the system -- my assumption is that if you can set the environment variable, then you are
+ // this lets us bootstrap the system -- my assumption is that if you can set the environment variable, then you are
     // an admin.
     if profile_in.email == request_context.config.admin_email {
         if request_context.is_test() {
@@ -181,11 +167,52 @@ pub async fn register(
     // ignore the game stats passed in by the client and create a new one
     persist_user.user_profile.games_played = Some(0);
     persist_user.user_profile.games_won = Some(0);
-    persist_user.roles = roles;
+    persist_user.roles = roles.clone();
     request_context
         .database
         .update_or_create_user(&persist_user)
         .await
+}
+
+/// Registers a new user by hashing the provided password and creating a `PersistUser` record in the database.
+///
+/// # Arguments
+///
+/// * `profile_in` - UserProfile object
+/// * `data` - `ServiceEnvironmentContext` data.
+/// * `is_test` - test header set?
+/// & `pwd_header_val` - the Option<> for the HTTP header containing the passwrod
+///
+/// # Returns
+/// Body contains a ClientUser (an id + profile)
+/// Returns an ServiceResponse indicating the success or failure of the registration process.
+pub async fn register(
+    password: &str,
+    profile_in: &UserProfile,
+    request_context: &RequestContext,
+) -> Result<ServiceResponse, ServiceResponse> {
+    
+
+    internal_register_user(password, profile_in, &mut vec![Role::User], request_context).await
+
+}
+///
+/// the big difference between register_user and register_test_user is that the latter is authenticated and only
+/// somebody in the admin group can add a test user.
+pub async fn register_test_user(
+    password: &str,
+    profile_in: &UserProfile,
+    request_context: &RequestContext,
+) -> Result<ServiceResponse, ServiceResponse> {
+    if !request_context.is_caller_in_role(Role::Admin) {
+        return Err(ServiceResponse::new(
+            "Must be a Admin",
+            StatusCode::UNAUTHORIZED,
+            ResponseType::NoData,
+            GameError::HttpError(StatusCode::UNAUTHORIZED),
+        ));
+    }
+    internal_register_user(password, profile_in, &mut vec![Role::User, Role::TestUser], request_context).await
 }
 
 /**
@@ -257,7 +284,7 @@ pub async fn login(
                     "",
                     StatusCode::OK,
                     ResponseType::Token(token),
-                    GameError::NoError(String::default()),
+                    GameError::NoError("ok".to_owned()),
                 ))
             }
             Err(e) => {
@@ -451,7 +478,7 @@ pub async fn validate_email(token: &str) -> Result<ServiceResponse, ServiceRespo
 }
 
 //
-//  url is in the form of host://api/v1/users/validate_email/<token>
+//  url is in the form of host://api/v1/users/validate-email/<token>
 pub fn get_validation_url(
     host: &str,
     id: &str,
@@ -465,7 +492,7 @@ pub fn get_validation_url(
     let encoded_token = form_urlencoded::byte_serialize(token.as_bytes()).collect::<String>();
 
     format!(
-        "https://{}/api/v1/users/validate_email/{}",
+        "https://{}/api/v1/users/validate-email/{}",
         host, encoded_token
     )
 }

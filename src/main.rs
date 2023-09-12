@@ -162,7 +162,7 @@ async fn get_version() -> HttpResponse {
  *
  * - Test Setup:
  *   - A special endpoint used only for testing purposes to set up test data.
- *   - URL: `https://localhost:8080/api/v1/test/verify_service`
+ *   - URL: `https://localhost:8080/api/v1/test/verify-service`
  *   - Method: `POST`
  */
 fn create_unauthenticated_service() -> Scope {
@@ -174,9 +174,9 @@ fn create_unauthenticated_service() -> Scope {
                 web::post().to(user_handlers::register_handler),
             )
             .route("/users/login", web::post().to(user_handlers::login_handler))
-            .route("/test/verify_service", web::post().to(user_handlers::verify_handler)) /* TEST ONLY */
+            .route("/test/verify-service", web::post().to(user_handlers::verify_handler)) /* TEST ONLY */
             .route(
-                "/users/validate_email/{token}",
+                "/users/validate-email/{token}",
                 web::get().to(user_handlers::validate_email),
             ),
     )
@@ -214,8 +214,12 @@ fn user_service() -> Scope {
             web::post().to(user_handlers::validate_phone_handler),
         )
         .route(
-            "/phone/send_code",
+            "/phone/send-code",
             web::post().to(user_handlers::send_phone_code_handler),
+        )
+        .route(
+            "/register-test-user",
+            web::post().to(user_handlers::register_test_user_handler),
         )
 }
 
@@ -478,7 +482,7 @@ mod tests {
         let mut app = create_test_service!();
 
         let request = test::TestRequest::post()
-            .uri("/api/v1/test/verify_service")
+            .uri("/api/v1/test/verify-service")
             .to_request();
 
         let response = test::call_service(&mut app, request).await;
@@ -517,7 +521,7 @@ mod tests {
         let auth_token = response.get_token().expect("an auth token!");
 
         let req = test::TestRequest::post()
-            .uri("/auth/api/v1/users/phone/send_code")
+            .uri("/auth/api/v1/users/phone/send-code")
             .append_header((header::CONTENT_TYPE, "application/json"))
             .append_header((GameHeader::TEST, TestContext::as_json(false)))
             .append_header(("Authorization", auth_token.clone()))

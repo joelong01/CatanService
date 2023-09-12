@@ -1,11 +1,14 @@
+use core::panic;
 use std::pin::Pin;
 
 use actix::fut::err;
 use actix_service::{Service, Transform};
-use actix_web::{dev::ServiceRequest, dev::ServiceResponse, error::ErrorUnauthorized, Error};
+use actix_web::{
+    dev::ServiceRequest, dev::ServiceResponse, error::ErrorUnauthorized, Error, HttpMessage,
+};
 
 use crate::{
-    games_service::game_container::game_messages::GameHeader, log_thread_info,
+    log_thread_info,
     user_service::users::validate_jwt_token,
 };
 use futures::{
@@ -13,9 +16,8 @@ use futures::{
     Future,
 };
 
-use reqwest::header::{HeaderName, HeaderValue};
 
-use super::request_context_mw::SERVICE_CONFIG;
+use super::request_context_mw::{RequestContext, SERVICE_CONFIG};
 
 // AuthenticationMiddlewareFactory serves as a factory to create instances of AuthenticationMiddleware
 // which is the actual middleware component. It implements the Transform trait required by
@@ -70,21 +72,23 @@ where
     // It intercepts each request, checks for the presence and validity of the authorization token,
     // and if the token is missing or invalid, immediately responds with an Unauthorized error.
     // This will also add headers for user_id and email for downstream handlers
-    fn call(&self, mut req: ServiceRequest) -> Self::Future {
+    fn call(&self, req: ServiceRequest) -> Self::Future {
         // fetch the authorization header
         let auth_header = req.headers().get("Authorization");
 
         match auth_header {
             Some(header_value) => {
                 let token_str = header_value.to_str().unwrap_or("").replace("Bearer ", "");
-                if let Some(claims) = validate_jwt_token(&token_str, &SERVICE_CONFIG.login_secret_key) {
-                    // Extract the id and sub from the claims
-                    let claims_json = serde_json::to_string(&claims.claims).expect("serialization of claims cannot fail");
-                    req.headers_mut().insert(
-                        HeaderName::from_static(GameHeader::ROLES),
-                        HeaderValue::from_str(&claims_json).unwrap(),
-                    );
-
+                if let Some(claims) =
+                    validate_jwt_token(&token_str, &SERVICE_CONFIG.login_secret_key)
+                {
+                    // add the claims to the RequestContext
+                    if let Some(request_context) = req.extensions_mut().get_mut::<RequestContext>()
+                    {
+                        request_context.set_claims(&claims.claims);
+                    } else {
+                        panic!("you are running a route that has authentication but not service config!")
+                    }
                 } else {
                     log_thread_info!("auth_mw", "rejected call: {:#?}", req.request());
                     let fut = err(ErrorUnauthorized("Unauthorized"));
