@@ -1,13 +1,11 @@
 #![allow(dead_code)]
 
 use actix_web::HttpResponse;
-use azure_core::error::ErrorKind;
+
 /**
  * this is the module where I define the structures needed for the data in Cosmos
  */
 use reqwest::StatusCode;
-use serde::de::{self, Deserializer, Error, Visitor};
-use serde::ser::{SerializeStruct, Serializer};
 use serde::{Deserialize, Serialize};
 use strum_macros::Display;
 
@@ -22,13 +20,13 @@ use crate::games_service::{
     game_container::game_messages::CatanMessage,
     shared::game_enums::{CatanGames, GameAction},
 };
-use crate::macros::convert_status_code;
+
 
 use super::service_models::PersistUser;
 
 //
 //  this also supports Eq, PartialEq, Clone, Serialize, and Deserialize via custom implementation
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Clone)]
 pub enum GameError {
     MissingData(String),
     BadActionData(String),
@@ -40,78 +38,13 @@ pub enum GameError {
     TooManyPlayers(usize),
     ReqwestError(String),
     NoError(String),
+    #[serde(serialize_with = "serialize_status_code")]
+    #[serde(deserialize_with = "deserialize_status_code")]
     HttpError(reqwest::StatusCode),
     AzError(String),
-    SerdeError(serde_json::Error),
-    AzureCoreError(azure_core::Error),
+    SerdeError(String),
+    AzureCoreError(String),
 }
-impl PartialEq for GameError {
-    fn eq(&self, other: &Self) -> bool {
-        use GameError::*;
-        match (self, other) {
-            (MissingData(a), MissingData(b)) => a == b,
-            (BadActionData(a), BadActionData(b)) => a == b,
-            (SerdeError(a), SerdeError(b)) => a.to_string() == b.to_string(),
-
-            (BadId(a), BadId(b)) => a == b,
-
-            (ChannelError(a), ChannelError(b)) => a == b,
-
-            (AlreadyExists(a), AlreadyExists(b)) => a == b,
-
-            (ActionError(a), ActionError(b)) => a == b,
-
-            (TooFewPlayers(a), TooFewPlayers(b)) => a == b,
-
-            (TooManyPlayers(a), TooManyPlayers(b)) => a == b,
-
-            (ReqwestError(a), ReqwestError(b)) => a == b,
-
-            (HttpError(a), HttpError(b)) => a == b,
-
-            (AzError(a), AzError(b)) => a == b,
-
-            (AzureCoreError(a), AzureCoreError(b)) => {
-                format!("{:#?}", a) == format!("{:#?}", b) // this is likely not a good idea...
-            }
-            _ => false,
-        }
-    }
-}
-impl Clone for GameError {
-    fn clone(&self) -> Self {
-        match self {
-            GameError::MissingData(s) => GameError::MissingData(s.clone()),
-            GameError::BadActionData(s) => GameError::BadActionData(s.clone()),
-            GameError::BadId(s) => GameError::BadId(s.clone()),
-            GameError::ChannelError(s) => GameError::ChannelError(s.clone()),
-            GameError::AlreadyExists(s) => GameError::AlreadyExists(s.clone()),
-            GameError::ActionError(s) => GameError::ActionError(s.clone()),
-            GameError::TooFewPlayers(n) => GameError::TooFewPlayers(*n),
-            GameError::TooManyPlayers(n) => GameError::TooManyPlayers(*n),
-            GameError::ReqwestError(s) => GameError::ReqwestError(s.clone()),
-            GameError::NoError(s) => GameError::NoError(s.clone()),
-            GameError::HttpError(status) => GameError::HttpError(*status),
-            GameError::AzError(s) => GameError::AzError(s.clone()),
-            GameError::SerdeError(err) => {
-                // Example of converting serde error to string and back.
-                // This is lossy!
-                let err_str = err.to_string();
-                GameError::SerdeError(
-                    serde_json::from_str::<serde_json::Value>(&err_str).unwrap_err(),
-                )
-            }
-            GameError::AzureCoreError(_) => {
-                // Here you might need a similar approach as with the serde error
-                // if azure_core::Error doesn't have a direct clone mechanism.
-                // For the purpose of this example, we'll just panic.
-                panic!("AzureCoreError cannot be cloned directly")
-            }
-        }
-    }
-}
-
-impl Eq for GameError {}
 
 // we need a From<> for each error type we add to use the error propagation ?
 impl From<reqwest::Error> for GameError {
@@ -122,186 +55,19 @@ impl From<reqwest::Error> for GameError {
 
 impl From<serde_json::Error> for GameError {
     fn from(err: serde_json::Error) -> Self {
-        GameError::SerdeError(err)
+        GameError::SerdeError(err.to_string())
     }
 }
 
 impl From<azure_core::Error> for GameError {
     fn from(err: azure_core::Error) -> Self {
-        GameError::AzureCoreError(err)
+        GameError::AzureCoreError(err.to_string())
     }
 }
 
 impl From<std::io::Error> for GameError {
     fn from(err: std::io::Error) -> Self {
         GameError::AzError(format!("{:#?}", err))
-    }
-}
-
-impl std::error::Error for GameError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            GameError::SerdeError(e) => Some(e),
-            GameError::AzureCoreError(e) => Some(e),
-
-            _ => None,
-        }
-    }
-}
-
-impl Serialize for GameError {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut state = serializer.serialize_struct("GameError", 2)?;
-        match self {
-            GameError::HttpError(status_code) => {
-                state.serialize_field("type", "HttpError")?;
-                state.serialize_field("value", &status_code.as_u16())?;
-            }
-            GameError::NoError(msg) => {
-                state.serialize_field("type", "NoError")?;
-                state.serialize_field("value", msg)?;
-            }
-            GameError::MissingData(msg) => {
-                state.serialize_field("type", "MissingData")?;
-                state.serialize_field("value", msg)?;
-            }
-            GameError::BadActionData(msg) => {
-                state.serialize_field("type", "BadActionData")?;
-                state.serialize_field("value", msg)?;
-            }
-            GameError::BadId(msg) => {
-                state.serialize_field("type", "BadId")?;
-                state.serialize_field("value", msg)?;
-            }
-            GameError::ChannelError(msg) => {
-                state.serialize_field("type", "ChannelError")?;
-                state.serialize_field("value", msg)?;
-            }
-            GameError::AlreadyExists(msg) => {
-                state.serialize_field("type", "AlreadyExists")?;
-                state.serialize_field("value", msg)?;
-            }
-            GameError::ActionError(msg) => {
-                state.serialize_field("type", "ActionError")?;
-                state.serialize_field("value", msg)?;
-            }
-            GameError::ReqwestError(msg) => {
-                state.serialize_field("type", "ReqwestError")?;
-                state.serialize_field("value", msg)?;
-            }
-            GameError::AzError(msg) => {
-                state.serialize_field("type", "AzError")?;
-                state.serialize_field("value", msg)?;
-            }
-            GameError::TooFewPlayers(count) => {
-                state.serialize_field("type", "TooFewPlayers")?;
-                state.serialize_field("value", count)?;
-            }
-            GameError::TooManyPlayers(count) => {
-                state.serialize_field("type", "TooManyPlayers")?;
-                state.serialize_field("value", count)?;
-            }
-            GameError::SerdeError(e) => {
-                state.serialize_field("type", "SerdeError")?;
-                state.serialize_field("value", &format!("{:#?}", e))?;
-            }
-            GameError::AzureCoreError(e) => {
-                state.serialize_field("type", "AzureCoreError")?;
-                state.serialize_field("value", &format!("{:#?}", e))?;
-            }
-        }
-        
-        state.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for GameError {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct GameErrorVisitor;
-
-        impl<'de> Visitor<'de> for GameErrorVisitor {
-            type Value = GameError;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("a struct representing GameError")
-            }
-
-            fn visit_map<V>(self, mut map: V) -> Result<GameError, V::Error>
-            where
-                V: de::MapAccess<'de>,
-            {
-                let mut error_type: Option<String> = None;
-                let mut value: Option<String> = None;
-
-                while let Some(key) = map.next_key::<String>()? {
-                    if key == "type" {
-                        error_type = map.next_value()?;
-                    } else if key == "value" {
-                        value = map.next_value()?;
-                    }
-                }
-
-                match (error_type, value) {
-                    (Some(ref t), Some(ref v)) if t == "HttpError" => {
-                        let code = v.parse::<u16>().map_err(de::Error::custom)?;
-                        Ok(GameError::HttpError(
-                            reqwest::StatusCode::from_u16(code).map_err(de::Error::custom)?,
-                        ))
-                    }
-                    (Some(ref t), Some(ref v)) if t == "NoError" => {
-                        Ok(GameError::NoError(v.clone()))
-                    }
-                    (Some(ref t), Some(ref v)) if t == "MissingData" => {
-                        Ok(GameError::MissingData(v.clone()))
-                    }
-                    (Some(ref t), Some(ref v)) if t == "BadActionData" => {
-                        Ok(GameError::BadActionData(v.clone()))
-                    }
-                    (Some(ref t), Some(ref v)) if t == "BadId" => Ok(GameError::BadId(v.clone())),
-                    (Some(ref t), Some(ref v)) if t == "ChannelError" => {
-                        Ok(GameError::ChannelError(v.clone()))
-                    }
-                    (Some(ref t), Some(ref v)) if t == "AlreadyExists" => {
-                        Ok(GameError::AlreadyExists(v.clone()))
-                    }
-                    (Some(ref t), Some(ref v)) if t == "ActionError" => {
-                        Ok(GameError::ActionError(v.clone()))
-                    }
-                    (Some(ref t), Some(ref v)) if t == "ReqwestError" => {
-                        Ok(GameError::ReqwestError(v.clone()))
-                    }
-                    (Some(ref t), Some(ref v)) if t == "AzError" => {
-                        Ok(GameError::AzError(v.clone()))
-                    }
-                    (Some(ref t), Some(ref v)) if t == "SerdeError" => {
-                        Ok(GameError::SerdeError(serde_json::Error::custom(v.clone())))
-                    } // This is a placeholder. Actual deserialization might be more involved.
-                    (Some(ref t), Some(ref v)) if t == "AzureCoreError" => {
-                        Ok(GameError::AzureCoreError(azure_core::Error::new(
-                            ErrorKind::Other,
-                            v.clone(),
-                        )))
-                    } // This is a placeholder. Actual deserialization might be more involved.
-                    (Some(ref t), Some(ref v)) if t == "TooFewPlayers" => {
-                        let count = v.parse::<usize>().map_err(de::Error::custom)?;
-                        Ok(GameError::TooFewPlayers(count))
-                    }
-                    (Some(ref t), Some(ref v)) if t == "TooManyPlayers" => {
-                        let count = v.parse::<usize>().map_err(de::Error::custom)?;
-                        Ok(GameError::TooManyPlayers(count))
-                    }
-                    _ => Err(de::Error::missing_field("type or value")),
-                }
-            }
-        }
-
-        deserializer.deserialize_map(GameErrorVisitor)
     }
 }
 
@@ -489,50 +255,18 @@ impl Display for ServiceResponse {
     }
 }
 
-impl From<GameError> for ServiceResponse {
-    fn from(err: GameError) -> Self {
-        let (message, status, response_type) = match &err {
-            GameError::SerdeError(e) => (
-                format!("Serde error: {}", e),
-                reqwest::StatusCode::BAD_REQUEST,
-                ResponseType::ErrorInfo(format!("Serde error: {:#?}", e)),
-            ),
-            GameError::AzureCoreError(e) => {
-                let status_code = match e.as_http_error() {
-                    Some(http_err) => convert_status_code(http_err.status()),
-                    None => reqwest::StatusCode::INTERNAL_SERVER_ERROR,
-                };
-
-                (
-                    format!("Azure error: {}", e),
-                    status_code,
-                    ResponseType::ErrorInfo(format!("Azure error: {:#?}", e)),
-                )
-            }
-            GameError::ReqwestError(e) => {
-                let error_msg = e.clone();
-                (
-                    error_msg.clone(),
-                    reqwest::StatusCode::INTERNAL_SERVER_ERROR,
-                    ResponseType::ErrorInfo(error_msg),
-                )
-            }
-            // ... Add handling for other error variants...
-            _ => (
-                format!("Unknown error"),
-                reqwest::StatusCode::INTERNAL_SERVER_ERROR,
-                ResponseType::ErrorInfo("Unknown error".into()),
-            ),
-        };
-
-        ServiceResponse {
-            message,
-            status,
-            response_type,
-            game_error: err,
-        }
+impl From<serde_json::Error> for ServiceResponse {
+    fn from(err: serde_json::Error) -> Self {
+        ServiceResponse::new(
+            "Unable to deserialize response",
+            StatusCode::INTERNAL_SERVER_ERROR,
+            ResponseType::NoData,
+            GameError::SerdeError(err.to_string()),
+        )
     }
 }
+
+
 
 impl ServiceResponse {
     pub fn new(
@@ -671,6 +405,7 @@ impl ServiceResponse {
             _ => None,
         }
     }
+
 }
 fn serialize_status_code<S>(status: &reqwest::StatusCode, serializer: S) -> Result<S::Ok, S::Error>
 where

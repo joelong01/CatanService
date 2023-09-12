@@ -103,9 +103,7 @@ fn verify_login() -> Result<String, ServiceResponse> {
     let args = ["account", "show"];
     print_cmd(&args);
     let output = exec_os(&args)?;
-    let response: Value = serde_json::from_str(&output)
-        .map_err(GameError::from)
-        .map_err(ServiceResponse::from)?;
+    let response: Value = serde_json::from_str(&output)?;
 
     trace!("user already logged into azure");
     if let Some(subscription_id) = response["id"].as_str() {
@@ -124,16 +122,17 @@ fn verify_login() -> Result<String, ServiceResponse> {
         let args = &["account", "show"];
         print_cmd(args);
         let post_output = exec_os(args)?;
-        let post_response: Value = serde_json::from_str(&post_output)
-            .map_err(GameError::from)
-            .map_err(ServiceResponse::from)?;
+        let post_response: Value = serde_json::from_str(&post_output)?;
 
         if let Some(subscription_id) = post_response["id"].as_str() {
             Ok(subscription_id.to_string())
         } else {
-            Err(ServiceResponse::from(GameError::MissingData(
-                "No subscription ID found in Azure CLI response after login.".to_string(),
-            )))
+            Err(ServiceResponse {
+                message: "No subscription ID found in Azure CLI response after login.".to_string(),
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                response_type: ResponseType::NoData,
+                game_error: GameError::AzError(String::default()),
+            })
         }
     }
 }
@@ -157,7 +156,7 @@ pub fn get_azure_token() -> Result<String, ServiceResponse> {
     // this should work, but the compiler is having trouble resolving the "From chain" serder_error -> GameError
     // but for whatever reason can go from GameError to ServiceError
     // let json: Value = serde_json::from_str(&output)?;
-    let json: Value = serde_json::from_str(&output).map_err(GameError::from)?;
+    let json: Value = serde_json::from_str(&output).map_err(ServiceResponse::from)?;
 
     match json["accessToken"].as_str() {
         Some(v) => Ok(v.to_string()),
@@ -293,7 +292,7 @@ pub fn is_location_valid(location: &str) -> Result<bool, ServiceResponse> {
     let output = exec_os(&cmd_args)?;
 
     let available_locations =
-        serde_json::from_str::<Vec<Value>>(&output).map_err(GameError::from)?;
+        serde_json::from_str::<Vec<Value>>(&output).map_err(ServiceResponse::from)?;
 
     // Step 3: Update the cache with fetched locations
     let mut new_locations = HashSet::new();
@@ -337,7 +336,12 @@ fn exec_os(args: &[&str]) -> Result<String, ServiceResponse> {
 
     let output = command
         .output()
-        .map_err(|err| GameError::AzError(format!("Failed to execute command: {:?}", err)))?;
+        .map_err(|err| ServiceResponse{
+            message: format!("Failed to execute command: {:?}", err),
+            status: StatusCode::BAD_REQUEST,
+            response_type: ResponseType::AzError(err.to_string()),
+            game_error: GameError::AzError(err.to_string()),
+        })?;
 
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())
@@ -508,7 +512,7 @@ pub fn store_cosmos_secrets_in_keyvault(
     secrets: &CosmosSecret,
     keyvault_name: &str,
 ) -> Result<(), ServiceResponse> {
-    let secrets_json = serde_json::to_string(secrets).map_err(GameError::from)?;
+    let secrets_json = serde_json::to_string(secrets).map_err(ServiceResponse::from)?;
     save_secret(keyvault_name, "cosmos-secrets", &secrets_json)?;
     Ok(())
 }
@@ -835,7 +839,7 @@ pub fn get_secret(keyvault_name: &str, secret_name: &str) -> Result<String, Serv
 
     // Parse the top-level JSON
     let top_level: serde_json::Value =
-        serde_json::from_str(&secret_json).map_err(GameError::from)?;
+        serde_json::from_str(&secret_json).map_err(ServiceResponse::from)?;
 
     // Extract the 'value' field from the JSON.
     let answer: Result<String, ServiceResponse> = top_level["value"]
@@ -888,7 +892,6 @@ pub fn send_text_message(to: &str, msg: &str) -> Result<ServiceResponse, Service
         ResponseType::NoData,
         GameError::NoError(String::default()),
     ))
-    
 }
 
 /// Sends an email using Azure Communication Services.
@@ -1031,7 +1034,6 @@ pub fn send_email_test() {
 }
 
 pub fn cleanup_randomized_resource_groups() {
-    
     let args = ["group", "list"];
     print_cmd(&args);
 
@@ -1069,8 +1071,6 @@ pub fn azure_resources_integration_test() {
             log::LevelFilter::Info,
             log::LevelFilter::Error,
         ));
-
-    
 
     // make sure the user is logged in
 
@@ -1193,13 +1193,19 @@ fn database_exits() {
             log::LevelFilter::Error,
         ));
 
-    let exists = cosmos_account_exists(&SERVICE_CONFIG.cosmos_account, &SERVICE_CONFIG.resource_group)
-        .expect("should work");
+    let exists = cosmos_account_exists(
+        &SERVICE_CONFIG.cosmos_account,
+        &SERVICE_CONFIG.resource_group,
+    )
+    .expect("should work");
 
     assert!(exists);
 
-    let exists = cosmos_account_exists(&SERVICE_CONFIG.cosmos_account, "TEST-RG-2193472304723089487")
-        .expect("should work - but not exist");
+    let exists = cosmos_account_exists(
+        &SERVICE_CONFIG.cosmos_account,
+        "TEST-RG-2193472304723089487",
+    )
+    .expect("should work - but not exist");
 
     assert!(!exists);
 
