@@ -27,17 +27,20 @@ impl ClientThreadHandler for Handler1 {
     }
 }
 pub(crate) async fn client1_thread(mut rx: Receiver<CatanMessage>) {
-    let proxy = ServiceProxy::new(Some(TestContext{use_cosmos_db: false}), HOST_URL);
-    let auth_token = proxy
-        .login("james@longshotdev.com", "password")
-        .await
-        .get_token()
-        .expect("successful login should have a JWT token in the ServiceResponse");
-
+    let proxy = ServiceProxy::new(
+        "james@longshotdev.com",
+        "password", Some(TestContext {
+            use_cosmos_db: false,
+        }),
+        HOST_URL,
+    )
+    .await
+    .expect("Loging to work");
+   
     let name = "James";
 
     let my_info: ClientUser = proxy
-        .get_profile(&auth_token)
+        .get_profile()
         .await
         .get_client_user()
         .expect("Successful call to get_profile should have a ClientUser in the body");
@@ -63,7 +66,7 @@ pub(crate) async fn client1_thread(mut rx: Receiver<CatanMessage>) {
     if let CatanMessage::Invite(invite) = message.clone() {
         let response = InvitationResponseData::from_invitation(true, &invite);
         proxy
-            .invitation_response(&response, &auth_token)
+            .invitation_response(&response)
             .await
             .assert_success("accept invite should succeed)");
         game_id = invite.game_id.clone();

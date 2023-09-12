@@ -221,6 +221,10 @@ fn user_service() -> Scope {
             "/register-test-user",
             web::post().to(user_handlers::register_test_user_handler),
         )
+        .route(
+            "/rotate-login-keys",
+            web::post().to(user_handlers::rotate_login_keys_handler),
+        )
 }
 
 /**
@@ -355,7 +359,9 @@ mod tests {
     use log::trace;
     use reqwest::StatusCode;
 
-    #[actix_rt::test]
+
+
+    #[tokio::test]
     async fn test_version_and_log_intialized() {
         init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Error).await;
         init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Error).await;
@@ -370,7 +376,7 @@ mod tests {
         assert_eq!(body, "version 1.0");
     }
 
-    #[actix_rt::test]
+    #[tokio::test]
     async fn create_user_login_check_profile() {
         let mut app = create_test_service!();
         setup_test!(&app, false);
@@ -477,7 +483,7 @@ mod tests {
             "profile returned by service different than the one sent in"
         );
     }
-    #[actix_rt::test]
+    #[tokio::test]
     async fn test_setup_no_test_header() {
         let mut app = create_test_service!();
 
@@ -490,7 +496,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 
-    #[actix_rt::test]
+    #[tokio::test]
     pub async fn find_or_create_test_db() {
         let app = create_test_service!();
         setup_test!(&app, false);
@@ -544,7 +550,7 @@ mod tests {
         let response = test::call_service(&mut app, req).await;
         assert_eq!(response.status(), 200);
     }
-    #[actix_rt::test]
+    #[tokio::test]
     async fn test_setup() {
         init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Trace).await;
         setup_cosmos().expect("can't continue if setup fails!");

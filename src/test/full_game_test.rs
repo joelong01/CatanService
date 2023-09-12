@@ -69,7 +69,7 @@ pub mod test {
         //
         //  setup the test database
         trace_thread_info!("test_thread", "setting up service");
-        let proxy = ServiceProxy::new(Some(TestContext{use_cosmos_db: false}), HOST_URL);
+        let proxy = ServiceProxy::new_non_auth(Some(TestContext{use_cosmos_db: false}), HOST_URL);
         let response = proxy.setup().await;
         response.assert_success("setup should not fail");
         assert!(response.status.is_success(), "error: {:#?}", response);
@@ -81,16 +81,10 @@ pub mod test {
         let test_users: Vec<ClientUser> = register_test_users(*CLIENT_COUNT).await;
         assert_eq!(test_users.len(), *CLIENT_COUNT);
 
-        // login and get auth_token
-        let auth_token = proxy
-            .login("joe@longshotdev.com", "password")
-            .await
-            .get_token()
-            .expect("successful login should have a JWT token in the ServiceResponse");
-
+       
         // start a game
         let returned_game = proxy
-            .new_game(CatanGames::Regular, &auth_token, None)
+            .new_game(CatanGames::Regular,  None)
             .await
             .get_game()
             .expect("Should have a RegularGame returned in the body");
@@ -118,7 +112,7 @@ pub mod test {
         //
         //  setup the test database
         trace_thread_info!("test_thread", "setting up service");
-        let proxy = ServiceProxy::new(Some(TestContext{use_cosmos_db: false}), HOST_URL);
+        let proxy = ServiceProxy::new_non_auth(Some(TestContext{use_cosmos_db: false}), HOST_URL);
         let response = proxy.setup().await;
         response.assert_success("setup should not fail");
         assert!(response.status.is_success(), "error: {:#?}", response);
@@ -236,7 +230,7 @@ pub mod test {
 
     async fn register_test_users(count: usize) -> Vec<ClientUser> {
         let mut test_users: Vec<ClientUser> = Vec::new();
-        let proxy = ServiceProxy::new(Some(TestContext{use_cosmos_db: false}), HOST_URL);
+        let proxy = ServiceProxy::new_non_auth(Some(TestContext{use_cosmos_db: false}), HOST_URL);
         let first_names = vec!["Joe", "James", "Doug"];
         let last_names = vec!["Winner", "Loser", "Longestroad"];
         let email_names = vec![

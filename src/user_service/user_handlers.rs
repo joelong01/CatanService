@@ -175,3 +175,13 @@ pub async fn send_phone_code_handler(
         .map(|sr| sr.to_http_response())
         .unwrap_or_else(|sr| sr.to_http_response())
 }
+
+pub async fn rotate_login_keys_handler(
+    request_context: RequestContext,
+) -> HttpResponse {
+
+    super::users::rotate_login_keys(&request_context)
+        .await
+        .map(|sr| sr.to_http_response())
+        .unwrap_or_else(|sr| sr.to_http_response())
+}

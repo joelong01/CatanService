@@ -1,20 +1,23 @@
 #![allow(dead_code)]
 use crate::{
     games_service::game_container::game_messages::CatanMessage,
-    shared::{shared_models::ClientUser, proxy::ServiceProxy},
+    middleware::request_context_mw::TestContext,
+    shared::{proxy::ServiceProxy, shared_models::ClientUser},
     test::test_structs::HOST_URL,
-    trace_thread_info, middleware::request_context_mw::TestContext,
+    trace_thread_info,
 };
 pub async fn game_poller(username: &str, tx: tokio::sync::mpsc::Sender<CatanMessage>) {
-    let proxy = ServiceProxy::new(Some(TestContext{use_cosmos_db: false}), HOST_URL);
-    let auth_token = &proxy
-        .login(username, "password")
-        .await
-        .get_token()
-        .expect("Login should work!");
-
+    let proxy = ServiceProxy::new(
+        username,
+        "password",
+        Some(TestContext {
+            use_cosmos_db: false,
+        }),
+        HOST_URL,
+    ).await.expect("login needs to work for test to run!");
+   
     let client_user: ClientUser = proxy
-        .get_profile(&auth_token)
+        .get_profile()
         .await
         .get_client_user()
         .expect("Client User should deserialize");
@@ -32,7 +35,7 @@ pub async fn game_poller(username: &str, tx: tokio::sync::mpsc::Sender<CatanMess
         trace_thread_info!(name, "Begin poll. GameId: {}", game_id);
 
         let message = proxy
-            .long_poll(&game_id, auth_token, index)
+            .long_poll(&game_id, index)
             .await
             .get_service_message()
             .expect("long_poll should have a message in the body");

@@ -45,7 +45,7 @@ pub struct RequestContext {
 
 impl Clone for RequestContext {
     fn clone(&self) -> Self {
-        log::error!("Cloning Request Context");
+        log::trace!("Cloning Request Context");
         RequestContext::new(&self.claims, &self.test_context, &SERVICE_CONFIG) 
     }
 }
