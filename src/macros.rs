@@ -43,16 +43,39 @@ macro_rules! log_return_err {
 }
 
 #[macro_export]
-macro_rules! log_return_unexpected_server_error {
+macro_rules! new_unexpected_server_error {
     ( $e:expr, $msg:expr ) => {{
-        log::error!("\t{}\n {:#?}", $e, $e);
-        return Err(ServiceResponse::new(
+        log::error!("\t{}\n {:#?}", $msg, $e);
+        Err(ServiceResponse::new(
             $msg,
             StatusCode::INTERNAL_SERVER_ERROR,
             ResponseType::ErrorInfo(format!("Error: {}", $e)),
             GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
         ));
     }};
+}
+
+#[macro_export]
+macro_rules! new_ok_response {
+    ($msg:expr) => {
+        Ok(ServiceResponse::new(
+            $msg,
+            StatusCode::OK,
+            ResponseType::NoData,
+            GameError::NoError(String::default()),
+        ))
+    };
+}
+
+#[macro_export]
+macro_rules! new_unauthorized_response {
+    ($msg:expr) => {
+        Err(ServiceResponse::new(
+            $msg,
+            StatusCode::UNAUTHORIZED,
+            ResponseType::NoData,
+            GameError::HttpError(StatusCode::UNAUTHORIZED)))
+    };
 }
 
 #[macro_export]

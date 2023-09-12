@@ -5,8 +5,8 @@ use rand::{Rng, RngCore};
 use url::form_urlencoded;
 
 use crate::azure_setup::azure_wrapper::{
-    cosmos_account_exists, cosmos_collection_exists, cosmos_database_exists, send_email,
-    send_text_message,
+    cosmos_account_exists, cosmos_collection_exists, cosmos_database_exists, get_secret,
+    keyvault_exists, save_secret, send_email, send_text_message, verify_login_or_panic,
 };
 use crate::middleware::service_config::SERVICE_CONFIG;
 use crate::shared::service_models::{Claims, PersistUser, Role};
@@ -14,7 +14,7 @@ use crate::shared::service_models::{Claims, PersistUser, Role};
  * this module implements the WebApi to create the database/collection, list all the users, and to create/find/delete
  * a User document in CosmosDb
  */
-use crate::{full_info, trace_function};
+use crate::{full_info, trace_function, new_ok_response, new_unauthorized_response};
 
 use crate::games_service::long_poller::long_poller::LongPoller;
 
@@ -30,6 +30,13 @@ use jsonwebtoken::{
 
 use reqwest::StatusCode;
 
+pub struct LoginKeys;
+
+impl LoginKeys {
+    pub const PRIMARY_KEY: &'static str = "primary-login-key";
+    pub const SECONDARY_KEY: &'static str = "secondary-login-key";
+}
+
 /**
  * this sets up CosmosDb to make the sample run. the only prereq is the secrets set in
  * .devconainter/required-secrets.json, this API will call setupdb. this just calls the setupdb api and deals with errors
@@ -43,12 +50,7 @@ pub async fn verify_cosmosdb(context: &RequestContext) -> Result<ServiceResponse
     let use_cosmos_db = match &context.test_context {
         Some(tc) => tc.use_cosmos_db,
         None => {
-            return Err(ServiceResponse::new(
-                "Test Header must be set",
-                StatusCode::UNAUTHORIZED,
-                ResponseType::NoData,
-                GameError::HttpError(StatusCode::UNAUTHORIZED),
-            ))
+            return new_unauthorized_response!("Test Header must be set");
         }
     };
 
@@ -134,7 +136,7 @@ async fn internal_register_user(
             GameError::HttpError(StatusCode::CONFLICT),
         ));
     }
- // this lets us bootstrap the system -- my assumption is that if you can set the environment variable, then you are
+    // this lets us bootstrap the system -- my assumption is that if you can set the environment variable, then you are
     // an admin.
     if profile_in.email == request_context.config.admin_email {
         if request_context.is_test() {
@@ -192,10 +194,7 @@ pub async fn register(
     profile_in: &UserProfile,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    
-
     internal_register_user(password, profile_in, &mut vec![Role::User], request_context).await
-
 }
 ///
 /// the big difference between register_user and register_test_user is that the latter is authenticated and only
@@ -206,14 +205,15 @@ pub async fn register_test_user(
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
     if !request_context.is_caller_in_role(Role::Admin) {
-        return Err(ServiceResponse::new(
-            "Must be a Admin",
-            StatusCode::UNAUTHORIZED,
-            ResponseType::NoData,
-            GameError::HttpError(StatusCode::UNAUTHORIZED),
-        ));
+        return new_unauthorized_response!("");
     }
-    internal_register_user(password, profile_in, &mut vec![Role::User, Role::TestUser], request_context).await
+    internal_register_user(
+        password,
+        profile_in,
+        &mut vec![Role::User, Role::TestUser],
+        request_context,
+    )
+    .await
 }
 
 /**
@@ -236,12 +236,7 @@ pub async fn login(
     {
         Some(u) => u,
         None => {
-            return Err(ServiceResponse {
-                message: String::default(),
-                status: StatusCode::UNAUTHORIZED,
-                response_type: ResponseType::NoData,
-                game_error: GameError::HttpError(StatusCode::UNAUTHORIZED),
-            });
+            return new_unauthorized_response!("");
         }
     };
 
@@ -298,12 +293,7 @@ pub async fn login(
             }
         }
     } else {
-        return Err(ServiceResponse::new(
-            "invalid password",
-            StatusCode::UNAUTHORIZED,
-            ResponseType::NoData,
-            GameError::HttpError(StatusCode::UNAUTHORIZED),
-        ));
+        return new_unauthorized_response!("");
     }
 }
 
@@ -469,12 +459,7 @@ pub async fn validate_email(token: &str) -> Result<ServiceResponse, ServiceRespo
         user.validated_email = true;
         request_context.database.update_or_create_user(&user).await
     } else {
-        return Err(ServiceResponse::new(
-            "unauthorized",
-            StatusCode::UNAUTHORIZED,
-            ResponseType::NoData,
-            GameError::HttpError(StatusCode::UNAUTHORIZED),
-        ));
+        return new_unauthorized_response!("");
     }
 }
 
@@ -645,6 +630,38 @@ pub async fn validate_phone(
             GameError::HttpError(StatusCode::BAD_REQUEST),
         )),
     }
+}
+
+///
+/// rotates the login keys -- admin only
+///
+
+pub async fn rotate_login_keys(
+    request_context: &RequestContext,
+) -> Result<ServiceResponse, ServiceResponse> {
+
+    if !request_context.is_caller_in_role(Role::Admin){
+         return new_unauthorized_response!("");  
+    }
+
+    let kv_name = request_context.config.kv_name.to_owned();
+    let old_name = "oldLoginSecret-test";
+    let new_name = "currentLoginSecret-test";
+
+    // make sure the user/service is logged in
+    verify_login_or_panic();
+
+    // verify KV exists
+    keyvault_exists(&kv_name).expect(&format!("Failed to find Key Vault named {}.", kv_name));
+
+    let current_primary_login_key = get_secret(&kv_name, LoginKeys::PRIMARY_KEY)?;
+    
+    let new_key = generate_jwt_key();
+
+    save_secret(&kv_name, LoginKeys::SECONDARY_KEY, &current_primary_login_key)?;
+    save_secret(&kv_name, LoginKeys::PRIMARY_KEY, &new_key)?;
+
+    return new_ok_response!("");
 }
 
 #[cfg(test)]

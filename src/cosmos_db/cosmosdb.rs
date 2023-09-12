@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 use crate::{
-    log_and_return_azure_core_error, log_return_unexpected_server_error,
+    log_and_return_azure_core_error,
     shared::shared_models::{
         ClientUser, GameError, ResponseType,
     },
@@ -281,10 +281,12 @@ impl UserDbTrait for UserDb {
                     ResponseType::ClientUser(ClientUser::from_persist_user(user)),
                     GameError::NoError(String::default()),
                 )),
-                Err(e) => log_return_unexpected_server_error!(
-                    e,
-                    "unexpected error serializing user struct"
-                ),
+                Err(e) => return Err(ServiceResponse::new(
+                    "unexpected serde serlialization error",
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    ResponseType::ErrorInfo(format!("Error: {}", e)),
+                    GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
+                ))
             },
             Err(e) => log_and_return_azure_core_error!(e, "update_or_create_user"),
         }
