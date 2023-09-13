@@ -232,7 +232,7 @@ macro_rules! setup_test {
     ($app:expr, $use_cosmos_db:expr) => {{
         use actix_web::http::header;
         use actix_web::test;
-
+        use crate::middleware::request_context_mw::TestContext;
         let test_context = TestContext::new($use_cosmos_db);
         let request = test::TestRequest::post()
             .uri("/api/v1/test/verify-service")

@@ -1,4 +1,3 @@
-use core::panic;
 use std::pin::Pin;
 
 use actix::fut::err;
@@ -7,17 +6,12 @@ use actix_web::{
     dev::ServiceRequest, dev::ServiceResponse, error::ErrorUnauthorized, Error, HttpMessage,
 };
 
-use crate::{
-    log_thread_info,
-    user_service::users::validate_jwt_token,
-};
 use futures::{
     future::{ok, Ready},
     Future,
 };
 
-
-use super::{request_context_mw::RequestContext, service_config::SERVICE_CONFIG};
+use super::request_context_mw::RequestContext;
 
 // AuthenticationMiddlewareFactory serves as a factory to create instances of AuthenticationMiddleware
 // which is the actual middleware component. It implements the Transform trait required by
@@ -78,22 +72,37 @@ where
 
         match auth_header {
             Some(header_value) => {
+                let mut request_context = req.extensions_mut().get_mut::<RequestContext>().expect(
+                    "You configured a route to use authentication, \
+                but not ServiceConfig. This won't work.",
+                ).clone();
                 let token_str = header_value.to_str().unwrap_or("").replace("Bearer ", "");
-                if let Some(claims) =
-                    validate_jwt_token(&token_str, &SERVICE_CONFIG.login_secret_key)
-                {
-                    // add the claims to the RequestContext
-                    if let Some(request_context) = req.extensions_mut().get_mut::<RequestContext>()
-                    {
-                        request_context.set_claims(&claims.claims);
-                    } else {
-                        panic!("you are running a route that has authentication but not service config!")
-                    }
+                // our token validation logic is predicated on knowing the claim set -- Validation, TestUser, or User
+                // but we don't know that until we crack the token to find the claims.  the Test Header will be set
+                // by the client to tell us if this is a test, and Validation does not use the auth_mw...so check for
+                // the test header, and if is there, use a test claim.  if not, use the normal user claim
+                let claims = if request_context.is_test() {
+                    request_context
+                        .security_context
+                        .test_keys
+                        .validate_token(&token_str)
                 } else {
-                    log_thread_info!("auth_mw", "rejected call: {:#?}", req.request());
-                    let fut = err(ErrorUnauthorized("Unauthorized"));
+                    request_context
+                        .security_context
+                        .login_keys
+                        .validate_token(&token_str)
+                };
+
+                if claims.is_none() {
+                    let fut = err::<ServiceResponse<B>, _>(
+                        ErrorUnauthorized("No Authorization Header").into(),
+                    );
                     return Box::pin(fut);
                 }
+
+                let claims = claims.unwrap();
+
+                request_context.set_claims(&claims);
             }
             None => {
                 let fut = err::<ServiceResponse<B>, _>(
@@ -102,7 +111,6 @@ where
                 return Box::pin(fut);
             }
         }
-
         let fut = self.service.call(req);
         Box::pin(fut)
     }

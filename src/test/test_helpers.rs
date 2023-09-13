@@ -4,6 +4,7 @@
 pub mod test {
 
     use crate::middleware::request_context_mw::{RequestContext, TestContext};
+    use crate::middleware::security_context::SecurityContext;
     use crate::middleware::service_config::SERVICE_CONFIG;
     use crate::shared::shared_models::{
         ClientUser, GameError, ResponseType, ServiceResponse, UserProfile,
@@ -110,7 +111,12 @@ pub mod test {
             let admin_pwd = env::var("ADMIN_PASSWORD")
                 .expect("ADMIN_PASSWORD not found in environment - unable to continue");
 
-            let request_context = RequestContext::new(&None, &None, &SERVICE_CONFIG);
+            let request_context = RequestContext::new(
+                &None,
+                &None,
+                &SERVICE_CONFIG,
+                &SecurityContext::cached_secrets(),
+            );
 
             let auth_token = match login(&profile.email, &admin_pwd, &request_context).await {
                 Ok(sr) => sr.get_token(),

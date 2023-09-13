@@ -2,8 +2,8 @@
 use crate::cosmos_db::cosmosdb::{UserDb, UserDbTrait};
 use crate::cosmos_db::mocked_db::TestDb;
 use crate::games_service::game_container::game_messages::GameHeader;
-use crate::shared::service_models::{Claims, Role};
 use crate::middleware::service_config::{ServiceConfig, SERVICE_CONFIG};
+use crate::shared::service_models::{Claims, Role};
 /**
  *  this file contains the middleware that injects ServiceContext into the Request.  The data in RequestContext is the
  *  configuration data necessary for the Service to run -- the secrets loaded from the environment, hard coded strings,
@@ -18,13 +18,7 @@ use futures::future::{ok, Ready};
 use serde::{Deserialize, Serialize};
 use std::task::{Context, Poll};
 
-#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
-#[serde(rename_all = "PascalCase")]
-pub struct Security {
-    pub primary_login_key: String,
-    pub secondary_login_key: String
-}
-
+use super::security_context::SecurityContext;
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 #[serde(rename_all = "PascalCase")]
@@ -48,25 +42,29 @@ pub struct RequestContext {
     pub config: ServiceConfig,
     pub test_context: Option<TestContext>,
     pub database: Box<dyn UserDbTrait>,
-    pub claims: Option<Claims>
-    
+    pub claims: Option<Claims>,
+    pub security_context: SecurityContext,
 }
 
 impl Clone for RequestContext {
     fn clone(&self) -> Self {
         log::trace!("Cloning Request Context");
-        RequestContext::new(&self.claims, &self.test_context, &SERVICE_CONFIG) 
+        RequestContext::new(
+            &self.claims,
+            &self.test_context,
+            &SERVICE_CONFIG,
+            &self.security_context,
+        )
     }
 }
-
 
 impl RequestContext {
     pub fn new(
         claims: &Option<Claims>,
         test_context: &Option<TestContext>,
         service_config: &'static ServiceConfig,
+        security_context: &SecurityContext,
     ) -> Self {
-
         let database: Box<dyn UserDbTrait> = match test_context {
             Some(context) => {
                 if context.use_cosmos_db {
@@ -81,14 +79,20 @@ impl RequestContext {
             config: service_config.clone(), // Clone the read-only environment data
             test_context: test_context.clone(),
             database,
-            claims: claims.clone()
+            claims: claims.clone(),
+            security_context: security_context.clone(),
         }
     }
     pub fn set_claims(&mut self, claims: &Claims) {
         self.claims = Some(claims.clone());
     }
     pub fn test_default(use_cosmos: bool) -> Self {
-        RequestContext::new(&None, &Some(TestContext::new(use_cosmos)), &SERVICE_CONFIG)
+        RequestContext::new(
+            &None,
+            &Some(TestContext::new(use_cosmos)),
+            &SERVICE_CONFIG,
+            &SecurityContext::cached_secrets(),
+        )
     }
 
     pub fn is_test(&self) -> bool {
@@ -119,11 +123,9 @@ impl RequestContext {
     pub fn is_caller_in_role(&self, role: Role) -> bool {
         match self.claims.clone() {
             Some(c) => c.roles.contains(&role),
-            None => false
+            None => false,
         }
-       
     }
-
 }
 impl FromRequest for RequestContext {
     type Error = Error;
@@ -138,13 +140,13 @@ impl FromRequest for RequestContext {
             ok(RequestContext {
                 config: SERVICE_CONFIG.clone(), // Clone the environment variables
                 test_context: None,
-                database: Box::new(UserDb::new(false, &SERVICE_CONFIG)), 
-                claims:None
+                database: Box::new(UserDb::new(false, &SERVICE_CONFIG)),
+                claims: None,
+                security_context: SecurityContext::cached_secrets(),
             })
         }
     }
 }
-
 
 pub struct RequestContextMiddleware;
 
@@ -192,10 +194,13 @@ where
                 .and_then(|value| serde_json::from_str::<TestContext>(value).ok())
         });
 
-        
-
         // Create RequestContext  - RequestContext runs *before* auth_mw, so claims are always None here
-        let request_context = RequestContext::new(&None, &test_context, &SERVICE_CONFIG);
+        let request_context = RequestContext::new(
+            &None,
+            &test_context,
+            &SERVICE_CONFIG,
+            &SecurityContext::cached_secrets(),
+        );
 
         // now we know what database to talk to!
 

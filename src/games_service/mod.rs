@@ -1,6 +1,5 @@
 pub mod buildings;
 pub mod catan_games;
-pub mod catanws;
 pub mod game_handlers;
 
 mod game;
