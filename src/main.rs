@@ -12,6 +12,7 @@ mod user_service;
 
 use actix_web::{web, HttpResponse, HttpServer, Scope};
 
+use cosmos_db::cosmosdb::COLLECTION_NAME_VALUES;
 use games_service::actions::action_handlers;
 use games_service::long_poller::long_poller_handler::long_poll_handler;
 use shared::shared_models::ServiceResponse;
@@ -113,15 +114,15 @@ async fn main() -> std::io::Result<()> {
         &SERVICE_CONFIG.resource_group,
     )?;
 
-    for collection in &SERVICE_CONFIG.cosmos_collections {
+    for collection in COLLECTION_NAME_VALUES.iter() {
         verify_or_create_collection(
             &SERVICE_CONFIG.cosmos_account,
             &SERVICE_CONFIG.cosmos_database_name,
-            &collection,
+            collection.value,
             &SERVICE_CONFIG.resource_group,
         )?;
 
-        let test_name = collection.clone() + "-test";
+        let test_name = format!("{}-test", collection.value);
         verify_or_create_collection(
             &SERVICE_CONFIG.cosmos_account,
             &test_db_name,

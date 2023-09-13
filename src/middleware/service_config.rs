@@ -34,7 +34,7 @@ pub struct ServiceConfig {
     pub cosmos_token: String,
     pub cosmos_account: String,
     pub cosmos_database_name: String,
-    pub cosmos_collections: Vec<String>,
+
 
     pub ssl_key_location: String,
     pub ssl_cert_location: String,
@@ -92,14 +92,6 @@ impl ServiceConfig {
             login_secret_key,
             validation_secret_key,
             cosmos_database_name: cosmos_database,
-            cosmos_collections: vec![
-                "Users-Collection".to_string(),
-                "Game-Collection".to_string(),
-                "Profile-Collection".to_string(),
-                "Users-Collection-test".to_string(),
-                "Game-Collection-test".to_string(),
-                "Profile-Collection-test".to_string(),
-            ],
             rust_log,
             test_email,
             service_email,
@@ -134,14 +126,6 @@ impl Default for ServiceConfig {
             login_secret_key: String::default(),
             validation_secret_key: String::default(),
             cosmos_database_name: "Users-Database".to_owned(),
-            cosmos_collections: vec![
-                "Users-Collection".to_string(),
-                "Game-Collection".to_string(),
-                "Profile-Collection".to_string(),
-                "Users-Collection-test".to_string(),
-                "Game-Collection-test".to_string(),
-                "Profile-Collection-test".to_string(),
-            ],
             rust_log: "actix_web=trace,actix_server=trace,rust=trace".to_owned(),
             kv_name: String::default(),
             test_phone_number: String::default(),

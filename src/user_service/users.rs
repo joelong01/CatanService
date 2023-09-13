@@ -86,8 +86,8 @@ pub async fn verify_cosmosdb(context: &RequestContext) -> Result<ServiceResponse
                 GameError::HttpError(StatusCode::NOT_FOUND),
             ));
         }
-
-        for collection in &context.config.cosmos_collections {
+     
+        for collection in &context.database.get_collection_names(context.is_test()) {
             let collection_exists = cosmos_collection_exists(
                 &context.config.cosmos_account,
                 &context.config.cosmos_database_name,

@@ -20,6 +20,14 @@ use std::task::{Context, Poll};
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 #[serde(rename_all = "PascalCase")]
+pub struct Security {
+    pub primary_login_key: String,
+    pub secondary_login_key: String
+}
+
+
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
+#[serde(rename_all = "PascalCase")]
 pub struct TestContext {
     pub use_cosmos_db: bool,
 }
@@ -41,6 +49,7 @@ pub struct RequestContext {
     pub test_context: Option<TestContext>,
     pub database: Box<dyn UserDbTrait>,
     pub claims: Option<Claims>
+    
 }
 
 impl Clone for RequestContext {
