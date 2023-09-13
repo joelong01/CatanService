@@ -72,26 +72,37 @@ where
 
         match auth_header {
             Some(header_value) => {
-                let mut request_context = req.extensions_mut().get_mut::<RequestContext>().expect(
-                    "You configured a route to use authentication, \
+                let mut request_context = req
+                    .extensions_mut()
+                    .get_mut::<RequestContext>()
+                    .expect(
+                        "You configured a route to use authentication, \
                 but not ServiceConfig. This won't work.",
-                ).clone();
+                    )
+                    .clone();
                 let token_str = header_value.to_str().unwrap_or("").replace("Bearer ", "");
                 // our token validation logic is predicated on knowing the claim set -- Validation, TestUser, or User
                 // but we don't know that until we crack the token to find the claims.  the Test Header will be set
                 // by the client to tell us if this is a test, and Validation does not use the auth_mw...so check for
-                // the test header, and if is there, use a test claim.  if not, use the normal user claim
-                let claims = if request_context.is_test() {
-                    request_context
+                // the test header, and if is there, use a test claim.  if not, use the normal user claim...the only
+                // time this does not work is if the admin is trying to create new test users -- in which case the admin
+                // has a UserClaim (not TestClaim) and the TestHeader might be set because the Admin does not want to use
+                // cosmos.  We could fix this any number of ways -- follow the TestHeader pattern, which is a "hint" to
+                // this middle ware to use the test keys -- or we can try the user key, if it works use it. if it fails,
+                // try the test key.  this the benefit that the non-test case isn't impacted by the test case.
+                //
+
+                let mut claims = request_context
+                    .security_context
+                    .login_keys
+                    .validate_token(&token_str);
+
+                if claims.is_none() && request_context.is_test() {
+                    claims = request_context
                         .security_context
                         .test_keys
-                        .validate_token(&token_str)
-                } else {
-                    request_context
-                        .security_context
-                        .login_keys
-                        .validate_token(&token_str)
-                };
+                        .validate_token(&token_str);
+                }
 
                 if claims.is_none() {
                     let fut = err::<ServiceResponse<B>, _>(
@@ -103,6 +114,7 @@ where
                 let claims = claims.unwrap();
 
                 request_context.set_claims(&claims);
+                req.extensions_mut().insert(request_context);
             }
             None => {
                 let fut = err::<ServiceResponse<B>, _>(

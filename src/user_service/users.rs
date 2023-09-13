@@ -114,10 +114,11 @@ async fn internal_register_user(
     roles: &mut Vec<Role>,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    if let Some(_) = request_context
+    if request_context
         .database
         .find_user_by_email(&profile_in.email)
-        .await?
+        .await
+        .is_ok() // you can't register twice!
     {
         return Err(ServiceResponse::new(
             "User already exists",
@@ -718,36 +719,36 @@ mod tests {
 
     async fn test_login(use_cosmos: bool) {
         let token = TestHelpers::admin_login().await;
+        
+        let request_context = RequestContext::test_default(use_cosmos);
+        let profile = UserProfile::new_test_user();
+        // setup
+        // let response = verify_cosmosdb(&request_context).await;
+        // assert!(response.is_ok());
+        // Register the user first
+        let result = register("password", &profile, &request_context).await;
+        assert!(result.is_ok());
+        let sr = result.unwrap();
+        let client_user = sr.get_client_user().expect("This should be a client user");
+        request_context
+            .database
+            .find_user_by_email(&client_user.user_profile.email)
+            .await
+            .expect("we just put this here!");
 
-        // let request_context = RequestContext::test_default(use_cosmos);
-        // let profile = UserProfile::new_test_user();
-        // // setup
-        // // let response = verify_cosmosdb(&request_context).await;
-        // // assert!(response.is_ok());
-        // // Register the user first
-        // let result = register("password", &profile, &request_context).await;
-        // assert!(result.is_ok());
-        // let sr = result.unwrap();
-        // let client_user = sr.get_client_user().expect("This should be a client user");
-        // request_context
-        //     .database
-        //     .find_user_by_email(&client_user.user_profile.email)
-        //     .await
-        //     .expect("we just put this here!");
+        // Test login with correct credentials
+        let response = login(&profile.email, "password", &request_context)
+            .await
+            .expect("login should succeed");
 
-        // // Test login with correct credentials
-        // let response = login(&profile.email, "password", &request_context)
-        //     .await
-        //     .expect("login should succeed");
-
-        // // Test login with incorrect credentials
-        // let response = login(&profile.email, "wrong_password", &request_context).await;
-        // match response {
-        //     Ok(_) => panic!("this should be an error!"),
-        //     Err(e) => {
-        //         assert_eq!(e.status, StatusCode::UNAUTHORIZED);
-        //     }
-        // }
+        // Test login with incorrect credentials
+        let response = login(&profile.email, "wrong_password", &request_context).await;
+        match response {
+            Ok(_) => panic!("this should be an error!"),
+            Err(e) => {
+                assert_eq!(e.status, StatusCode::UNAUTHORIZED);
+            }
+        }
 
         // find user
 
