@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{shared::{shared_models::{GameError, ResponseType, ServiceResponse, ClientUser}, service_models::PersistUser}, log_return_bad_id};
+use crate::{shared::{shared_models::{GameError, ResponseType, ServiceResponse, ClientUser}, service_models::PersistUser}, log_return_bad_id, new_not_found_error};
 use async_trait::async_trait;
 use log::trace;
 use reqwest::StatusCode;
@@ -67,7 +67,7 @@ async fn update_or_create_user(&self, user: &PersistUser) -> Result<ServiceRespo
             .find(|(_key, user)| *user.id == *id)
         {
             Some(u) => Ok(Some(u.1.clone())),
-            None => Ok(None),
+            None => return new_not_found_error!("Not Found"),
         }
     }
 
@@ -80,7 +80,7 @@ async fn update_or_create_user(&self, user: &PersistUser) -> Result<ServiceRespo
             .find(|(_key, user)| *user.user_profile.email == *val)
         {
             Some(u) => Ok(Some(u.1.clone())),
-            None => Ok(None),
+            None => new_not_found_error!("Not Found"),
         }
     }
 }

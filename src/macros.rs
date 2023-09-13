@@ -92,6 +92,18 @@ macro_rules! log_return_not_found {
 }
 
 #[macro_export]
+macro_rules! new_not_found_error {
+    ($msg:expr ) => {{
+        Err(ServiceResponse::new(
+            $msg,
+            StatusCode::NOT_FOUND,
+            ResponseType::NoData,
+            GameError::HttpError(StatusCode::NOT_FOUND),
+        ))
+    }};
+}
+
+#[macro_export]
 macro_rules! log_return_bad_id {
     ( $id:expr,$msg:expr ) => {{
         use reqwest::StatusCode;

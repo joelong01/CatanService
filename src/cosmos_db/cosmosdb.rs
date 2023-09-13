@@ -4,7 +4,7 @@ use crate::{
     shared::shared_models::{
         ClientUser, GameError, ResponseType,
     },
-    shared::service_models::PersistUser, middleware::service_config::ServiceConfig
+    shared::service_models::PersistUser, middleware::service_config::ServiceConfig, new_not_found_error
 };
 use std::collections::HashMap;
 
@@ -122,7 +122,7 @@ impl UserDb {
             .into_stream::<serde_json::Value>();
         //
         // this just matches what list does, but only returns the first one
-        // we are getting an error right now, but nothing to indicate what the error is.
+
         while let Some(response) = stream.next().await {
             match response {
                 Ok(response) => {
@@ -320,7 +320,7 @@ impl UserDbTrait for UserDb {
                 if !users.is_empty() {
                     Ok(Some(users.first().unwrap().clone())) // clone is necessary because `first()` returns a reference
                 } else {
-                    Ok(None)
+                    new_not_found_error!("not found")
                 }
             }
             Err(e) => {
@@ -336,7 +336,7 @@ impl UserDbTrait for UserDb {
                     log::trace!("found user with email={}", val);
                     Ok(Some(users.first().unwrap().clone()))
                 } else {
-                    Ok(None) // No user was found
+                    new_not_found_error!("not found")
                 }
             }
             Err(e) => {
