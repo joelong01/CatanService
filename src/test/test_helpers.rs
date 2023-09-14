@@ -9,15 +9,43 @@ pub mod test {
     use crate::shared::shared_models::{
         ClientUser, GameError, ResponseType, ServiceResponse, UserProfile,
     };
+    use crate::test::test_proxy::TestProxy;
     use crate::user_service::users::{login, register};
     use std::io::prelude::*;
     use std::{env, fs::File};
 
     use crate::games_service::game_container::game_messages::GameHeader;
-    use crate::{create_test_service, init_env_logger};
+    use crate::{create_app, create_test_service, init_env_logger};
     use actix_web::http::header;
     use actix_web::test;
     use reqwest::StatusCode;
+
+    #[tokio::test]
+    async fn test_new_proxy() {
+        crate::init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
+        let app = test::init_service(create_app!()).await;
+        let mut test_proxy = TestProxy::new(&app, None);
+
+        let profile = TestHelpers::load_admin_profile_from_config();
+        let admin_pwd = env::var("ADMIN_PASSWORD")
+            .expect("ADMIN_PASSWORD not found in environment - unable to continue");
+
+        let service_response = test_proxy.login(&profile.email, &admin_pwd).await;
+
+        let auth_token = service_response
+            .get_token()
+            .expect("shoudl contain auth token");
+        assert!(auth_token.len() > 0);
+
+        test_proxy.set_auth_token(&auth_token);
+        let service_response = test_proxy.get_profile().await;
+        let client_user = service_response
+            .get_client_user()
+            .expect("this should be a client_user");
+
+        assert!(client_user.id.len() > 0);
+        assert_eq!(client_user.user_profile.email, profile.email);
+    }
 
     #[tokio::test]
     async fn test_get_auth_token() {

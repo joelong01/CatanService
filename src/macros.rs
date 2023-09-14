@@ -254,7 +254,7 @@ macro_rules! create_app {
         use crate::create_unauthenticated_service;
         use crate::AuthenticationMiddlewareFactory;
         use actix_cors::Cors;
-        use actix_web::{middleware::Logger, web, App};
+        use actix_web::{web, App};
 
         use crate::{
             action_service, game_service, lobby_service, longpoll_service, profile_service,
@@ -264,7 +264,7 @@ macro_rules! create_app {
         use crate::middleware::request_context_mw::RequestContextMiddleware;
 
         App::new()
-            .wrap(Logger::default())
+          //  .wrap(Logger::default())
             .wrap(RequestContextMiddleware)
             .wrap(Cors::permissive())
             .service(create_unauthenticated_service()) // Make sure this function is in scope

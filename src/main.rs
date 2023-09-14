@@ -352,7 +352,7 @@ mod tests {
         middleware::{request_context_mw::{RequestContext, TestContext}, service_config::SERVICE_CONFIG},
         setup_test,
         shared::shared_models::{ClientUser, ServiceResponse, UserProfile, UserType},
-        user_service::users::{login, register, verify_cosmosdb}, setup_cosmos,
+        user_service::users::{login, register, verify_cosmosdb}, setup_cosmos, create_app,
     };
 
     use actix_web::{http::header, test};
@@ -380,6 +380,7 @@ mod tests {
     #[tokio::test]
     async fn create_user_login_check_profile() {
         let mut app = create_test_service!();
+        
         setup_test!(&app, false);
 
         const USER_1_PASSWORD: &'static str = "password";

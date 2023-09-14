@@ -5,3 +5,4 @@ mod client2;
 mod test_structs;
 mod polling_thread;
 pub mod test_helpers;
+pub mod test_proxy;
