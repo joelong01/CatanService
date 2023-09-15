@@ -7,11 +7,9 @@ pub mod test {
     use crate::middleware::request_context_mw::{RequestContext, TestContext};
     use crate::middleware::security_context::SecurityContext;
     use crate::middleware::service_config::SERVICE_CONFIG;
+    use crate::test::test_proxy::TestProxy;
     use crate::user_service::users::{login, register};
-    use crate::{
-        shared::shared_models::{GameError, ResponseType, ServiceResponse, UserProfile},
-        test::test_proxy::TestProxy,
-    };
+    use crate::shared::shared_models::{GameError, ResponseType, ServiceResponse, UserProfile};
     use actix_web::{
         body::{BoxBody, EitherBody},
         Error,
@@ -21,13 +19,13 @@ pub mod test {
     use actix_http::Request;
     use actix_service::Service;
     use actix_web::dev::ServiceResponse as ActixServiceResponse;
-    use crate::{create_app, create_test_service, init_env_logger};
+    use crate::{create_service, create_test_service, init_env_logger};
 
     #[tokio::test]
     async fn test_new_proxy() {
         crate::init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
-        let app = test::init_service(create_app!()).await;
-        let mut test_proxy = TestProxy::new(&app, None);
+        let test_service = test::init_service(create_service!()).await;
+        let mut test_proxy = TestProxy::new(&test_service, None);
 
         let admin_profile = TestHelpers::load_admin_profile_from_config();
         let admin_pwd = env::var("ADMIN_PASSWORD")

@@ -15,7 +15,7 @@ use crate::games_service::game_container::game_messages::{
 use crate::games_service::shared::game_enums::CatanGames;
 use crate::middleware::request_context_mw::TestContext;
 use crate::shared::shared_models::{self, ClientUser, UserProfile};
-use crate::{create_app, shared::shared_models::ServiceResponse};
+use crate::{create_service, shared::shared_models::ServiceResponse};
 
 use actix_http::Request;
 use actix_service::Service;
@@ -25,10 +25,12 @@ use actix_web::{
     body::{BoxBody, EitherBody},
     Error,
 };
+use async_trait::async_trait;
 use futures::Future;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::pin::Pin;
+use std::sync::Arc;
 pub struct TestProxy<'a, S> {
     test_context: Option<TestContext>,
     service: &'a S,
@@ -103,8 +105,7 @@ where
         &self,
         url: &str,
         headers: Option<&HashMap<HeaderName, HeaderValue>>,
-    ) -> ServiceResponse
-where {
+    ) -> ServiceResponse {
         let mut request = TestRequest::get().uri(url);
 
         if let Some(header_map) = headers {
@@ -306,6 +307,5 @@ where {
     pub async fn delete_user(&self, profile: &ClientUser) -> ServiceResponse {
         let url = format!("/auth/api/v1/users/{}", profile.id);
         self.delete(&url, None).await
-
     }
 }

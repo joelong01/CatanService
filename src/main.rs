@@ -89,7 +89,7 @@ async fn main() -> std::io::Result<()> {
     //
     // set up the HttpServer - pass in the broker service as part of App data
     // we use the create_app! macro so that we always create the same shape of app in our tests
-    HttpServer::new(move || create_app!())
+    HttpServer::new(move || create_service!())
         .bind_openssl(format!("{}:{}", ip_address, port), builder)?
         .run()
         .await
@@ -352,7 +352,7 @@ mod tests {
         middleware::{request_context_mw::{RequestContext, TestContext}, service_config::SERVICE_CONFIG},
         setup_test,
         shared::shared_models::{ClientUser, ServiceResponse, UserProfile, UserType},
-        user_service::users::{login, register, verify_cosmosdb}, setup_cosmos, create_app,
+        user_service::users::{login, register, verify_cosmosdb}, setup_cosmos, create_service,
     };
 
     use actix_web::{http::header, test};

@@ -21,7 +21,7 @@ pub mod test {
     };
 
     use crate::{
-        create_app, create_test_service, full_info,
+        create_service, create_test_service, full_info,
         games_service::{
             game_container::{
                 self,
@@ -187,7 +187,7 @@ pub mod test {
         let url = Url::parse(HOST_URL).expect("Global test URL should always parse");
         let host = url.host_str().expect("URL better have a host...");
         let port = url.port().expect("port needs to be set");
-        let server = HttpServer::new(move || create_app!())
+        let server = HttpServer::new(move || create_service!())
             .bind(format!("{}:{}", host, port))?
             .run();
 

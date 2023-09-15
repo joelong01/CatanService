@@ -249,7 +249,7 @@ macro_rules! setup_test {
 }
 
 #[macro_export]
-macro_rules! create_app {
+macro_rules! create_service {
     () => {{
         use crate::create_unauthenticated_service;
         use crate::AuthenticationMiddlewareFactory;
@@ -284,13 +284,13 @@ macro_rules! create_app {
 #[macro_export]
 macro_rules! create_test_service {
     () => {{
-        use crate::create_app;
+        use crate::create_service;
         use crate::init_env_logger;
         use actix_web::test;
 
         init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Error).await;
 
-        let app = test::init_service(create_app!()).await;
+        let app = test::init_service(create_service!()).await;
         app
     }};
 }
