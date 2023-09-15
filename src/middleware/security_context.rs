@@ -3,6 +3,7 @@ use crate::{
     azure_setup::azure_wrapper::{key_vault_get_secret, key_vault_save_secret},
     shared::service_models::Claims,
 };
+
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
@@ -15,7 +16,7 @@ use jsonwebtoken::{
     decode, encode, Algorithm, DecodingKey, EncodingKey, Header, TokenData, Validation,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct KeyKind;
 
 impl KeyKind {
@@ -126,6 +127,7 @@ pub struct SecurityContext {
 }
 
 impl SecurityContext {
+    const SECURITY_CONTEXT_SECRET_NAME: &'static str = "security-context-secrets";
     pub fn cached_secrets() -> SecurityContext {
         let secrets = SECRETS_CACHE
             .read()
@@ -134,15 +136,45 @@ impl SecurityContext {
     }
 
     pub(crate) fn new() -> Self {
-        Self {
+        match key_vault_get_secret(&SERVICE_CONFIG.kv_name, Self::SECURITY_CONTEXT_SECRET_NAME) {
+            Ok(json) => {
+                match serde_json::from_str::<SecurityContext>(&json) {
+                    Ok(sc) => sc,
+                    Err(e) => {
+                        log::error!("Failed to deserialize the security context: {}", e);
+                        Self::create_and_save_security_context()
+                    }
+                }
+            }
+            Err(e) => {
+                log::error!("Failed to retrieve secret from key vault: {}", e);
+                Self::create_and_save_security_context()
+            }
+        }
+    }
+    
+    fn create_and_save_security_context() -> SecurityContext {
+        let security_context = SecurityContext {
             login_keys: KeySet::new(KeyKind::PRIMARY_KEY, KeyKind::SECONDARY_KEY),
             validation_keys: KeySet::new(
                 KeyKind::VALIDATATION_PRIMARY_KEY,
                 KeyKind::VALIDATATION_SECONDARY_KEY,
             ),
             test_keys: KeySet::new(KeyKind::TEST_PRIMARY_KEY, KeyKind::TEST_SECONDARY_KEY),
+        };
+    
+        match serde_json::to_string(&security_context) {
+            Ok(secrets) => {
+                if let Err(e) = key_vault_save_secret(&SERVICE_CONFIG.kv_name, Self::SECURITY_CONTEXT_SECRET_NAME, &secrets) {
+                    log::error!("Failed to save secret in key vault: {}", e);
+                }
+            },
+            Err(e) => log::error!("Failed to serialize the security context: {}", e),
         }
+    
+        security_context
     }
+    
 
     pub fn refresh_cache() {
         let security_context = SecurityContext {

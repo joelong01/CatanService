@@ -35,12 +35,12 @@ pub mod test {
 
         let service_response = test_proxy.login(&admin_profile.email, &admin_pwd).await;
 
-        let auth_token = service_response
+        let admin_auth_token = service_response
             .get_token()
             .expect("should contain auth token");
-        assert!(auth_token.len() > 0);
+        assert!(admin_auth_token.len() > 0);
 
-        test_proxy.set_auth_token(&Some(auth_token));
+        test_proxy.set_auth_token(&Some(admin_auth_token.clone()));
         let service_response = test_proxy.get_profile().await;
         let client_user = service_response
             .to_client_user()
@@ -73,7 +73,7 @@ pub mod test {
                 assert!(sr.status.is_success());
             }
         }
-
+        test_proxy.set_auth_token(&Some(admin_auth_token));
         let users = test_proxy
         .get_all_users()
         .await
