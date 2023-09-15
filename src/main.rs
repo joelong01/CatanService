@@ -423,7 +423,7 @@ mod tests {
             //  we get back a service response with a client user in the body
 
             let client_user: ClientUser =
-                ServiceResponse::to_client_user(std::str::from_utf8(&body).unwrap())
+                ServiceResponse::to_client_user_from_json(std::str::from_utf8(&body).unwrap())
                     .expect("Service Response should deserialize")
                     .1;
 
@@ -472,7 +472,7 @@ mod tests {
         //
         //  we get a service response where the body is a ClientUser
         let profile_from_service =
-            ServiceResponse::to_client_user(std::str::from_utf8(&body).unwrap())
+            ServiceResponse::to_client_user_from_json(std::str::from_utf8(&body).unwrap())
                 .expect("Service Response should deserialize")
                 .1;
 
@@ -520,7 +520,7 @@ mod tests {
         let sr = register("password", &profile, &request_context)
             .await
             .expect("this should work");
-        let _client_user = sr.get_client_user().expect("This should be a client user");
+        let _client_user = sr.to_client_user().expect("This should be a client user");
 
         let response = login(&profile.email, "password", &request_context)
             .await

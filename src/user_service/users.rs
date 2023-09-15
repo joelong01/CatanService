@@ -654,7 +654,7 @@ mod tests {
         let sr = register("password", &profile, &request_context)
             .await
             .expect("this should work");
-        let client_user = sr.get_client_user().expect("This should be a client user");
+        let client_user = sr.to_client_user().expect("This should be a client user");
         let code = 12345;
         let sr = internal_send_phone_code(&client_user.id, code, &request_context)
             .await
@@ -682,7 +682,7 @@ mod tests {
         let sr = register("password", &profile, &request_context)
             .await
             .expect("this should work");
-        let client_user = sr.get_client_user().expect("This should be a client user");
+        let client_user = sr.to_client_user().expect("This should be a client user");
         let host_name = std::env::var("HOST_NAME").expect("HOST_NAME must be set");
         let result = send_validation_email(
             &host_name,
@@ -729,7 +729,7 @@ mod tests {
         let result = register("password", &profile, &request_context).await;
         assert!(result.is_ok());
         let sr = result.unwrap();
-        let client_user = sr.get_client_user().expect("This should be a client user");
+        let client_user = sr.to_client_user().expect("This should be a client user");
         request_context
             .database
             .find_user_by_email(&client_user.user_profile.email)

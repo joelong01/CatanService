@@ -51,7 +51,7 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
     let my_info: ClientUser = proxy
         .get_profile()
         .await
-        .get_client_user()
+        .to_client_user()
         .expect("Successful call to get_profile should have a ClientUser in the body");
 
     trace_thread_info!(name, "Waiting for 500ms");

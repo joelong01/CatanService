@@ -1,24 +1,27 @@
-#![allow(dead_code)]
-
 #[cfg(test)]
 pub mod test {
+    #![allow(dead_code)]
+    use actix_http::StatusCode;
+    use actix_web::test;
 
     use crate::middleware::request_context_mw::{RequestContext, TestContext};
     use crate::middleware::security_context::SecurityContext;
     use crate::middleware::service_config::SERVICE_CONFIG;
-    use crate::shared::shared_models::{
-        ClientUser, GameError, ResponseType, ServiceResponse, UserProfile,
-    };
-    use crate::test::test_proxy::TestProxy;
     use crate::user_service::users::{login, register};
+    use crate::{
+        shared::shared_models::{GameError, ResponseType, ServiceResponse, UserProfile},
+        test::test_proxy::TestProxy,
+    };
+    use actix_web::{
+        body::{BoxBody, EitherBody},
+        Error,
+    };
     use std::io::prelude::*;
     use std::{env, fs::File};
-
-    use crate::games_service::game_container::game_messages::GameHeader;
+    use actix_http::Request;
+    use actix_service::Service;
+    use actix_web::dev::ServiceResponse as ActixServiceResponse;
     use crate::{create_app, create_test_service, init_env_logger};
-    use actix_web::http::header;
-    use actix_web::test;
-    use reqwest::StatusCode;
 
     #[tokio::test]
     async fn test_new_proxy() {
@@ -26,25 +29,59 @@ pub mod test {
         let app = test::init_service(create_app!()).await;
         let mut test_proxy = TestProxy::new(&app, None);
 
-        let profile = TestHelpers::load_admin_profile_from_config();
+        let admin_profile = TestHelpers::load_admin_profile_from_config();
         let admin_pwd = env::var("ADMIN_PASSWORD")
             .expect("ADMIN_PASSWORD not found in environment - unable to continue");
 
-        let service_response = test_proxy.login(&profile.email, &admin_pwd).await;
+        let service_response = test_proxy.login(&admin_profile.email, &admin_pwd).await;
 
         let auth_token = service_response
             .get_token()
-            .expect("shoudl contain auth token");
+            .expect("should contain auth token");
         assert!(auth_token.len() > 0);
 
-        test_proxy.set_auth_token(&auth_token);
+        test_proxy.set_auth_token(&Some(auth_token));
         let service_response = test_proxy.get_profile().await;
         let client_user = service_response
-            .get_client_user()
+            .to_client_user()
             .expect("this should be a client_user");
 
         assert!(client_user.id.len() > 0);
-        assert_eq!(client_user.user_profile.email, profile.email);
+        assert_eq!(client_user.user_profile.email, admin_profile.email);
+
+        
+      
+        //
+        // clean up test user in production system
+        let test_users = TestHelpers::load_test_users_from_config();
+        assert!(test_users.len() > 0);
+        for user in test_users {
+            assert_ne!(user.email, admin_profile.email);
+            // note that test context is not set -- so if we made a mistake (ahem) and put the test users in the 
+            // production database, this will delete all of them.
+            test_proxy.set_auth_token(&None);
+            let result = test_proxy.login(&user.email, "password").await;
+
+            if let Some(test_auth_token) = result.get_token() {
+                test_proxy.set_auth_token(&Some(test_auth_token));
+                let cu = test_proxy
+                    .get_profile()
+                    .await
+                    .to_client_user()
+                    .expect("this shoudl be there since login worked");
+                let sr = test_proxy.delete_user(&cu).await;
+                assert!(sr.status.is_success());
+            }
+        }
+
+        let users = test_proxy
+        .get_all_users()
+        .await
+        .get_client_users()
+        .expect("there should be at least one user always (the admin)");
+
+        assert!(users.len() > 0);
+
     }
 
     #[tokio::test]
@@ -79,43 +116,31 @@ pub mod test {
         };
     }
     #[tokio::test]
-    async fn register_test_users() {
+    async fn register_test_users_test() {
         init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
-        let mut app = create_test_service!();
+        let app = create_test_service!();
+        let mut proxy = TestProxy::new(&app, None);
         //  setup_test!(&app, true);
         let admin_token = TestHelpers::admin_login().await;
+        proxy.set_auth_token(&Some(admin_token));
+        register_test_users(&proxy).await;
+
+        
+    }
+
+    async fn register_test_users<S>(proxy: &TestProxy<'_, S>) // Add the expected lifetime and generic type for the function signature
+    where
+        S: Service<Request, Response = ActixServiceResponse<EitherBody<BoxBody>>, Error = Error> + 'static,
+    {
         let test_users = TestHelpers::load_test_users_from_config();
 
         for user in test_users.iter() {
-            let req = actix_web::test::TestRequest::post()
-                .uri("/auth/api/v1/users/register-test-user")
-                .append_header((header::CONTENT_TYPE, "application/json"))
-                .append_header((GameHeader::TEST, TestContext::as_json(true)))
-                .append_header((GameHeader::PASSWORD, "password".to_string()))
-                .append_header(("Authorization", admin_token.clone()))
-                .set_json(&user)
-                .to_request();
-            let response = actix_web::test::call_service(&mut app, req).await;
-            let status = response.status();
-            let body = test::read_body(response).await;
-            let service_response_as_json =
-                std::str::from_utf8(&body).expect("should convert to str");
-            if !status.is_success() {
-                log::trace!("{} already registered", user.display_name.clone());
-                assert_eq!(status, StatusCode::CONFLICT);
-                log::trace!("Response body: {:?}", service_response_as_json);
+            let service_response = proxy.register_test_user(user, "password").await;
 
-                let sr: ServiceResponse = serde_json::from_str(&service_response_as_json)
-                    .expect("failed to deserialize into ServiceResponse");
-
-                assert_eq!(sr.status, StatusCode::CONFLICT);
-            } else {
+            if service_response.status.is_success() {
                 //  we get back a service response with a client user in the body
 
-                let client_user: ClientUser =
-                    ServiceResponse::to_client_user(service_response_as_json)
-                        .expect("Service Response should deserialize")
-                        .1;
+                let client_user = service_response.to_client_user();
 
                 let pretty_json = serde_json::to_string_pretty(&client_user)
                     .expect("Failed to pretty-print JSON");
@@ -127,6 +152,9 @@ pub mod test {
                 );
 
                 log::trace!("registered client_user: {:#?}", pretty_json);
+            } else {
+                log::trace!("{} already registered", user.display_name.clone());
+                assert_eq!(service_response.status, StatusCode::CONFLICT);
             }
         }
     }

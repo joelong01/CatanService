@@ -317,14 +317,14 @@ impl ServiceResponse {
         response
     }
 
-    pub fn get_client_user(&self) -> Option<ClientUser> {
+    pub fn to_client_user(&self) -> Option<ClientUser> {
         match self.response_type.clone() {
             ResponseType::ClientUser(data) => Some(data),
             _ => None,
         }
     }
 
-    pub fn to_client_user(json: &str) -> Option<(ServiceResponse, ClientUser)> {
+    pub fn to_client_user_from_json(json: &str) -> Option<(ServiceResponse, ClientUser)> {
         let service_response: ServiceResponse = match serde_json::from_str(json) {
             Ok(sr) => sr,
             Err(_) => return None,

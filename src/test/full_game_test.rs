@@ -260,7 +260,7 @@ pub mod test {
                 .register(&user_profile, "password")
                 .await
                 .assert_success("Register should succeed")
-                .get_client_user()
+                .to_client_user()
                 .expect("Register should have a ClientUser in the body");
             test_users.push(client_user);
         }
