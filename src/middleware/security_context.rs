@@ -40,29 +40,9 @@ impl KeySet {
         Self {
             primary_key_name: p_key_name.to_string(),
             secondary_key_name: s_key_name.to_string(),
-            primary_key: Self::get_secret(p_key_name).to_owned(),
-            secondary_key: Self::get_secret(s_key_name).to_owned(),
+            primary_key: SecurityContext::generate_jwt_key().to_owned(),
+            secondary_key: SecurityContext::generate_jwt_key().to_owned(),
         }
-    }
-    // this needs work -- as it is, if we can't talk to KeyVault, or if the secret doesn't exists, this will create a temp
-    // secret and use it, and then try to save it. that makes it easy to develop, but a bad production idea.
-    // if key_vault_get_secret fails, this  should probably panic!.  we should also as part of initial provisioning
-    // guarantee that keys are there.
-    fn get_secret(name: &'static str) -> String {
-        let secret = match key_vault_get_secret(&SERVICE_CONFIG.kv_name, name) {
-            Ok(s) => s,
-            Err(_) => {
-                let new_key = SecurityContext::generate_jwt_key();
-                if key_vault_save_secret(&SERVICE_CONFIG.kv_name, name, &new_key).is_err() {
-                    log::error!(
-                        "Failed to save secret in key vault.  all secrets signed with this \
-                     key will be invalid when the process exits."
-                    )
-                }
-                new_key
-            }
-        };
-        secret
     }
 
     pub fn create_jwt_token(&self, claims: &Claims) -> Result<String, Box<dyn std::error::Error>> {
@@ -137,22 +117,22 @@ impl SecurityContext {
 
     pub(crate) fn new() -> Self {
         match key_vault_get_secret(&SERVICE_CONFIG.kv_name, Self::SECURITY_CONTEXT_SECRET_NAME) {
-            Ok(json) => {
-                match serde_json::from_str::<SecurityContext>(&json) {
-                    Ok(sc) => sc,
-                    Err(e) => {
-                        log::error!("Failed to deserialize the security context: {}", e);
-                        Self::create_and_save_security_context()
-                    }
+            Ok(json) => match serde_json::from_str::<SecurityContext>(&json) {
+                Ok(sc) => sc,
+                Err(e) => {
+                    log::error!("Failed to deserialize the security context: {}", e);
+                    Self::create_and_save_security_context()
                 }
-            }
+            },
             Err(e) => {
                 log::error!("Failed to retrieve secret from key vault: {}", e);
                 Self::create_and_save_security_context()
             }
         }
     }
-    
+    //
+    //  this needs work.  it says "if we can't talk to keyvault, create new keys and use them"...so any toekns
+    //  become invalid after the service exits.  this is ok for offline testing, but may read to other problems
     fn create_and_save_security_context() -> SecurityContext {
         let security_context = SecurityContext {
             login_keys: KeySet::new(KeyKind::PRIMARY_KEY, KeyKind::SECONDARY_KEY),
@@ -162,19 +142,22 @@ impl SecurityContext {
             ),
             test_keys: KeySet::new(KeyKind::TEST_PRIMARY_KEY, KeyKind::TEST_SECONDARY_KEY),
         };
-    
+
         match serde_json::to_string(&security_context) {
             Ok(secrets) => {
-                if let Err(e) = key_vault_save_secret(&SERVICE_CONFIG.kv_name, Self::SECURITY_CONTEXT_SECRET_NAME, &secrets) {
+                if let Err(e) = key_vault_save_secret(
+                    &SERVICE_CONFIG.kv_name,
+                    Self::SECURITY_CONTEXT_SECRET_NAME,
+                    &secrets,
+                ) {
                     log::error!("Failed to save secret in key vault: {}", e);
                 }
-            },
+            }
             Err(e) => log::error!("Failed to serialize the security context: {}", e),
         }
-    
+
         security_context
     }
-    
 
     pub fn refresh_cache() {
         let security_context = SecurityContext {

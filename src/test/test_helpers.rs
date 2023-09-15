@@ -73,7 +73,7 @@ pub mod test {
                 assert!(sr.status.is_success());
             }
         }
-        test_proxy.set_auth_token(&Some(admin_auth_token));
+        test_proxy.set_auth_token(&Some(admin_auth_token.clone()));
         let users = test_proxy
         .get_all_users()
         .await
