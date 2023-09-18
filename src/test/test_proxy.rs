@@ -1,21 +1,17 @@
-#![allow(unused_imports)]
 #![allow(dead_code)]
 
 use actix_web::http::header::{self, HeaderName, HeaderValue};
 
 use actix_web::test::{self, TestRequest};
-
-use azure_core::auth;
 use serde::Serialize;
-
 use crate::games_service::catan_games::games::regular::regular_game::RegularGame;
 use crate::games_service::game_container::game_messages::{
     GameHeader, Invitation, InvitationResponseData,
 };
 use crate::games_service::shared::game_enums::CatanGames;
 use crate::middleware::request_context_mw::TestContext;
-use crate::shared::shared_models::{self, ClientUser, UserProfile};
-use crate::{create_service, shared::shared_models::ServiceResponse};
+use crate::shared::shared_models::{ClientUser, UserProfile};
+use crate::shared::shared_models::ServiceResponse;
 
 use actix_http::Request;
 use actix_service::Service;
@@ -25,12 +21,10 @@ use actix_web::{
     body::{BoxBody, EitherBody},
     Error,
 };
-use async_trait::async_trait;
-use futures::Future;
+
+
 use std::collections::HashMap;
-use std::hash::Hash;
-use std::pin::Pin;
-use std::sync::Arc;
+
 pub struct TestProxy<'a, S> {
     test_context: Option<TestContext>,
     service: &'a S,
@@ -309,3 +303,4 @@ where
         self.delete(&url, None).await
     }
 }
+
