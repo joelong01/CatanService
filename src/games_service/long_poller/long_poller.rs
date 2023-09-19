@@ -8,7 +8,7 @@ use tokio::sync::{mpsc, Mutex, RwLock};
 use crate::{
     games_service::game_container::game_messages::{CatanMessage, GameStatus},
     log_thread_info,
-    shared::shared_models::{ClientUser, GameError, ResponseType, ServiceResponse, UserProfile},
+    shared::shared_models::{UserProfile, GameError, ResponseType, ServiceResponse},
 };
 //
 //  this is a map of "waiters" - holding all the state necessary for a Long Poller to wait on a thread
@@ -202,16 +202,13 @@ impl LongPoller {
     /// # Returns
     ///
     /// * a Vec us user_ids
-    pub async fn get_available() -> Vec<ClientUser> {
+    pub async fn get_available() -> Vec<UserProfile> {
         let mut available = Vec::new();
         let users = ALL_USERS_MAP.read().await;
         for u in users.values() {
             let lp = u.read().await;
             if lp.status == GameStatus::Available {
-                available.push(ClientUser {
-                    id: lp.user_id.clone(),
-                    user_profile: lp.user_profile.clone(),
-                });
+                available.push(lp.user_profile.clone());
             }
         }
         available

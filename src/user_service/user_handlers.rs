@@ -1,7 +1,7 @@
 use crate::{
     get_header_value,
     middleware::{request_context_mw::RequestContext, header_extractor::HeadersExtractor},
-    shared::shared_models::{ClientUser, GameError, ResponseType, ServiceResponse, UserProfile},
+    shared::shared_models::{UserProfile, GameError, ResponseType, ServiceResponse},
 };
 use actix_web::{
     http::Error,
@@ -107,7 +107,7 @@ pub async fn find_user_by_id_handler(
                     let service_response = ServiceResponse::new(
                         "",
                         StatusCode::OK,
-                        ResponseType::ClientUser(ClientUser::from_persist_user(&user)),
+                        ResponseType::Profile(UserProfile::from_persist_user(&user)),
                         GameError::NoError(String::default()),
                     );
                     Ok(service_response.to_http_response())

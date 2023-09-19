@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::middleware::request_context_mw::TestContext;
 
-use super::shared_models::{ClientUser, UserProfile};
+use super::shared_models::UserProfile;
 use uuid::Uuid;
 
 /**
@@ -59,19 +59,7 @@ impl PersistUser {
         }
     }
 
-    pub fn from_client_user(client_user: &ClientUser, hash: String) -> Self {
-        Self {
-            id: client_user.id.clone(),
-            local_user_owner_id: None,
-            partition_key: 1,
-            password_hash: Some(hash.to_owned()),
-            user_profile: client_user.user_profile.clone(),
-            validated_email: false,
-            validated_phone: false,
-            phone_code: None,
-            roles: vec![Role::User],
-        }
-    }
+ 
     pub fn from_user_profile(profile: &UserProfile, hash: String) -> Self {
         Self {
             id: match &profile.user_id {

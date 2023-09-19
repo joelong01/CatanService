@@ -4,7 +4,7 @@ use crate::{
     middleware::service_config::ServiceConfig,
     new_not_found_error,
     shared::service_models::PersistUser,
-    shared::shared_models::{ClientUser, GameError, ResponseType},
+    shared::shared_models::{UserProfile, GameError, ResponseType},
 };
 use std::collections::HashMap;
 
@@ -294,7 +294,7 @@ impl UserDbTrait for UserDb {
                 Ok(..) => Ok(ServiceResponse::new(
                     "created",
                     StatusCode::CREATED,
-                    ResponseType::ClientUser(ClientUser::from_persist_user(user)),
+                    ResponseType::Profile(UserProfile::from_persist_user(user)),
                     GameError::NoError(String::default()),
                 )),
                 Err(e) => {

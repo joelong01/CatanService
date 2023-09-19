@@ -10,7 +10,7 @@ use crate::middleware::request_context_mw::TestContext;
 use crate::{crack_game_update, wait_for_message};
 use crate::{
     games_service::game_container::game_messages::CatanMessage, log_thread_info,
-    shared::shared_models::ClientUser, trace_thread_info,
+    shared::shared_models::UserProfile, trace_thread_info,
 };
 use crate::{shared::proxy::ServiceProxy, test::test_structs::HOST_URL};
 
@@ -39,10 +39,10 @@ pub(crate) async fn client1_thread(mut rx: Receiver<CatanMessage>) {
    
     let name = "James";
 
-    let my_info: ClientUser = proxy
+    let my_info: UserProfile = proxy
         .get_profile()
         .await
-        .to_client_user()
+        .to_profile()
         .expect("Successful call to get_profile should have a ClientUser in the body");
     trace_thread_info!(name, "Waiting for 500ms");
     tokio::time::sleep(Duration::from_millis(500)).await;

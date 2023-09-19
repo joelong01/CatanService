@@ -359,7 +359,7 @@ mod tests {
         },
         setup_cosmos, setup_test,
         shared::
-            shared_models::{ClientUser, ServiceResponse, UserProfile},
+            shared_models::{UserProfile, ServiceResponse},
         
         test::{
             test_helpers::test::{register_test_users, TestHelpers},
@@ -419,8 +419,8 @@ mod tests {
         } else {
             //  we get back a service response with a client user in the body
 
-            let client_user: ClientUser =
-                ServiceResponse::to_client_user_from_json(std::str::from_utf8(&body).unwrap())
+            let client_user: UserProfile =
+                ServiceResponse::profile_from_json(std::str::from_utf8(&body).unwrap())
                     .expect("Service Response should deserialize")
                     .1;
 
@@ -469,7 +469,7 @@ mod tests {
         //
         //  we get a service response where the body is a ClientUser
         let profile_from_service =
-            ServiceResponse::to_client_user_from_json(std::str::from_utf8(&body).unwrap())
+            ServiceResponse::profile_from_json(std::str::from_utf8(&body).unwrap())
                 .expect("Service Response should deserialize")
                 .1;
 
@@ -477,7 +477,6 @@ mod tests {
         user1_profile.games_won = Some(0); // service sets this when regisering.
         assert!(
             profile_from_service
-                .user_profile
                 .is_equal_by_val(&user1_profile),
             "profile returned by service different than the one sent in"
         );
@@ -548,9 +547,7 @@ mod tests {
             .get_client_users()
             .unwrap()
             .pop()
-            .unwrap()
-            .user_profile
-            .clone();
+            .unwrap();
 
         assert!(new_profile.is_equal_by_val(&profile));
     }

@@ -10,14 +10,14 @@ use crate::{
         long_poller::long_poller::LongPoller,
     },
     middleware::request_context_mw::RequestContext,
-    shared::shared_models::{ClientUser, GameError, ResponseType, ServiceResponse},
+    shared::shared_models::{UserProfile, GameError, ResponseType, ServiceResponse},
 };
 
 pub async fn get_lobby() -> Result<ServiceResponse, ServiceResponse> {
     return Ok(ServiceResponse::new(
         "",
         StatusCode::OK,
-        ResponseType::ClientUsers(LongPoller::get_available().await),
+        ResponseType::Profiles(LongPoller::get_available().await),
         GameError::NoError(String::default()),
     ));
 }
@@ -54,7 +54,7 @@ pub async fn respond_to_invite(
             .expect("this is an authenticated call.  find_user_by_id cannot fail");
         GameContainer::add_player(
             &invite_response.game_id,
-            &ClientUser::from_persist_user(&persist_user),
+            &UserProfile::from_persist_user(&persist_user),
         )
         .await
         .expect("add_player shouldn't fail.  TODO: handle failure");

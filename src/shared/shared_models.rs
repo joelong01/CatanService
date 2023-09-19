@@ -233,6 +233,21 @@ impl UserProfile {
             self.pii = None;
         }
     }
+    pub fn from_persist_user(persist_user: &PersistUser) -> Self {
+        persist_user.user_profile.clone()
+        // Self {
+        //     user_id: persist_user.user_profile.user_id.clone(),
+        //     user_type: persist_user.user_profile.user_type.clone(),
+        //     pii: persist_user.user_profile.pii.clone(),
+        //     display_name: persist_user.user_profile.display_name.clone(),
+        //     picture_url: persist_user.user_profile.picture_url.clone(),
+        //     foreground_color: persist_user.user_profile.foreground_color.clone(),
+        //     background_color: persist_user.user_profile.background_color.clone(),
+        //     text_color: persist_user.user_profile.text_color.clone(),
+        //     games_played: persist_user.user_profile.games_played.clone(),
+        //     games_won: persist_user.user_profile.games_won.clone(),
+        // }
+    }
    
     pub fn new_test_user() -> Self {
         let random_string = || {
@@ -267,38 +282,12 @@ impl UserProfile {
     }
 }
 
-///
-/// This is the struct that is returned to the clien whenever User data needs to be returned.  it is also the format
-/// that data is passed from the client to the service.  Note that the password is not in this structure -- it passes
-/// from the client in a header, as does the JWT token when it is needed.
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
-#[serde(rename_all = "PascalCase")]
-pub struct ClientUser {
-    pub id: String,
-    pub user_profile: UserProfile,
-}
 
-impl ClientUser {
-    /// Creates a new [`ClientUser`].
-    fn new(id: String) -> Self {
-        Self {
-            id,
-            user_profile: UserProfile::default(),
-        }
-    }
-
-    pub fn from_persist_user(persist_user: &PersistUser) -> Self {
-        Self {
-            id: persist_user.id.clone(),
-            user_profile: persist_user.user_profile.clone(),
-        }
-    }
-}
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Display)]
 pub enum ResponseType {
-    ClientUser(ClientUser),
-    ClientUsers(Vec<ClientUser>),
+    Profile(UserProfile),
+    Profiles(Vec<UserProfile>),
     Token(String),
     Url(String),
     ErrorInfo(String),
@@ -393,31 +382,31 @@ impl ServiceResponse {
         response
     }
 
-    pub fn to_client_user(&self) -> Option<ClientUser> {
+    pub fn to_profile(&self) -> Option<UserProfile> {
         match self.response_type.clone() {
-            ResponseType::ClientUser(data) => Some(data),
+            ResponseType::Profile(data) => Some(data),
             _ => None,
         }
     }
 
-    pub fn to_client_user_from_json(json: &str) -> Option<(ServiceResponse, ClientUser)> {
+    pub fn profile_from_json(json: &str) -> Option<(ServiceResponse, UserProfile)> {
         let service_response: ServiceResponse = match serde_json::from_str(json) {
             Ok(sr) => sr,
             Err(_) => return None,
         };
         match service_response.response_type.clone() {
-            ResponseType::ClientUser(client_user) => Some((service_response, client_user)),
+            ResponseType::Profile(client_user) => Some((service_response, client_user)),
             _ => None,
         }
     }
 
-    pub fn to_client_users(json: &str) -> Option<(ServiceResponse, Vec<ClientUser>)> {
+    pub fn to_client_users(json: &str) -> Option<(ServiceResponse, Vec<UserProfile>)> {
         let service_response: ServiceResponse = match serde_json::from_str(json) {
             Ok(sr) => sr,
             Err(_) => return None,
         };
         match service_response.response_type.clone() {
-            ResponseType::ClientUsers(client_users) => Some((service_response, client_users)),
+            ResponseType::Profiles(client_users) => Some((service_response, client_users)),
             _ => None,
         }
     }
@@ -453,9 +442,9 @@ impl ServiceResponse {
         }
     }
 
-    pub fn get_client_users(&self) -> Option<Vec<ClientUser>> {
+    pub fn get_client_users(&self) -> Option<Vec<UserProfile>> {
         match &self.response_type {
-            ResponseType::ClientUsers(users) => Some(users.clone()),
+            ResponseType::Profiles(users) => Some(users.clone()),
             _ => None,
         }
     }

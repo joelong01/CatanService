@@ -4,7 +4,7 @@ use crate::{
         long_poller::long_poller::LongPoller,
     },
     middleware::request_context_mw::RequestContext,
-    shared::shared_models::{ClientUser, GameError, ResponseType, ServiceResponse},
+    shared::shared_models::{UserProfile, GameError, ResponseType, ServiceResponse},
 };
 
 use reqwest::StatusCode;
@@ -78,13 +78,13 @@ pub async fn new_game(
         match test_game {
             Some(g) => g.clone(),
             None => {
-                let mut game = RegularGame::new(&ClientUser::from_persist_user(&user));
+                let mut game = RegularGame::new(&UserProfile::from_persist_user(&user));
                 game.shuffle();
                 game
             }
         }
     } else {
-        let mut game = RegularGame::new(&ClientUser::from_persist_user(&user));
+        let mut game = RegularGame::new(&UserProfile::from_persist_user(&user));
         game.shuffle();
         game
     };

@@ -2,7 +2,7 @@
 use crate::{
     games_service::game_container::game_messages::CatanMessage,
     middleware::request_context_mw::TestContext,
-    shared::{proxy::ServiceProxy, shared_models::ClientUser},
+    shared::{proxy::ServiceProxy, shared_models::UserProfile},
     test::test_structs::HOST_URL,
     trace_thread_info,
 };
@@ -16,13 +16,13 @@ pub async fn game_poller(username: &str, tx: tokio::sync::mpsc::Sender<CatanMess
         HOST_URL,
     ).await.expect("login needs to work for test to run!");
    
-    let client_user: ClientUser = proxy
+    let client_user_profile: UserProfile = proxy
         .get_profile()
         .await
-        .to_client_user()
+        .to_profile()
         .expect("Client User should deserialize");
     // Create the client inside the spawned task
-    let name = &client_user.user_profile.display_name;
+    let name = &client_user_profile.display_name;
     trace_thread_info!(name, "polling thread started, sending start message");
     tx.send(CatanMessage::Started(format!("{}  started", name)))
         .await

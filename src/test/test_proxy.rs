@@ -10,7 +10,7 @@ use crate::games_service::game_container::game_messages::{
 };
 use crate::games_service::shared::game_enums::CatanGames;
 use crate::middleware::request_context_mw::TestContext;
-use crate::shared::shared_models::{ClientUser, UserProfile};
+use crate::shared::shared_models::UserProfile;
 use crate::shared::shared_models::ServiceResponse;
 
 use actix_http::Request;
@@ -342,8 +342,8 @@ where
         self.get("/auth/api/v1/users", None).await
     }
 
-    pub async fn delete_user(&self, profile: &ClientUser) -> ServiceResponse {
-        let url = format!("/auth/api/v1/users/{}", profile.id);
+    pub async fn delete_user(&self, profile: &UserProfile) -> ServiceResponse {
+        let url = format!("/auth/api/v1/users/{}", profile.user_id.clone().unwrap());
         self.delete(&url, None).await
     }
 

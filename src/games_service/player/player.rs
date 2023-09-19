@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 use serde::{Deserialize, Serialize};
 
-use crate::shared::shared_models::ClientUser;
+use crate::shared::shared_models::UserProfile;
 
 use crate::games_service::{
     buildings::building::Building, harbors::harbor::Harbor, roads::road::Road,
@@ -17,7 +17,7 @@ use super::player_enums::Target;
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "PascalCase")]
 pub struct Player {
-    pub user_data: ClientUser,
+    pub user_data: UserProfile,
     pub roads: Vec<Road>,
     pub buildings: Vec<Building>,
     pub harbors: Vec<Harbor>,

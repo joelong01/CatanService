@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::shared::shared_models::ClientUser;
+use crate::shared::shared_models::UserProfile;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::{fmt, str::FromStr};
@@ -11,7 +11,7 @@ use strum_macros::EnumIter;
 #[derive(Debug, Serialize, Clone, Deserialize)]
 pub struct GameData {
     pub id: String,
-    pub players: Vec<ClientUser>,
+    pub players: Vec<UserProfile>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SupportedGames {

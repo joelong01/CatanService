@@ -12,7 +12,7 @@ mod tests {
             tiles::{tile_enums::TileResource, tile_key::TileKey},
         },
         middleware::service_config::SERVICE_CONFIG,
-        shared::shared_models::{ClientUser, UserProfile, UserType},
+        shared::shared_models::{UserProfile, UserType},
     };
     use std::io::Write;
     use std::{collections::HashMap, fs::File};
@@ -177,22 +177,19 @@ mod tests {
         assert_eq!(game.current_player_id, "3");
 
         let p = game.get_next_player();
-        assert_eq!(game.current_player_id, p.user_data.id);
+        assert_eq!(game.current_player_id, p.user_data.user_id.unwrap());
         let p = game.get_next_player();
-        assert_eq!(game.current_player_id, p.user_data.id);
+        assert_eq!(game.current_player_id, p.user_data.user_id.unwrap());
         assert_eq!(game.current_player_id, "1");
 
         let p = game.get_next_player();
-        assert_eq!(game.current_player_id, p.user_data.id);
+        assert_eq!(game.current_player_id, p.user_data.user_id.unwrap());
         assert_eq!(game.current_player_id, "3");
     }
 
     fn create_game() -> RegularGame {
         println!("create_game");
-        let user = ClientUser {
-            id: "1".to_owned(),
-            user_profile: UserProfile::new_test_user(),
-        };
+        let user = UserProfile::new_test_user();
         RegularGame::new(&user)
     }
     fn test_add_players(game: &mut RegularGame) {
@@ -205,16 +202,10 @@ mod tests {
         );
         //
         //  create 2 more users and add them to the game
-        let user1 = ClientUser {
-            id: "2".to_owned(),
-            user_profile: UserProfile::new_test_user() 
-        };
+        let user1 = UserProfile::new_test_user();
 
 
-        let user2 = ClientUser {
-            id: "3".to_owned(),
-            user_profile: UserProfile::new_test_user() 
-        };
+        let user2 = UserProfile::new_test_user();
         game.add_user(&user1);
         game.add_user(&user2);
     }

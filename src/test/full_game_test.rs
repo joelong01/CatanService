@@ -35,7 +35,7 @@ pub mod test {
             shared::game_enums::GameState,
         },
         setup_test,
-        shared::shared_models::{ClientUser, ServiceResponse, UserProfile},
+        shared::shared_models::{ServiceResponse, UserProfile},
         trace_thread_info,
     };
     use crate::{games_service::game_container::game_messages::ErrorData, init_env_logger};
@@ -88,7 +88,7 @@ pub mod test {
         //  create new users to play our game
         const CLIENT_COUNT: &'static usize = &1;
         trace_thread_info!("test_thread", "creating users");
-        let test_users: Vec<ClientUser> = register_test_users(*CLIENT_COUNT).await;
+        let test_users: Vec<UserProfile> = register_test_users(*CLIENT_COUNT).await;
         assert_eq!(test_users.len(), *CLIENT_COUNT);
 
         // start a game
@@ -134,7 +134,7 @@ pub mod test {
         //  create new users to play our game
         const CLIENT_COUNT: &'static usize = &3;
         trace_thread_info!("test_thread", "creating users");
-        let mut test_users: Vec<ClientUser> = register_test_users(*CLIENT_COUNT).await;
+        let mut test_users: Vec<UserProfile> = register_test_users(*CLIENT_COUNT).await;
         assert_eq!(test_users.len(), *CLIENT_COUNT);
         //
         //  these are the handlers for clients0, clients1, and clients2
@@ -152,7 +152,6 @@ pub mod test {
 
             let (tx, rx) = mpsc::channel::<CatanMessage>(32);
             let username = test_users[i]
-                .user_profile
                 .pii
                 .as_mut()
                 .unwrap()
@@ -247,8 +246,8 @@ pub mod test {
         }
     }
 
-    async fn register_test_users(count: usize) -> Vec<ClientUser> {
-        let mut test_users: Vec<ClientUser> = Vec::new();
+    async fn register_test_users(count: usize) -> Vec<UserProfile> {
+        let mut test_users: Vec<UserProfile> = Vec::new();
         let proxy = ServiceProxy::new_non_auth(
             Some(TestContext {
                 use_cosmos_db: false,
@@ -290,7 +289,7 @@ pub mod test {
                 .register(&user_profile, "password")
                 .await
                 .assert_success("Register should succeed")
-                .to_client_user()
+                .to_profile()
                 .expect("Register should have a ClientUser in the body");
             test_users.push(client_user);
         }

@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{shared::{shared_models::{GameError, ResponseType, ServiceResponse, ClientUser}, service_models::PersistUser}, log_return_bad_id, new_not_found_error};
+use crate::{shared::{shared_models::{GameError, ResponseType, ServiceResponse, UserProfile}, service_models::PersistUser}, log_return_bad_id, new_not_found_error};
 use async_trait::async_trait;
 use log::trace;
 use reqwest::StatusCode;
@@ -44,7 +44,7 @@ async fn update_or_create_user(&self, user: &PersistUser) -> Result<ServiceRespo
         Ok(ServiceResponse::new(
             "created",
             StatusCode::CREATED,
-            ResponseType::ClientUser(ClientUser::from_persist_user(user)),
+            ResponseType::Profile(UserProfile::from_persist_user(user)),
             GameError::NoError(String::default()),
         ))
     }

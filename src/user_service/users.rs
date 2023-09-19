@@ -21,9 +21,7 @@ use crate::{bad_request_from_string, new_ok_response, new_unauthorized_response,
 use crate::games_service::long_poller::long_poller::LongPoller;
 
 use crate::middleware::request_context_mw::RequestContext;
-use crate::shared::shared_models::{
-    ClientUser, GameError, ResponseType, ServiceResponse, UserProfile,
-};
+use crate::shared::shared_models::{GameError, ResponseType, ServiceResponse, UserProfile};
 
 use reqwest::StatusCode;
 
@@ -332,15 +330,15 @@ pub async fn list_users(
     // Get list of users
     match request_context.database.list().await {
         Ok(users) => {
-            let client_users: Vec<ClientUser> = users
+            let client_users: Vec<UserProfile> = users
                 .iter()
-                .map(|user| ClientUser::from_persist_user(&user))
+                .map(|user| UserProfile::from_persist_user(&user))
                 .collect();
 
             Ok(ServiceResponse::new(
                 "",
                 StatusCode::OK,
-                ResponseType::ClientUsers(client_users),
+                ResponseType::Profiles(client_users),
                 GameError::NoError(String::default()),
             ))
         }
@@ -377,7 +375,7 @@ pub async fn get_profile(
     Ok(ServiceResponse::new(
         "",
         StatusCode::OK,
-        ResponseType::ClientUser(ClientUser::from_persist_user(&user)),
+        ResponseType::Profile(UserProfile::from_persist_user(&user)),
         GameError::NoError(String::default()),
     ))
 }
@@ -697,9 +695,9 @@ mod tests {
         let sr = register("password", &profile, &request_context)
             .await
             .expect("this should work");
-        let client_user = sr.to_client_user().expect("This should be a client user");
+        let client_user = sr.to_profile().expect("This should be a client user");
         let code = 12345;
-        let sr = internal_send_phone_code(&client_user.id, code, &request_context)
+        let sr = internal_send_phone_code(&client_user.user_id.unwrap(), code, &request_context)
             .await
             .expect("text message should be sent!");
 
@@ -726,11 +724,11 @@ mod tests {
         let sr = register("password", &profile, &request_context)
             .await
             .expect("this should work");
-        let client_user = sr.to_client_user().expect("This should be a client user");
+        let client_user = sr.to_profile().expect("This should be a client user");
         let host_name = std::env::var("HOST_NAME").expect("HOST_NAME must be set");
         let result = send_validation_email(
             &host_name,
-            &client_user.id,
+            &client_user.user_id.unwrap(),
             &profile.get_email_or_panic(),
             &request_context,
         );
@@ -773,10 +771,10 @@ mod tests {
         let result = register("password", &profile, &request_context).await;
         assert!(result.is_ok());
         let sr = result.unwrap();
-        let client_user = sr.to_client_user().expect("This should be a client user");
+        let user_profile = sr.to_profile().expect("This should be a client user");
         request_context
             .database
-            .find_user_by_email(&client_user.user_profile.pii.unwrap().email)
+            .find_user_by_email(&user_profile.pii.unwrap().email)
             .await
             .expect("we just put this here!");
 

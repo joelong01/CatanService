@@ -10,7 +10,7 @@ use crate::{
     },
     log_thread_info,
     middleware::request_context_mw::TestContext,
-    shared::shared_models::ClientUser,
+    shared::shared_models::UserProfile,
     trace_thread_info, wait_for_message,
 };
 use crate::{
@@ -48,10 +48,10 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
 
     let name = "Main(Joe)";
 
-    let my_info: ClientUser = proxy
+    let my_info: UserProfile = proxy
         .get_profile()
         .await
-        .to_client_user()
+        .to_profile()
         .expect("Successful call to get_profile should have a ClientUser in the body");
 
     trace_thread_info!(name, "Waiting for 500ms");
@@ -92,19 +92,19 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
     trace_thread_info!(name, "get_lobby returned: {:#?}", lobby);
 
     for lobby_user in lobby {
-        let my_clone = my_info.clone();
-        let profile = my_clone.user_profile;
-        if lobby_user.id == my_clone.id {
+        let cloned_profile = my_info.clone();
+
+        if lobby_user.user_id == cloned_profile.user_id {
             continue; // don't invite myself
         }
         let invite_message = "Join my game!".to_string();
         let invitation = Invitation {
-            from_id: my_clone.id.clone(),
-            from_name: profile.display_name.clone(),
-            to_id: lobby_user.id.clone(),
-            to_name: lobby_user.user_profile.display_name.clone(),
+            from_id: cloned_profile.user_id.clone().unwrap(),
+            from_name: cloned_profile.display_name.clone(),
+            to_id: lobby_user.user_id.clone().unwrap(),
+            to_name: lobby_user.display_name.clone(),
             message: invite_message.clone(),
-            from_picture: profile.picture_url.clone(),
+            from_picture: cloned_profile.picture_url.clone(),
             game_id: game_id.to_owned(),
         };
         trace_thread_info!(name, "Sending GameInvite");

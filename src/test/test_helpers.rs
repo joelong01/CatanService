@@ -43,13 +43,13 @@ pub mod test {
         test_proxy.set_auth_token(&Some(admin_auth_token.clone()));
         
         let service_response = test_proxy.get_profile().await;
-        let client_user = service_response
-            .to_client_user()
+        let client_user_profile = service_response
+            .to_profile()
             .expect("this should be a client_user");
 
-        assert!(client_user.id.len() > 0);
+        assert!(client_user_profile.user_id.unwrap().len() > 0);
         assert_eq!(
-            client_user.user_profile.pii.unwrap().email,
+            client_user_profile.pii.unwrap().email,
             admin_profile.get_email_or_panic()
         );
 
@@ -74,7 +74,7 @@ pub mod test {
                 let cu = test_proxy
                     .get_profile()
                     .await
-                    .to_client_user()
+                    .to_profile()
                     .expect("this shoudl be there since login worked");
                 let sr = test_proxy.delete_user(&cu).await;
                 assert!(sr.status.is_success());
@@ -146,7 +146,7 @@ pub mod test {
             if service_response.status.is_success() {
                 //  we get back a service response with a client user in the body
 
-                let client_user = service_response.to_client_user();
+                let client_user = service_response.to_profile();
 
                 let pretty_json = serde_json::to_string_pretty(&client_user)
                     .expect("Failed to pretty-print JSON");
