@@ -34,8 +34,6 @@ use crate::shared::shared_models::ResponseType;
 use crate::shared::shared_models::ServiceResponse;
 use crate::trace_function;
 
-
-
 use super::azure_types::CosmosDatabaseInfo;
 
 static SUBSCRIPTION_ID: OnceCell<String> = OnceCell::new();
@@ -334,14 +332,12 @@ fn exec_os(args: &[&str]) -> Result<String, ServiceResponse> {
     let mut command = Command::new("az");
     command.args(args);
 
-    let output = command
-        .output()
-        .map_err(|err| ServiceResponse{
-            message: format!("Failed to execute command: {:?}", err),
-            status: StatusCode::BAD_REQUEST,
-            response_type: ResponseType::AzError(err.to_string()),
-            game_error: GameError::AzError(err.to_string()),
-        })?;
+    let output = command.output().map_err(|err| ServiceResponse {
+        message: format!("Failed to execute command: {:?}", err),
+        status: StatusCode::BAD_REQUEST,
+        response_type: ResponseType::AzError(err.to_string()),
+        game_error: GameError::AzError(err.to_string()),
+    })?;
 
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())
@@ -824,7 +820,10 @@ pub fn key_vault_save_secret(
 ///
 /// * The value of the retrieved secret wrapped in `Ok` if successful.
 /// - `Err(ServiceResponse)`: An error message describing the reason for the failure.
-pub fn key_vault_get_secret(keyvault_name: &str, secret_name: &str) -> Result<String, ServiceResponse> {
+pub fn key_vault_get_secret(
+    keyvault_name: &str,
+    secret_name: &str,
+) -> Result<String, ServiceResponse> {
     let args = [
         "keyvault",
         "secret",
@@ -1003,232 +1002,276 @@ pub fn verify_or_create_collection(
 
     Ok(())
 }
+#[cfg(test)]
+mod tests {
 
-#[test]
-pub fn send_text_message_test() {
-    tokio::runtime::Runtime::new()
-        .expect("Failed to create Tokio runtime")
-        .block_on(init_env_logger(
-            log::LevelFilter::Info,
-            log::LevelFilter::Error,
-        ));
-    send_text_message(&SERVICE_CONFIG.test_phone_number, "this is a test")
+    #![allow(dead_code)]
+
+
+    use once_cell::sync::Lazy;
+    use once_cell::sync::OnceCell;
+    use rand::Rng;
+    use regex::Regex;
+    use reqwest::StatusCode;
+    use serde::{Deserialize, Serialize};
+    use serde_json::Value;
+    use std::collections::HashMap;
+    use std::collections::HashSet;
+    use std::env;
+    use std::process::Command;
+    use std::str;
+    use std::sync::Mutex;
+    use tracing::info;
+    
+    use lazy_static::lazy_static;
+    
+    use crate::az_error_to_service_response;
+    use crate::azure_setup::azure_wrapper::*;
+
+    use crate::bad_request_from_string;
+    use crate::init_env_logger;
+    use crate::log_and_return_azure_core_error;
+    use crate::log_return_bad_request;
+    use crate::log_return_serde_error;
+    use crate::middleware::request_context_mw::RequestContext;
+    use crate::middleware::request_context_mw::TestContext;
+    use crate::middleware::service_config::SERVICE_CONFIG;
+    use crate::shared::service_models::Claims;
+    use crate::shared::service_models::Role;
+    use crate::shared::shared_models::GameError;
+    use crate::shared::shared_models::ResponseType;
+    use crate::shared::shared_models::ServiceResponse;
+    use crate::trace_function;
+
+
+    #[test]
+    pub fn send_text_message_test() {
+        tokio::runtime::Runtime::new()
+            .expect("Failed to create Tokio runtime")
+            .block_on(init_env_logger(
+                log::LevelFilter::Info,
+                log::LevelFilter::Error,
+            ));
+        send_text_message(&SERVICE_CONFIG.test_phone_number, "this is a test")
+            .expect("text message should be sent");
+    }
+
+    #[test]
+    pub fn send_email_test() {
+        tokio::runtime::Runtime::new()
+            .expect("Failed to create Tokio runtime")
+            .block_on(init_env_logger(
+                log::LevelFilter::Info,
+                log::LevelFilter::Error,
+            ));
+        send_email(
+            &SERVICE_CONFIG.test_email,
+            &SERVICE_CONFIG.service_email,
+            "this is a test",
+            "test email",
+        )
         .expect("text message should be sent");
-}
+    }
 
-#[test]
-pub fn send_email_test() {
-    tokio::runtime::Runtime::new()
-        .expect("Failed to create Tokio runtime")
-        .block_on(init_env_logger(
-            log::LevelFilter::Info,
-            log::LevelFilter::Error,
-        ));
-    send_email(
-        &SERVICE_CONFIG.test_email,
-        &SERVICE_CONFIG.service_email,
-        "this is a test",
-        "test email",
-    )
-    .expect("text message should be sent");
-}
+    pub fn cleanup_randomized_resource_groups() {
+        let args = ["group", "list"];
+        print_cmd(&args);
 
-pub fn cleanup_randomized_resource_groups() {
-    let args = ["group", "list"];
-    print_cmd(&args);
+        let json_doc = exec_os(&args).expect("Failed to execute OS command");
 
-    let json_doc = exec_os(&args).expect("Failed to execute OS command");
+        let parsed: serde_json::Value =
+            serde_json::from_str(&json_doc).expect("Failed to parse JSON");
 
-    let parsed: serde_json::Value = serde_json::from_str(&json_doc).expect("Failed to parse JSON");
-
-    // Assume the root of the parsed JSON is an array
-    if let serde_json::Value::Array(groups) = parsed {
-        for group in groups {
-            if let Some(group_name) = group.get("name").and_then(|name| name.as_str()) {
-                if group_name.contains("test-resource-group") {
-                    delete_resource_group(group_name).expect("should be able to delete this group");
+        // Assume the root of the parsed JSON is an array
+        if let serde_json::Value::Array(groups) = parsed {
+            for group in groups {
+                if let Some(group_name) = group.get("name").and_then(|name| name.as_str()) {
+                    if group_name.contains("test-resource-group") {
+                        delete_resource_group(group_name)
+                            .expect("should be able to delete this group");
+                    }
                 }
             }
         }
     }
-}
 
-#[test]
-pub fn azure_resources_integration_test() {
-    let randomize_end_of_name = &format!("{}", rand::thread_rng().gen_range(100_000..=999_999));
-    let resource_group = "test-resource-group-".to_owned() + randomize_end_of_name;
-    let location = &SERVICE_CONFIG.azure_location;
-    let kv_name = std::env::var("KEV_VAULT_NAME").expect("KEV_VAULT_NAME not found in environment");
-    let cosmos_account_name = "test-cosmos-account-".to_owned() + randomize_end_of_name;
-    let database_name = "test-cosmos-database-".to_owned() + randomize_end_of_name;
-    let collection_name = "test-collection-".to_owned() + randomize_end_of_name;
+    #[test]
+    pub fn azure_resources_integration_test() {
+        let randomize_end_of_name = &format!("{}", rand::thread_rng().gen_range(100_000..=999_999));
+        let resource_group = "test-resource-group-".to_owned() + randomize_end_of_name;
+        let location = &SERVICE_CONFIG.azure_location;
+        let kv_name =
+            std::env::var("KEV_VAULT_NAME").expect("KEV_VAULT_NAME not found in environment");
+        let cosmos_account_name = "test-cosmos-account-".to_owned() + randomize_end_of_name;
+        let database_name = "test-cosmos-database-".to_owned() + randomize_end_of_name;
+        let collection_name = "test-collection-".to_owned() + randomize_end_of_name;
 
-    //
-    //  run the async function synchronously
-    tokio::runtime::Runtime::new()
-        .expect("Failed to create Tokio runtime")
-        .block_on(init_env_logger(
-            log::LevelFilter::Info,
-            log::LevelFilter::Error,
-        ));
+        //
+        //  run the async function synchronously
+        tokio::runtime::Runtime::new()
+            .expect("Failed to create Tokio runtime")
+            .block_on(init_env_logger(
+                log::LevelFilter::Info,
+                log::LevelFilter::Error,
+            ));
 
-    // make sure the user is logged in
+        // make sure the user is logged in
 
-    verify_login_or_panic();
+        verify_login_or_panic();
 
-    // cleanup if any tests left something behind
-    cleanup_randomized_resource_groups();
+        // cleanup if any tests left something behind
+        cleanup_randomized_resource_groups();
 
-    // verify KV exists
-    keyvault_exists(&kv_name).expect(&format!("Failed to find Key Vault named {}.", kv_name));
+        // verify KV exists
+        keyvault_exists(&kv_name).expect(&format!("Failed to find Key Vault named {}.", kv_name));
 
-    // Create a test resource group
-    log::info!("creating resource group");
-    create_resource_group(&resource_group, location).expect("Failed to create resource group.");
+        // Create a test resource group
+        log::info!("creating resource group");
+        create_resource_group(&resource_group, location).expect("Failed to create resource group.");
 
-    log::trace!("creating cosmosdb: {}", cosmos_account_name);
-    //Add a Cosmos DB instance to it
-    create_cosmos_account(&resource_group, &cosmos_account_name, location)
-        .expect("Failed to create Cosmos DB instance.");
+        log::trace!("creating cosmosdb: {}", cosmos_account_name);
+        //Add a Cosmos DB instance to it
+        create_cosmos_account(&resource_group, &cosmos_account_name, location)
+            .expect("Failed to create Cosmos DB instance.");
 
-    log::trace!("Creating database: {}", database_name);
-    create_database(&cosmos_account_name, &database_name, &resource_group)
-        .expect("creating a cosmos db should succeed");
-    // Create a collection in the Cosmos DB instance
-    log::trace!("Creating collection: {}", collection_name);
-    create_collection(
-        &cosmos_account_name,
-        &database_name,
-        &collection_name,
-        &resource_group,
-    )
-    .expect("Failed to create collection in Cosmos DB.");
+        log::trace!("Creating database: {}", database_name);
+        create_database(&cosmos_account_name, &database_name, &resource_group)
+            .expect("creating a cosmos db should succeed");
+        // Create a collection in the Cosmos DB instance
+        log::trace!("Creating collection: {}", collection_name);
+        create_collection(
+            &cosmos_account_name,
+            &database_name,
+            &collection_name,
+            &resource_group,
+        )
+        .expect("Failed to create collection in Cosmos DB.");
 
-    //get cosmos secrets from cosmos
-    let secrets = get_cosmos_secrets(&cosmos_account_name, &resource_group)
-        .expect("Failed to retrieve Cosmos DB secrets.");
+        //get cosmos secrets from cosmos
+        let secrets = get_cosmos_secrets(&cosmos_account_name, &resource_group)
+            .expect("Failed to retrieve Cosmos DB secrets.");
 
-    // find the secondary read/write secret
-    let secret = secrets
-        .iter()
-        .find(|s| s.key_kind == "Secondary")
-        .expect("there should be a Secondary key in the cosmos secrets");
+        // find the secondary read/write secret
+        let secret = secrets
+            .iter()
+            .find(|s| s.key_kind == "Secondary")
+            .expect("there should be a Secondary key in the cosmos secrets");
 
-    // store in key vault
-    store_cosmos_secrets_in_keyvault(&secret, &kv_name)
-        .expect("Failed to store secrets in Key Vault.");
+        // store in key vault
+        store_cosmos_secrets_in_keyvault(&secret, &kv_name)
+            .expect("Failed to store secrets in Key Vault.");
 
-    //Validate that the resource group, Cosmos DB, and Key Vault exist
-    assert!(
-        resource_group_exists(&resource_group).expect("Failed to check resource group existence.")
-    );
-    assert!(cosmos_account_exists(&cosmos_account_name, &resource_group)
-        .expect("Failed to check Cosmos DB existence."));
+        //Validate that the resource group, Cosmos DB, and Key Vault exist
+        assert!(resource_group_exists(&resource_group)
+            .expect("Failed to check resource group existence."));
+        assert!(cosmos_account_exists(&cosmos_account_name, &resource_group)
+            .expect("Failed to check Cosmos DB existence."));
 
-    //  Get the secrets back out of Key Vault and validate they are correct
-    let retrieved_secrets = retrieve_cosmos_secrets_from_keyvault(&kv_name)
-        .expect("Failed to retrieve secrets from Key Vault.");
-    assert_eq!(
-        *secret, retrieved_secrets,
-        "Stored and retrieved secrets do not match."
-    );
+        //  Get the secrets back out of Key Vault and validate they are correct
+        let retrieved_secrets = retrieve_cosmos_secrets_from_keyvault(&kv_name)
+            .expect("Failed to retrieve secrets from Key Vault.");
+        assert_eq!(
+            *secret, retrieved_secrets,
+            "Stored and retrieved secrets do not match."
+        );
 
-    // Delete Cosmos DB - commented out as this take *forever* to run
-    // delete_cosmos_account(&cosmos_account_name, &resource_group)
-    //     .expect("Failed to delete Cosmos DB.");
+        // Delete Cosmos DB - commented out as this take *forever* to run
+        // delete_cosmos_account(&cosmos_account_name, &resource_group)
+        //     .expect("Failed to delete Cosmos DB.");
 
-    // Clean up: Delete the test resource group (you can comment this out if you want to inspect resources)
-    delete_resource_group(&resource_group).expect("Failed to delete resource group.");
-}
+        // Clean up: Delete the test resource group (you can comment this out if you want to inspect resources)
+        delete_resource_group(&resource_group).expect("Failed to delete resource group.");
+    }
 
-#[test]
-pub fn rotate_login_keys() {
-    // let kv_name = std::env::var("KEV_VAULT_NAME").expect("KEY_VAULT_NAME not found in environment");
-    // let old_name = "oldLoginSecret-test";
-    // let new_name = "currentLoginSecret-test";
+    #[test]
+    pub fn rotate_login_keys() {
+        // let kv_name = std::env::var("KEV_VAULT_NAME").expect("KEY_VAULT_NAME not found in environment");
+        // let old_name = "oldLoginSecret-test";
+        // let new_name = "currentLoginSecret-test";
 
-    // // make sure the user is logged in
-    // verify_login_or_panic();
+        // // make sure the user is logged in
+        // verify_login_or_panic();
 
-    // // verify KV exists
-    // keyvault_exists(&kv_name).expect(&format!("Failed to find Key Vault named {}.", kv_name));
+        // // verify KV exists
+        // keyvault_exists(&kv_name).expect(&format!("Failed to find Key Vault named {}.", kv_name));
 
-    // let current_login_key = key_vault_get_secret(&kv_name, new_name).unwrap_or_else(|_| generate_jwt_key());
-    // let test_context = TestContext::new(false);
-    // let claims = Claims::new(
-    //     "test_id",
-    //     "test@email.com",
-    //     24 * 60 * 60,
-    //     &vec![Role::Admin],
-    //     &Some(test_context),
-    // );
-    // let token =
-    //     create_jwt_token(&claims, &RequestContext::test_default(false)).expect("create token should not fail");
+        // let current_login_key = key_vault_get_secret(&kv_name, new_name).unwrap_or_else(|_| generate_jwt_key());
+        // let test_context = TestContext::new(false, None);
+        // let claims = Claims::new(
+        //     "test_id",
+        //     "test@email.com",
+        //     24 * 60 * 60,
+        //     &vec![Role::Admin],
+        //     &Some(test_context),
+        // );
+        // let token =
+        //     create_jwt_token(&claims, &RequestContext::test_default(false)).expect("create token should not fail");
 
-    // let new_key = generate_jwt_key();
+        // let new_key = generate_jwt_key();
 
-    // let _ = key_vault_save_secret(&kv_name, old_name, &current_login_key);
-    // let _ = key_vault_save_secret(&kv_name, new_name, &new_key);
+        // let _ = key_vault_save_secret(&kv_name, old_name, &current_login_key);
+        // let _ = key_vault_save_secret(&kv_name, new_name, &new_key);
 
-    // let current_login_key_again =
-    //     key_vault_get_secret(&kv_name, new_name).unwrap_or_else(|_| generate_jwt_key());
+        // let current_login_key_again =
+        //     key_vault_get_secret(&kv_name, new_name).unwrap_or_else(|_| generate_jwt_key());
 
-    // let res_current = validate_jwt_token_with_key(&token, &current_login_key_again);
-    // assert!(res_current.is_none());
+        // let res_current = validate_jwt_token_with_key(&token, &current_login_key_again);
+        // assert!(res_current.is_none());
 
-    // let old_key = key_vault_get_secret(&kv_name, old_name).unwrap_or_else(|_| generate_jwt_key());
+        // let old_key = key_vault_get_secret(&kv_name, old_name).unwrap_or_else(|_| generate_jwt_key());
 
-    // let res_old = validate_jwt_token_with_key(&token, &old_key);
-    // assert!(res_old.is_some());
-}
+        // let res_old = validate_jwt_token_with_key(&token, &old_key);
+        // assert!(res_old.is_some());
+    }
 
-#[test]
-fn database_exits() {
-    //
-    //  run the async function synchronously
-    tokio::runtime::Runtime::new()
-        .expect("Failed to create Tokio runtime")
-        .block_on(init_env_logger(
-            log::LevelFilter::Info,
-            log::LevelFilter::Error,
-        ));
+    #[test]
+    fn database_exits() {
+        //
+        //  run the async function synchronously
+        tokio::runtime::Runtime::new()
+            .expect("Failed to create Tokio runtime")
+            .block_on(init_env_logger(
+                log::LevelFilter::Info,
+                log::LevelFilter::Error,
+            ));
 
-    let exists = cosmos_account_exists(
-        &SERVICE_CONFIG.cosmos_account,
-        &SERVICE_CONFIG.resource_group,
-    )
-    .expect("should work");
+        let exists = cosmos_account_exists(
+            &SERVICE_CONFIG.cosmos_account,
+            &SERVICE_CONFIG.resource_group,
+        )
+        .expect("should work");
 
-    assert!(exists);
+        assert!(exists);
 
-    let exists = cosmos_account_exists(
-        &SERVICE_CONFIG.cosmos_account,
-        "TEST-RG-2193472304723089487",
-    )
-    .expect("should work - but not exist");
-
-    assert!(!exists);
-
-    let exists = cosmos_account_exists("bad account name", "TEST-RG-2193472304723089487")
+        let exists = cosmos_account_exists(
+            &SERVICE_CONFIG.cosmos_account,
+            "TEST-RG-2193472304723089487",
+        )
         .expect("should work - but not exist");
 
-    assert!(!exists);
+        assert!(!exists);
 
-    let exists = cosmos_database_exists(
-        &SERVICE_CONFIG.cosmos_account,
-        &SERVICE_CONFIG.cosmos_database_name,
-        &SERVICE_CONFIG.resource_group,
-    )
-    .expect("should work");
+        let exists = cosmos_account_exists("bad account name", "TEST-RG-2193472304723089487")
+            .expect("should work - but not exist");
 
-    assert!(exists);
+        assert!(!exists);
 
-    let exists = cosmos_database_exists(
-        &SERVICE_CONFIG.cosmos_account,
-        "Very-Bad-Db-name",
-        &SERVICE_CONFIG.resource_group,
-    )
-    .expect("should work - but no exist");
+        let exists = cosmos_database_exists(
+            &SERVICE_CONFIG.cosmos_account,
+            &SERVICE_CONFIG.cosmos_database_name,
+            &SERVICE_CONFIG.resource_group,
+        )
+        .expect("should work");
 
-    assert!(!exists);
+        assert!(exists);
+
+        let exists = cosmos_database_exists(
+            &SERVICE_CONFIG.cosmos_account,
+            "Very-Bad-Db-name",
+            &SERVICE_CONFIG.resource_group,
+        )
+        .expect("should work - but no exist");
+
+        assert!(!exists);
+    }
 }

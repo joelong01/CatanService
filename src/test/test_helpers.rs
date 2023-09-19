@@ -41,8 +41,8 @@ pub mod test {
         assert!(admin_auth_token.len() > 0);
 
         test_proxy.set_auth_token(&Some(admin_auth_token.clone()));
-        
-        let service_response = test_proxy.get_profile().await;
+
+        let service_response = test_proxy.get_profile("Self").await;
         let client_user_profile = service_response
             .to_profile()
             .expect("this should be a client_user");
@@ -72,7 +72,7 @@ pub mod test {
             if let Some(test_auth_token) = result.get_token() {
                 test_proxy.set_auth_token(&Some(test_auth_token));
                 let cu = test_proxy
-                    .get_profile()
+                    .get_profile("Self")
                     .await
                     .to_profile()
                     .expect("this shoudl be there since login worked");
@@ -84,7 +84,7 @@ pub mod test {
         let users = test_proxy
             .get_all_users()
             .await
-            .get_client_users()
+            .get_profile_vec()
             .expect("there should be at least one user always (the admin)");
 
         assert!(users.len() > 0);
@@ -96,7 +96,7 @@ pub mod test {
         let _admin_token = TestHelpers::admin_login().await;
         let test_users = TestHelpers::load_test_users_from_config();
         log::trace!("{}", serde_json::to_string(&test_users).unwrap());
-        let _test_context = TestContext::new(true);
+        let _test_context = TestContext::new(true, None);
 
         print!("ok");
     }
@@ -125,31 +125,35 @@ pub mod test {
     async fn register_test_users_test() {
         init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
         let app = create_test_service!();
-        let mut proxy = TestProxy::new(&app, None);
+        let mut proxy = TestProxy::new(&app, Some(TestContext::new(true, None)));
         //  setup_test!(&app, true);
-        let admin_token = TestHelpers::admin_login().await;
-        proxy.set_auth_token(&Some(admin_token));
-        register_test_users(&proxy).await;
+
+        let users = register_test_users(&mut proxy).await;
+        for user in users {
+            assert!(user.pii.is_some());
+            assert!(user.user_id.is_some());
+        }
     }
 
-    pub async fn register_test_users<S>(proxy: &TestProxy<'_, S>) -> Vec<UserProfile>
+    pub async fn register_test_users<S>(proxy: &mut TestProxy<'_, S>) -> Vec<UserProfile>
     // Add the expected lifetime and generic type for the function signature
     where
         S: Service<Request, Response = ActixServiceResponse<EitherBody<BoxBody>>, Error = Error>
             + 'static,
     {
+        let admin_token = TestHelpers::admin_login().await;
+        proxy.set_auth_token(&Some(admin_token));
         let test_users = TestHelpers::load_test_users_from_config();
-
+        let mut profiles = Vec::new();
         for user in test_users.iter() {
             let service_response = proxy.register_test_user(user, "password").await;
-
             if service_response.status.is_success() {
-                //  we get back a service response with a client user in the body
+                let profile = service_response.to_profile().expect("should be a profile");
 
-                let client_user = service_response.to_profile();
+                profiles.push(profile.clone());
 
-                let pretty_json = serde_json::to_string_pretty(&client_user)
-                    .expect("Failed to pretty-print JSON");
+                let pretty_json =
+                    serde_json::to_string_pretty(&profile).expect("Failed to pretty-print JSON");
 
                 // Check if the pretty-printed JSON contains any underscores
                 assert!(
@@ -161,9 +165,14 @@ pub mod test {
             } else {
                 log::trace!("{} already registered", user.display_name.clone());
                 assert_eq!(service_response.status, StatusCode::CONFLICT);
+                let email = user.pii.clone().unwrap().email;
+                let service_response = proxy.get_profile(&email).await;
+                assert!(service_response.status.is_success());
+                let profile = service_response.to_profile().expect("should be a profile");
+                profiles.push(profile.clone());
             }
         }
-        test_users
+        profiles
     }
 
     pub struct TestHelpers {}

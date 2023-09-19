@@ -1,7 +1,7 @@
 use crate::{
     get_header_value,
-    middleware::{request_context_mw::RequestContext, header_extractor::HeadersExtractor},
-    shared::shared_models::{UserProfile, GameError, ResponseType, ServiceResponse},
+    middleware::{header_extractor::HeadersExtractor, request_context_mw::RequestContext},
+    shared::shared_models::{GameError, ResponseType, ServiceResponse, UserProfile},
 };
 use actix_web::{
     http::Error,
@@ -76,20 +76,25 @@ pub async fn list_users_handler(request_context: RequestContext) -> HttpResponse
 }
 
 // Get user profile
-pub async fn get_profile_handler(request_context: RequestContext) -> HttpResponse {
-    super::users::get_profile(&request_context)
+pub async fn get_profile_handler(
+    email: web::Path<String>,
+    request_context: RequestContext,
+) -> HttpResponse {
+    super::users::get_profile(&email, &request_context)
         .await
         .map(|sr| sr.to_http_response())
         .unwrap_or_else(|sr| sr.to_http_response())
 }
 
-pub async fn update_profile_handler(request_context: RequestContext,   profile_in: web::Json<UserProfile>) -> HttpResponse {
+pub async fn update_profile_handler(
+    request_context: RequestContext,
+    profile_in: web::Json<UserProfile>,
+) -> HttpResponse {
     super::users::update_profile(&profile_in, &request_context)
         .await
         .map(|sr| sr.to_http_response())
         .unwrap_or_else(|sr| sr.to_http_response())
 }
-
 
 // Find user by ID
 pub async fn find_user_by_id_handler(
@@ -174,20 +179,15 @@ pub async fn validate_phone_handler(
 }
 
 pub async fn send_phone_code_handler(
-    headers: HeadersExtractor,
     request_context: RequestContext,
 ) -> HttpResponse {
-    let user_id = get_header_value!(user_id, headers);
-    super::users::send_phone_code(&user_id, &request_context)
+    super::users::send_phone_code(&request_context)
         .await
         .map(|sr| sr.to_http_response())
         .unwrap_or_else(|sr| sr.to_http_response())
 }
 
-pub async fn rotate_login_keys_handler(
-    request_context: RequestContext,
-) -> HttpResponse {
-
+pub async fn rotate_login_keys_handler(request_context: RequestContext) -> HttpResponse {
     super::users::rotate_login_keys(&request_context)
         .await
         .map(|sr| sr.to_http_response())

@@ -47,7 +47,7 @@ pub struct PersistUser {
 impl PersistUser {
     pub fn new() -> Self {
         Self {
-            id: PersistUser::get_id(),
+            id: PersistUser::new_id(),
             local_user_owner_id: None,
             partition_key: 1,
             password_hash: None,
@@ -64,7 +64,7 @@ impl PersistUser {
         Self {
             id: match &profile.user_id {
                 Some(identifier) => identifier.clone(),
-                None => PersistUser::get_id(),
+                None => PersistUser::new_id(),
             },
             local_user_owner_id: profile.user_id.clone(),
             partition_key: 1,
@@ -88,7 +88,7 @@ impl PersistUser {
     /// # Returns
     ///
     /// * A unique `String` ID.
-    pub fn get_id() -> String {
+    pub fn new_id() -> String {
         Uuid::new_v4().to_string()
     }
 }

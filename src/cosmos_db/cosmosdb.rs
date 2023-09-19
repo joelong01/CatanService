@@ -513,7 +513,7 @@ mod tests {
             };
             let user = PersistUser {
                 partition_key: 1,
-                id: PersistUser::get_id(),
+                id: PersistUser::new_id(),
                 password_hash: Some(password_hash.to_owned()),
                 user_profile: UserProfile {
                     user_type: UserType::Connected,

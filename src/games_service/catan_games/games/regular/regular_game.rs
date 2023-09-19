@@ -78,7 +78,7 @@ impl RegularGame {
         let player = {
             let user = creator.clone();
             Player {
-                user_data: user.clone(),
+                profile: user.clone(),
                 roads: vec![],
                 buildings: vec![],
                 harbors: vec![],
@@ -105,7 +105,7 @@ impl RegularGame {
             .collect();
 
         Self {
-            id: PersistUser::get_id(),
+            id: PersistUser::new_id(),
             players,
             tiles,
             harbors,
@@ -137,7 +137,7 @@ impl RegularGame {
         let mut clone = self.clone();
         let player = {
             Player {
-                user_data: profile.clone(),
+                profile: profile.clone(),
                 roads: vec![],
                 buildings: vec![],
                 harbors: vec![],
@@ -472,7 +472,7 @@ impl<'a> GameTrait<'a> for RegularGame {
         self.players.insert(user.user_id.clone().unwrap(), {
             let user = user;
             Player {
-                user_data: user.clone(),
+                profile: user.clone(),
                 roads: vec![],
                 buildings: vec![],
                 harbors: vec![],

@@ -75,9 +75,7 @@ pub mod test {
         //  setup the test database
         trace_thread_info!("test_thread", "setting up service");
         let proxy = ServiceProxy::new_non_auth(
-            Some(TestContext {
-                use_cosmos_db: false,
-            }),
+            Some(TestContext::new(false, None)),
             HOST_URL,
         );
         let response = proxy.setup().await;
@@ -121,9 +119,7 @@ pub mod test {
         //  setup the test database
         trace_thread_info!("test_thread", "setting up service");
         let proxy = ServiceProxy::new_non_auth(
-            Some(TestContext {
-                use_cosmos_db: false,
-            }),
+            Some(TestContext::new(false, None)),
             HOST_URL,
         );
         let response = proxy.setup().await;
@@ -249,9 +245,7 @@ pub mod test {
     async fn register_test_users(count: usize) -> Vec<UserProfile> {
         let mut test_users: Vec<UserProfile> = Vec::new();
         let proxy = ServiceProxy::new_non_auth(
-            Some(TestContext {
-                use_cosmos_db: false,
-            }),
+            Some(TestContext::new(false, None)),
             HOST_URL,
         );
         let first_names = vec!["Joe", "James", "Doug"];

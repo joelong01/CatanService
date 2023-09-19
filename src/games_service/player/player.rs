@@ -17,7 +17,7 @@ use super::player_enums::Target;
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "PascalCase")]
 pub struct Player {
-    pub user_data: UserProfile,
+    pub profile: UserProfile,
     pub roads: Vec<Road>,
     pub buildings: Vec<Building>,
     pub harbors: Vec<Harbor>,

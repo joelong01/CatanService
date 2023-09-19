@@ -132,16 +132,8 @@ async fn internal_register_user(
         ));
     }
     // this lets us bootstrap the system -- my assumption is that if you can set the environment variable, then you are
-    // an admin.
+    // an admin.  You can have a test context so that you can create the admin in the mock database.
     if email == request_context.config.admin_email {
-        if request_context.is_test() {
-            return Err(ServiceResponse::new(
-                "Should not have test context",
-                StatusCode::BAD_REQUEST,
-                ResponseType::NoData,
-                GameError::HttpError(StatusCode::BAD_REQUEST),
-            ));
-        }
         roles.push(Role::Admin);
     }
 
@@ -161,7 +153,8 @@ async fn internal_register_user(
 
     // Create the user record
     let mut persist_user = PersistUser::from_user_profile(&profile_in, password_hash.to_owned());
-
+    // put the generated id into th user profile as well so that the client will see it
+    persist_user.user_profile.user_id = Some(persist_user.id.clone());
     // ignore the game stats passed in by the client and create a new one
     persist_user.user_profile.games_played = Some(0);
     persist_user.user_profile.games_won = Some(0);
@@ -352,19 +345,78 @@ pub async fn list_users(
         }
     }
 }
+///
+///     1. email should be id or email
+///         - figure out which one it is by context
+///     2. check the claims -- you can always look up your own profile
+///     3. an admin can look up anybody's profile
 pub async fn get_profile(
+    id_or_email: &str,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
+    let lookup_value: String;
+
     let user_id = request_context
         .claims
         .as_ref()
         .expect("auth_mw should have added this or rejected the call")
         .id
         .clone();
-    let user = match request_context.database.find_user_by_id(&user_id).await? {
+
+    let user_email = request_context
+        .claims
+        .as_ref()
+        .expect("auth_mw should have added this or rejected the call")
+        .sub
+        .clone();
+
+    //
+    //  so there can be 3 things to lokup by.  if Self, look in the context
+    //  and lookup by that id.  if it has an @ in it, look up by email.
+    //  only an admin can look up somebody else's profile.
+
+    if id_or_email.to_ascii_lowercase() == "self" {
+        lookup_value = user_id.clone().clone();
+    } else {
+        lookup_value = id_or_email.to_string();
+    }
+
+    // lookup value is either id or email...is it different than the one in the context?
+
+    if lookup_value != user_id
+        && lookup_value != user_email
+        && !request_context.is_caller_in_role(Role::Admin)
+    {
+        // if you aren't the admin, you can only look up your own profile
+        return new_unauthorized_response!("");
+    }
+
+    let user_email = request_context
+        .claims
+        .as_ref()
+        .expect("auth_mw should have added this or rejected the call")
+        .sub
+        .clone();
+
+    let user = match lookup_value.contains("@") {
+        true => {
+            request_context
+                .database
+                .find_user_by_email(&lookup_value)
+                .await?
+        }
+        false => {
+            request_context
+                .database
+                .find_user_by_id(&lookup_value)
+                .await?
+        }
+    };
+
+    let user = match user {
         Some(u) => u,
         None => {
-            return Ok(ServiceResponse {
+            return Err(ServiceResponse {
                 message: format!("id {} not found", user_id),
                 status: StatusCode::NOT_FOUND,
                 response_type: ResponseType::NoData,
@@ -529,11 +581,30 @@ pub fn send_validation_email(
 /// 4. update the profile
 /// 5. send the text message to the phone
 pub async fn send_phone_code(
-    user_id: &str,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    let code = rand::thread_rng().gen_range(100_000..=999_999);
-    internal_send_phone_code(user_id, code, request_context).await
+    let user_id = request_context
+        .claims
+        .as_ref()
+        .expect("auth_mw should have added this or rejected the call")
+        .id
+        .clone();
+
+        let random_code: i32 = rand::thread_rng().gen_range(100_000..=999_999);
+
+        let code: i32 = request_context
+            .test_context
+            .as_ref()
+            .and_then(|test_ctx| test_ctx.phone_code.as_ref())
+            .copied()
+            .unwrap_or(random_code);
+        
+
+   
+    let sr =  internal_send_phone_code(&user_id, code, request_context).await;
+
+
+    sr
 }
 ///
 /// I have the send_phone_code() and the internal_send_phone_code() so that i can test internal_send_phone_code() in an
@@ -581,7 +652,7 @@ async fn internal_send_phone_code(
 ///
 /// # Arguments
 ///
-/// * `user_id` - The unique identifier for the user.
+
 /// * `code` - The phone code to validate.
 /// * `request_context` - Context related to the current request.
 ///
@@ -679,35 +750,8 @@ mod tests {
         test::test_helpers::test::TestHelpers,
     };
 
+    
     use super::*;
-    #[tokio::test]
-    async fn test_validate_phone() {
-        init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
-        let app = create_test_service!();
-        setup_test!(&app, false);
-
-        let request_context = RequestContext::test_default(false);
-        let mut profile = UserProfile::new_test_user();
-        profile.pii.as_mut().unwrap().phone_number = SERVICE_CONFIG.test_phone_number.clone();
-        // setup
-        let response = verify_cosmosdb(&request_context).await;
-
-        let sr = register("password", &profile, &request_context)
-            .await
-            .expect("this should work");
-        let client_user = sr.to_profile().expect("This should be a client user");
-        let code = 12345;
-        let sr = internal_send_phone_code(&client_user.user_id.unwrap(), code, &request_context)
-            .await
-            .expect("text message should be sent!");
-
-        log::trace!("code is: {}", code);
-        let sr = validate_phone(&format!("{}", code), &request_context)
-            .await
-            .expect("validation to work");
-        assert_eq!(sr.status, StatusCode::OK);
-    }
-
     #[tokio::test]
     async fn test_validate_email() {
         init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Error).await;
@@ -715,7 +759,7 @@ mod tests {
         setup_test!(&app, false);
 
         let request_context = RequestContext::test_default(false);
-        let mut profile = UserProfile::new_test_user();
+        let mut profile = UserProfile::new_test_user(None);
         profile.pii.as_mut().unwrap().email = SERVICE_CONFIG.test_email.clone();
 
         // setup
@@ -763,7 +807,7 @@ mod tests {
         let token = TestHelpers::admin_login().await;
 
         let request_context = RequestContext::test_default(use_cosmos);
-        let profile = UserProfile::new_test_user();
+        let profile = UserProfile::new_test_user(None);
         // setup
         // let response = verify_cosmosdb(&request_context).await;
         // assert!(response.is_ok());

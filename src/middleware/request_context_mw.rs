@@ -24,17 +24,19 @@ use super::security_context::SecurityContext;
 #[serde(rename_all = "PascalCase")]
 pub struct TestContext {
     pub use_cosmos_db: bool,
+    pub phone_code: Option<i32>
 }
 
 impl TestContext {
-    pub fn new(use_cosmos_db: bool) -> Self {
-        Self { use_cosmos_db }
+    pub fn new(use_cosmos_db: bool, phone_code: Option<i32>) -> Self {
+        Self { use_cosmos_db, phone_code: phone_code }
     }
     pub fn as_json(use_cosmos: bool) -> String {
-        let tc = TestContext {
-            use_cosmos_db: use_cosmos,
-        };
+        let tc = TestContext::new(use_cosmos, None);
         serde_json::to_string(&tc).unwrap()
+    }
+    pub fn set_phone_code(&mut self, code: Option<i32>) {
+        self.phone_code = code.clone();
     }
 }
 
@@ -89,7 +91,7 @@ impl RequestContext {
     pub fn test_default(use_cosmos: bool) -> Self {
         RequestContext::new(
             &None,
-            &Some(TestContext::new(use_cosmos)),
+            &Some(TestContext::new(use_cosmos, None)),
             &SERVICE_CONFIG,
             &SecurityContext::cached_secrets(),
         )

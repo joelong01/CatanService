@@ -237,8 +237,8 @@ impl ServiceProxy {
         self.post::<()>(url, headers, None).await
     }
 
-    pub async fn get_profile(&self) -> ServiceResponse {
-        let url = "/auth/api/v1/profile";
+    pub async fn get_profile(&self, id: &str) -> ServiceResponse {
+        let url = format!("/auth/api/v1/profile/{}", id);
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
 
         headers.insert(
@@ -246,7 +246,7 @@ impl ServiceProxy {
             HeaderValue::from_str(&self.auth_token).expect("Invalid header value"),
         );
 
-        self.get(url, headers).await
+        self.get(&url, headers).await
     }
 
     pub async fn new_game(

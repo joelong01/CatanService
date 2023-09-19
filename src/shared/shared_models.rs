@@ -203,7 +203,7 @@ impl UserProfile {
         self.foreground_color = other.foreground_color.clone();
         self.background_color = other.background_color.clone();
         self.text_color = other.text_color.clone();
-        
+
         // Update optional fields if the other has a value:
         if let Some(ref other_id) = other.user_id {
             self.user_id = Some(other_id.clone());
@@ -248,8 +248,12 @@ impl UserProfile {
         //     games_won: persist_user.user_profile.games_won.clone(),
         // }
     }
-   
-    pub fn new_test_user() -> Self {
+
+    pub fn new_test_user(id: Option<String>) -> Self {
+        let id = match id {
+            Some(id) => id,
+            None => PersistUser::new_id(),
+        };
         let random_string = || {
             use rand::distributions::Alphanumeric;
             use rand::{thread_rng, Rng};
@@ -263,14 +267,14 @@ impl UserProfile {
         let random_name = random_string();
         UserProfile {
             user_type: UserType::Connected,
-            user_id: None,
+            user_id: Some(id),
             pii: Some(PersonalInformation {
                 email: format!("{}@test.com", random_string()),
                 phone_number: random_string(),
                 first_name: random_name.clone(),
                 last_name: random_name.clone(),
             }),
-           
+
             display_name: random_name,
             picture_url: String::default(),
             foreground_color: String::default(),
@@ -281,8 +285,6 @@ impl UserProfile {
         }
     }
 }
-
-
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Display)]
 pub enum ResponseType {
@@ -400,7 +402,7 @@ impl ServiceResponse {
         }
     }
 
-    pub fn to_client_users(json: &str) -> Option<(ServiceResponse, Vec<UserProfile>)> {
+    pub fn to_profile_vec(json: &str) -> Option<(ServiceResponse, Vec<UserProfile>)> {
         let service_response: ServiceResponse = match serde_json::from_str(json) {
             Ok(sr) => sr,
             Err(_) => return None,
@@ -442,7 +444,7 @@ impl ServiceResponse {
         }
     }
 
-    pub fn get_client_users(&self) -> Option<Vec<UserProfile>> {
+    pub fn get_profile_vec(&self) -> Option<Vec<UserProfile>> {
         match &self.response_type {
             ResponseType::Profiles(users) => Some(users.clone()),
             _ => None,

@@ -29,9 +29,7 @@ impl ClientThreadHandler for Handler1 {
 pub(crate) async fn client1_thread(mut rx: Receiver<CatanMessage>) {
     let proxy = ServiceProxy::new(
         "james@longshotdev.com",
-        "password", Some(TestContext {
-            use_cosmos_db: false,
-        }),
+        "password", Some(TestContext::new(false, None)),
         HOST_URL,
     )
     .await
@@ -40,7 +38,7 @@ pub(crate) async fn client1_thread(mut rx: Receiver<CatanMessage>) {
     let name = "James";
 
     let my_info: UserProfile = proxy
-        .get_profile()
+        .get_profile("Self")
         .await
         .to_profile()
         .expect("Successful call to get_profile should have a ClientUser in the body");

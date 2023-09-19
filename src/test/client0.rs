@@ -40,16 +40,14 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
     let proxy = ServiceProxy::new(
         "joe@longshotdev.com",
         "password",
-        Some(TestContext {
-            use_cosmos_db: false,
-        }),
+        Some(TestContext::new(false, None)),
         HOST_URL,
     ).await.expect("login to succeed");
 
     let name = "Main(Joe)";
 
     let my_info: UserProfile = proxy
-        .get_profile()
+        .get_profile("Self")
         .await
         .to_profile()
         .expect("Successful call to get_profile should have a ClientUser in the body");
@@ -86,7 +84,7 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
     let lobby = proxy
         .get_lobby()
         .await
-        .get_client_users()
+        .get_profile_vec()
         .expect("Vec<> should be in body");
 
     trace_thread_info!(name, "get_lobby returned: {:#?}", lobby);

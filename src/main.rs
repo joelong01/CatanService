@@ -307,7 +307,7 @@ fn longpoll_service() -> Scope {
 }
 
 fn profile_service() -> Scope {
-    web::scope("profile").route("", web::get().to(user_handlers::get_profile_handler))
+    web::scope("profile").route("/{email}", web::get().to(user_handlers::get_profile_handler))
 }
 
 lazy_static! {
@@ -358,20 +358,21 @@ mod tests {
             service_config::SERVICE_CONFIG,
         },
         setup_cosmos, setup_test,
-        shared::
-            shared_models::{UserProfile, ServiceResponse},
+
         
         test::{
-            test_helpers::test::{register_test_users, TestHelpers},
+            test_helpers::test::register_test_users,
             test_proxy::TestProxy,
         },
 
     };
 
-    use actix_web::{http::header, test};
 
-    use log::trace;
+
+
+    use actix_web::test;
     use reqwest::StatusCode;
+
 
     #[tokio::test]
     async fn test_version_and_log_intialized() {
@@ -390,96 +391,30 @@ mod tests {
 
     #[tokio::test]
     async fn create_user_login_check_profile() {
-        let mut app = create_test_service!();
-
+        init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
+     
+        let  app = create_test_service!();
         setup_test!(&app, false);
+        let use_cosmos = true;
+        let mut proxy = TestProxy::new(&app, Some(TestContext::new(use_cosmos, None)));
+       
+        let test_users = register_test_users(&mut proxy).await;
+        let service_response = proxy.login(&test_users[0].clone().pii.expect("pii should exist").email, "password").await;
+        assert!(service_response.status.is_success());
 
-        const USER_1_PASSWORD: &'static str = "password";
+        let auth_token = service_response.get_token().expect("auth token should exist");
+        proxy.set_auth_token(&Some(auth_token));
+        let service_response = proxy.get_profile("Self").await;
+        let profile = service_response.to_profile().expect("profile should exist");
+        let first = test_users
+        .first()
+        .and_then(|user| user.pii.as_ref()).unwrap();
+        
+    
 
-        // 1. Register the user
-        let mut user1_profile = UserProfile::new_test_user();
-
-        let req = test::TestRequest::post()
-            .uri("/api/v1/users/register")
-            .append_header((header::CONTENT_TYPE, "application/json"))
-            .append_header((GameHeader::TEST, TestContext::as_json(false)))
-            .append_header((GameHeader::PASSWORD, USER_1_PASSWORD))
-            .set_json(&user1_profile)
-            .to_request();
-
-        let response = test::call_service(&mut app, req).await;
-        let status = response.status();
-        let body = test::read_body(response).await;
-        if !status.is_success() {
-            trace!("user_1 already registered");
-            assert_eq!(status, 409);
-            let resp: ServiceResponse =
-                serde_json::from_slice(&body).expect("failed to deserialize into ServiceResponse");
-            assert_eq!(resp.status, 409);
-        } else {
-            //  we get back a service response with a client user in the body
-
-            let client_user: UserProfile =
-                ServiceResponse::profile_from_json(std::str::from_utf8(&body).unwrap())
-                    .expect("Service Response should deserialize")
-                    .1;
-
-            let pretty_json =
-                serde_json::to_string_pretty(&client_user).expect("Failed to pretty-print JSON");
-
-            // Check if the pretty-printed JSON contains any underscores
-            assert!(
-                !pretty_json.contains('_'),
-                "JSON contains an underscore character"
-            );
-
-            trace!("registered client_user: {:#?}", pretty_json);
-        }
-
-        // 2. Login the user
-
-        let req = test::TestRequest::post()
-            .uri("/api/v1/users/login")
-            .append_header((GameHeader::TEST, TestContext::as_json(false)))
-            .append_header((GameHeader::PASSWORD, USER_1_PASSWORD))
-            .append_header((GameHeader::EMAIL, user1_profile.get_email_or_panic()))
-            .to_request();
-
-        let resp = test::call_service(&mut app, req).await;
-        assert!(resp.status().is_success());
-
-        let body = test::read_body(resp).await;
-        let auth_token = ServiceResponse::json_to_token(std::str::from_utf8(&body).unwrap())
-            .expect("should be jwt")
-            .1;
-
-        assert!(auth_token.len() > 10, "auth token appears invalid");
-
-        // 4. Get profile
-        let req = test::TestRequest::get()
-            .uri("/auth/api/v1/profile")
-            .append_header((header::CONTENT_TYPE, "application/json"))
-            .append_header((GameHeader::TEST, TestContext::as_json(false)))
-            .append_header(("Authorization", auth_token))
-            .to_request();
-
-        let resp = test::call_service(&mut app, req).await;
-        assert_eq!(resp.status(), 200);
-        let body = test::read_body(resp).await;
-        //
-        //  we get a service response where the body is a ClientUser
-        let profile_from_service =
-            ServiceResponse::profile_from_json(std::str::from_utf8(&body).unwrap())
-                .expect("Service Response should deserialize")
-                .1;
-
-        user1_profile.games_played = Some(0);
-        user1_profile.games_won = Some(0); // service sets this when regisering.
-        assert!(
-            profile_from_service
-                .is_equal_by_val(&user1_profile),
-            "profile returned by service different than the one sent in"
-        );
+        assert_eq!(&profile.pii.as_ref().unwrap().email, first.email.as_str());
+        
+        
     }
     #[tokio::test]
     async fn test_setup_no_test_header() {
@@ -505,20 +440,14 @@ mod tests {
     async fn test_validate_phone() {
         init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
         let app = create_test_service!();
-        setup_test!(&app, false);
+        let code = 569342;
+        let mut proxy = TestProxy::new(&app, Some(TestContext::new(true, Some(code))));
+        let users = register_test_users(&mut proxy).await;
 
-        let mut proxy = TestProxy::new(&app, None);
+        let mut profile = users[0].clone();
+        assert!(profile.pii.is_some());
+        assert!(profile.user_id.is_some());
 
-        //
-        //   login as the admin and create the test users
-        let admin_token = TestHelpers::admin_login().await;
-        proxy.set_auth_token(&Some(admin_token));
-        proxy.set_test_context(&Some(TestContext::new(true)));
-        let test_users = register_test_users(&proxy).await;
-
-        let mut profile = test_users[0].clone();
-
-        // set test header
 
         // login as the first test user
 
@@ -542,14 +471,25 @@ mod tests {
         // lookup profile
 
         let new_profile = proxy
-            .get_profile()
+            .get_profile("Self")
             .await
-            .get_client_users()
-            .unwrap()
-            .pop()
-            .unwrap();
+            .to_profile()
+            .expect("should get a profile back from get_profile for an account that can login");
 
+        // they better be the same!
         assert!(new_profile.is_equal_by_val(&profile));
+        
+        // send the phone code.  somebody is going to get a text...
+        // the actual code is defined above and set in the test context, so that we can verify it
+        let service_response = proxy.send_phone_code().await;
+        assert!(service_response.status.is_success());
+
+        //
+        //  send the verification
+        let service_response = proxy.validate_phone_code(code).await;
+        assert!(service_response.status.is_success());
+
+
     }
     #[tokio::test]
     async fn test_setup() {

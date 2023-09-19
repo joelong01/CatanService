@@ -34,9 +34,7 @@ pub(crate) async fn client2_thread(mut rx: Receiver<CatanMessage>) {
     let proxy = ServiceProxy::new(
         "doug@longshotdev.com",
         "password",
-        Some(TestContext {
-            use_cosmos_db: false,
-        }),
+        Some(TestContext::new(false, None)),
         HOST_URL,
     )
     .await
@@ -44,7 +42,7 @@ pub(crate) async fn client2_thread(mut rx: Receiver<CatanMessage>) {
 
     let name = "Doug";
     let my_info: UserProfile = proxy
-        .get_profile()
+        .get_profile("Self")
         .await
         .to_profile()
         .expect("Successful call to get_profile should have a ClientUser in the body");

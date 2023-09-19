@@ -10,14 +10,12 @@ pub async fn game_poller(username: &str, tx: tokio::sync::mpsc::Sender<CatanMess
     let proxy = ServiceProxy::new(
         username,
         "password",
-        Some(TestContext {
-            use_cosmos_db: false,
-        }),
+        Some(TestContext::new(false, None)),
         HOST_URL,
     ).await.expect("login needs to work for test to run!");
    
     let client_user_profile: UserProfile = proxy
-        .get_profile()
+        .get_profile("Self")
         .await
         .to_profile()
         .expect("Client User should deserialize");

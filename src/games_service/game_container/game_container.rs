@@ -95,7 +95,7 @@ impl GameContainer {
         let mut players = Vec::new();
         let (game, _) = GameContainer::current_game(game_id).await?;
         for p in game.players.values() {
-            players.push(p.user_data.user_id.clone().unwrap());
+            players.push(p.profile.user_id.clone().unwrap());
         }
 
         Ok(players)

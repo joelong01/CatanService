@@ -263,10 +263,10 @@ where
         let sr = self.post::<()>(url, None, None).await;
         sr
     }
-    pub async fn get_profile(&self) -> ServiceResponse {
-        let url = "/auth/api/v1/profile";
+    pub async fn get_profile(&self, id: &str) -> ServiceResponse {
+        let url = format!("/auth/api/v1/profile/{}", id);
 
-        self.get(url, None).await
+        self.get(&url, None).await
     }
 
     pub async fn new_game(
@@ -352,5 +352,15 @@ where
         self.put::<&UserProfile>(url, None, Some(new_profile))
             .await
     }
+    pub async fn send_phone_code(&self) -> ServiceResponse {
+        let url= "/auth/api/v1/users/phone/send-code";
+        self.post::<()>(url, None, None).await
+    }
+
+    pub async fn validate_phone_code(&self, code: i32 ) -> ServiceResponse {
+        let url= format!("/auth/api/v1/users/phone/validate/{}", code);
+        self.post::<()>(&url, None, None).await
+    }
+
 }
 
