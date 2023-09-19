@@ -10,7 +10,6 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use strum_macros::Display;
 
-
 use std::{fmt, fmt::Display, fmt::Formatter, sync::Arc};
 use tokio::sync::{mpsc, RwLock};
 
@@ -21,7 +20,6 @@ use crate::games_service::{
     game_container::game_messages::CatanMessage,
     shared::game_enums::{CatanGames, GameAction},
 };
-
 
 use super::service_models::PersistUser;
 
@@ -108,18 +106,39 @@ pub enum UserType {
     Local,
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "PascalCase")]
+pub struct PersonalInformation {
+    pub phone_number: String,
+    pub email: String,
+    pub first_name: String,
+    pub last_name: String,
+}
+
+impl PersonalInformation {
+    pub fn is_equal_by_val(&self, other: &PersonalInformation) -> bool {
+        if self.phone_number == other.phone_number
+            && self.email == other.email
+            && self.first_name == other.first_name
+            && self.last_name == other.last_name
+        {
+            return true;
+        }
+
+        false
+    }
+}
+
 ///
 /// UserProfile is just information about the client.  this can be as much or little information as the app needs
 /// to run
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "PascalCase")]
 pub struct UserProfile {
+    pub user_id: Option<String>,
     pub user_type: UserType,
-    pub email: String,
-    pub first_name: String,
-    pub last_name: String,
+    pub pii: Option<PersonalInformation>,
     pub display_name: String,
-    pub phone_number: String,
     pub picture_url: String,
     pub foreground_color: String,
     pub background_color: String,
@@ -131,10 +150,8 @@ impl Default for UserProfile {
     fn default() -> Self {
         UserProfile {
             user_type: UserType::Connected,
-            email: String::default(),
-            first_name: String::default(),
-            last_name: String::default(),
-            phone_number: String::default(),
+            user_id: None,
+            pii: None,
             display_name: String::default(),
             picture_url: String::default(),
             foreground_color: String::default(),
@@ -147,12 +164,24 @@ impl Default for UserProfile {
 }
 
 impl UserProfile {
-    pub fn is_equal_byval(&self, other: &UserProfile) -> bool {
-        self.email == other.email
-            && self.first_name == other.first_name
-            && self.last_name == other.last_name
-            && self.display_name == other.display_name
-            && self.phone_number == other.phone_number
+    pub fn is_equal_by_val(&self, other: &UserProfile) -> bool {
+        match &self.pii {
+            Some(pii) => match &other.pii {
+                Some(other_pii) => {
+                    if !pii.is_equal_by_val(other_pii) {
+                        return false;
+                    }
+                }
+                None => return false,
+            },
+            None => {
+                if other.pii.is_some() {
+                    return false;
+                }
+            }
+        }
+
+        self.display_name == other.display_name
             && self.picture_url == other.picture_url
             && self.foreground_color == other.foreground_color
             && self.background_color == other.background_color
@@ -161,6 +190,50 @@ impl UserProfile {
             && self.games_won.unwrap_or(0) == other.games_won.unwrap_or(0)
     }
 
+    pub fn get_email_or_panic(&self) -> String {
+        match &self.pii {
+            Some(pii) => pii.email.clone(),
+            None => panic!("Asked for email and it doesn't exist"),
+        }
+    }
+    pub fn update_from(&mut self, other: &UserProfile) {
+        // For non-optional fields, update directly:
+        self.display_name = other.display_name.clone();
+        self.picture_url = other.picture_url.clone();
+        self.foreground_color = other.foreground_color.clone();
+        self.background_color = other.background_color.clone();
+        self.text_color = other.text_color.clone();
+        
+        // Update optional fields if the other has a value:
+        if let Some(ref other_id) = other.user_id {
+            self.user_id = Some(other_id.clone());
+        }
+
+        if let Some(ref other_games_played) = other.games_played {
+            self.games_played = Some(*other_games_played);
+        }
+
+        if let Some(ref other_games_won) = other.games_won {
+            self.games_won = Some(*other_games_won);
+        }
+
+        if let Some(ref other_pii) = other.pii {
+            if self.pii.is_none() {
+                self.pii = Some(other_pii.clone());
+            } else {
+                // Update the fields of pii if self has it
+                let self_pii = self.pii.as_mut().unwrap();
+                self_pii.email = other_pii.email.clone();
+                self_pii.phone_number = other_pii.phone_number.clone();
+                self_pii.first_name = other_pii.first_name.clone();
+                self_pii.last_name = other_pii.last_name.clone();
+            }
+        } else {
+            // If the other's pii is None, set self's pii to None as well
+            self.pii = None;
+        }
+    }
+   
     pub fn new_test_user() -> Self {
         let random_string = || {
             use rand::distributions::Alphanumeric;
@@ -175,12 +248,16 @@ impl UserProfile {
         let random_name = random_string();
         UserProfile {
             user_type: UserType::Connected,
-            email: format!("{}@test.com", random_string()),
-            first_name: random_name.clone(),
-            last_name: random_name.clone(),
+            user_id: None,
+            pii: Some(PersonalInformation {
+                email: format!("{}@test.com", random_string()),
+                phone_number: random_string(),
+                first_name: random_name.clone(),
+                last_name: random_name.clone(),
+            }),
+           
             display_name: random_name,
             picture_url: String::default(),
-            phone_number: String::default(),
             foreground_color: String::default(),
             background_color: String::default(),
             text_color: String::default(),
@@ -189,6 +266,7 @@ impl UserProfile {
         }
     }
 }
+
 ///
 /// This is the struct that is returned to the clien whenever User data needs to be returned.  it is also the format
 /// that data is passed from the client to the service.  Note that the password is not in this structure -- it passes
@@ -266,8 +344,6 @@ impl From<serde_json::Error> for ServiceResponse {
         )
     }
 }
-
-
 
 impl ServiceResponse {
     pub fn new(
@@ -406,7 +482,6 @@ impl ServiceResponse {
             _ => None,
         }
     }
-
 }
 fn serialize_status_code<S>(status: &reqwest::StatusCode, serializer: S) -> Result<S::Ok, S::Error>
 where
@@ -422,8 +497,6 @@ where
     let code = u16::deserialize(deserializer)?;
     Ok(StatusCode::from_u16(code).map_err(serde::de::Error::custom)?)
 }
-
-
 
 /**
  * hold the data that both the Lobby and the GameContainer use to keep track of the waiting clients

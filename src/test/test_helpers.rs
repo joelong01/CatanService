@@ -7,19 +7,19 @@ pub mod test {
     use crate::middleware::request_context_mw::{RequestContext, TestContext};
     use crate::middleware::security_context::SecurityContext;
     use crate::middleware::service_config::SERVICE_CONFIG;
+    use crate::shared::shared_models::{GameError, ResponseType, ServiceResponse, UserProfile};
     use crate::test::test_proxy::TestProxy;
     use crate::user_service::users::{login, register};
-    use crate::shared::shared_models::{GameError, ResponseType, ServiceResponse, UserProfile};
+    use crate::{create_service, create_test_service, init_env_logger};
+    use actix_http::Request;
+    use actix_service::Service;
+    use actix_web::dev::ServiceResponse as ActixServiceResponse;
     use actix_web::{
         body::{BoxBody, EitherBody},
         Error,
     };
     use std::io::prelude::*;
     use std::{env, fs::File};
-    use actix_http::Request;
-    use actix_service::Service;
-    use actix_web::dev::ServiceResponse as ActixServiceResponse;
-    use crate::{create_service, create_test_service, init_env_logger};
 
     #[tokio::test]
     async fn test_new_proxy() {
@@ -31,7 +31,9 @@ pub mod test {
         let admin_pwd = env::var("ADMIN_PASSWORD")
             .expect("ADMIN_PASSWORD not found in environment - unable to continue");
 
-        let service_response = test_proxy.login(&admin_profile.email, &admin_pwd).await;
+        let service_response = test_proxy
+            .login(&admin_profile.get_email_or_panic(), &admin_pwd)
+            .await;
 
         let admin_auth_token = service_response
             .get_token()
@@ -39,26 +41,33 @@ pub mod test {
         assert!(admin_auth_token.len() > 0);
 
         test_proxy.set_auth_token(&Some(admin_auth_token.clone()));
+        
         let service_response = test_proxy.get_profile().await;
         let client_user = service_response
             .to_client_user()
             .expect("this should be a client_user");
 
         assert!(client_user.id.len() > 0);
-        assert_eq!(client_user.user_profile.email, admin_profile.email);
+        assert_eq!(
+            client_user.user_profile.pii.unwrap().email,
+            admin_profile.get_email_or_panic()
+        );
 
-        
-      
         //
         // clean up test user in production system
         let test_users = TestHelpers::load_test_users_from_config();
         assert!(test_users.len() > 0);
         for user in test_users {
-            assert_ne!(user.email, admin_profile.email);
-            // note that test context is not set -- so if we made a mistake (ahem) and put the test users in the 
+            assert_ne!(
+                user.get_email_or_panic(),
+                admin_profile.get_email_or_panic()
+            );
+            // note that test context is not set -- so if we made a mistake (ahem) and put the test users in the
             // production database, this will delete all of them.
             test_proxy.set_auth_token(&None);
-            let result = test_proxy.login(&user.email, "password").await;
+            let result = test_proxy
+                .login(&user.get_email_or_panic(), "password")
+                .await;
 
             if let Some(test_auth_token) = result.get_token() {
                 test_proxy.set_auth_token(&Some(test_auth_token));
@@ -73,13 +82,12 @@ pub mod test {
         }
         test_proxy.set_auth_token(&Some(admin_auth_token.clone()));
         let users = test_proxy
-        .get_all_users()
-        .await
-        .get_client_users()
-        .expect("there should be at least one user always (the admin)");
+            .get_all_users()
+            .await
+            .get_client_users()
+            .expect("there should be at least one user always (the admin)");
 
         assert!(users.len() > 0);
-
     }
 
     #[tokio::test]
@@ -122,13 +130,13 @@ pub mod test {
         let admin_token = TestHelpers::admin_login().await;
         proxy.set_auth_token(&Some(admin_token));
         register_test_users(&proxy).await;
-
-        
     }
 
-    async fn register_test_users<S>(proxy: &TestProxy<'_, S>) // Add the expected lifetime and generic type for the function signature
+    pub async fn register_test_users<S>(proxy: &TestProxy<'_, S>) -> Vec<UserProfile>
+    // Add the expected lifetime and generic type for the function signature
     where
-        S: Service<Request, Response = ActixServiceResponse<EitherBody<BoxBody>>, Error = Error> + 'static,
+        S: Service<Request, Response = ActixServiceResponse<EitherBody<BoxBody>>, Error = Error>
+            + 'static,
     {
         let test_users = TestHelpers::load_test_users_from_config();
 
@@ -155,6 +163,7 @@ pub mod test {
                 assert_eq!(service_response.status, StatusCode::CONFLICT);
             }
         }
+        test_users
     }
 
     pub struct TestHelpers {}
@@ -172,18 +181,19 @@ pub mod test {
                 &SecurityContext::cached_secrets(),
             );
 
-            let auth_token = match login(&profile.email, &admin_pwd, &request_context).await {
-                Ok(sr) => sr.get_token(),
-                Err(_) => {
-                    register(&admin_pwd, &profile, &request_context)
-                        .await
-                        .expect("registering a new user should work");
-                    login(&profile.email, &admin_pwd, &request_context)
-                        .await
-                        .expect("login after register should work")
-                        .get_token()
-                }
-            };
+            let auth_token =
+                match login(&profile.get_email_or_panic(), &admin_pwd, &request_context).await {
+                    Ok(sr) => sr.get_token(),
+                    Err(_) => {
+                        register(&admin_pwd, &profile, &request_context)
+                            .await
+                            .expect("registering a new user should work");
+                        login(&profile.get_email_or_panic(), &admin_pwd, &request_context)
+                            .await
+                            .expect("login after register should work")
+                            .get_token()
+                    }
+                };
 
             auth_token.expect("should contain the admin auth token")
         }

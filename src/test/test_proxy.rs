@@ -128,19 +128,51 @@ where
 
         service_response
     }
-    pub async fn register(&self, profile: &UserProfile, password: &str) -> ServiceResponse {
-        let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
-
-        headers.insert(
-            HeaderName::from_static(GameHeader::PASSWORD),
-            HeaderValue::from_str(password).expect("Invalid header value"),
-        );
-
-        let url = "/api/v1/users/register";
-        self.post::<&UserProfile>(url, Some(&headers), Some(profile))
+    pub async fn put<B: Serialize>(
+        &self,
+        url: &str,
+        headers: Option<&HashMap<HeaderName, HeaderValue>>,
+        body: Option<B>,
+    ) -> ServiceResponse {
+        let mut request = TestRequest::put().uri(url);  // <-- Use PUT here
+    
+        // Adding Content-Type header for JSON
+        request = request.append_header((header::CONTENT_TYPE, "application/json"));
+    
+        if let Some(header_map) = headers {
+            for (key, value) in header_map {
+                request = request.append_header((key, value));
+            }
+        }
+    
+        if let Some(body_content) = body {
+            let bytes = serde_json::to_vec(&body_content).expect("Failed to serialize body");
+            request = request.set_payload(Bytes::from(bytes));
+        }
+    
+        // auth header
+        if let Some(auth_token) = &self.auth_token {
+            let header_value = format!("Bearer {}", auth_token);
+            request = request.append_header(("Authorization", header_value));
+        }
+    
+        // add the test header
+        if let Some(test_context) = &self.test_context {
+            let json = serde_json::to_string(&test_context).unwrap();
+            request = request.append_header((GameHeader::TEST, json));
+        }
+    
+        let request = request.to_request();
+    
+        let response = test::call_service(self.service, request).await;
+        let service_response: ServiceResponse = test::try_read_body_json(response)
             .await
+            .expect("should be a ServiceResponse");
+    
+        service_response
     }
-
+    
+   
     pub async fn delete(
         &self,
         url: &str,
@@ -182,6 +214,18 @@ where
 
         service_response
     }
+    pub async fn register(&self, profile: &UserProfile, password: &str) -> ServiceResponse {
+        let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
+
+        headers.insert(
+            HeaderName::from_static(GameHeader::PASSWORD),
+            HeaderValue::from_str(password).expect("Invalid header value"),
+        );
+
+        let url = "/api/v1/users/register";
+        self.post::<&UserProfile>(url, Some(&headers), Some(profile))
+            .await
+    }
 
     pub async fn register_test_user(
         &self,
@@ -195,7 +239,7 @@ where
             HeaderValue::from_str(password).expect("Invalid header value"),
         );
 
-        let url = "/api/v1/users/register-test-user";
+        let url = "/auth/api/v1/users/register-test-user";
         self.post::<&UserProfile>(url, Some(&headers), Some(profile))
             .await
     }
@@ -230,7 +274,7 @@ where
         game_type: CatanGames,
         game: Option<&RegularGame>,
     ) -> ServiceResponse {
-        let url = format!("auth/api/v1/games/{:?}", game_type);
+        let url = format!("/auth/api/v1/games/{:?}", game_type);
         let service_response = match game {
             Some(g) => self.post::<&RegularGame>(&url, None, Some(g)).await,
             None => self.post::<()>(&url, None, None).await,
@@ -301,6 +345,12 @@ where
     pub async fn delete_user(&self, profile: &ClientUser) -> ServiceResponse {
         let url = format!("/auth/api/v1/users/{}", profile.id);
         self.delete(&url, None).await
+    }
+
+    pub async fn update_profile(&self, new_profile: &UserProfile) -> ServiceResponse {
+        let url = "/auth/api/v1/users";
+        self.put::<&UserProfile>(url, None, Some(new_profile))
+            .await
     }
 }
 

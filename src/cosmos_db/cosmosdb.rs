@@ -62,16 +62,17 @@ pub trait UserDbTrait {
     async fn find_user_by_id(&self, val: &str) -> Result<Option<PersistUser>, ServiceResponse>;
     async fn find_user_by_email(&self, val: &str) -> Result<Option<PersistUser>, ServiceResponse>;
     fn get_collection_names(&self, is_test: bool) -> Vec<String> {
-        COLLECTION_NAME_VALUES.iter().map(|name_value| {
-            if is_test {
-                format!("{}-Test", name_value.value)
-            } else {
-                name_value.value.to_string()
-            }
-        }).collect()
+        COLLECTION_NAME_VALUES
+            .iter()
+            .map(|name_value| {
+                if is_test {
+                    format!("{}-Test", name_value.value)
+                } else {
+                    name_value.value.to_string()
+                }
+            })
+            .collect()
     }
-    
-    
 }
 
 /**
@@ -342,11 +343,12 @@ impl UserDbTrait for UserDb {
             }
         }
     }
-   
-
 
     async fn find_user_by_email(&self, val: &str) -> Result<Option<PersistUser>, ServiceResponse> {
-        let query = format!(r#"SELECT * FROM c WHERE c.user_profile.Email = '{}'"#, val);
+        let query = format!(
+            r#"SELECT * FROM c WHERE c.user_profile.Pii.Email = '{}'"#,
+            val
+        );
         match self.execute_query(CosmosDocType::User, &query).await {
             Ok(users) => {
                 if !users.is_empty() {
@@ -361,8 +363,6 @@ impl UserDbTrait for UserDb {
             }
         }
     }
-
-   
 }
 
 #[cfg(test)]
@@ -373,7 +373,7 @@ mod tests {
         middleware::{request_context_mw::RequestContext, service_config::SERVICE_CONFIG},
         shared::{
             service_models::Role,
-            shared_models::{UserProfile, UserType},
+            shared_models::{PersonalInformation, UserProfile, UserType},
         },
         user_service::users::verify_cosmosdb,
     };
@@ -384,10 +384,6 @@ mod tests {
     #[tokio::test]
 
     async fn test_e2e() {
-        // test_db_e2e(Some(TestContext {
-        //     use_cosmos_db: true,
-        // }))
-
         let context = RequestContext::test_default(true);
         test_db_e2e(&context).await;
     }
@@ -406,7 +402,7 @@ mod tests {
         let users = create_users().await;
         for user in users.clone() {
             match user_db.update_or_create_user(&user).await {
-                Ok(..) => trace!("created user {}", user.user_profile.email),
+                Ok(..) => trace!("created user {}", user.user_profile.get_email_or_panic()),
                 Err(e) => panic!("failed to create user.  err: {}", e),
             }
         }
@@ -427,9 +423,12 @@ mod tests {
         assert!(test_user.validated_email);
 
         // find user by email
-        log::trace!("looking for user {}", test_user.user_profile.email);
+        log::trace!(
+            "looking for user {}",
+            test_user.user_profile.get_email_or_panic()
+        );
         let found_user = match user_db
-            .find_user_by_email(&test_user.user_profile.email)
+            .find_user_by_email(&test_user.user_profile.get_email_or_panic())
             .await
         {
             Ok(user) => user,
@@ -442,8 +441,8 @@ mod tests {
         };
 
         assert_eq!(
-            found_user.unwrap().user_profile.email,
-            test_user.user_profile.email
+            found_user.unwrap().user_profile.get_email_or_panic(),
+            test_user.user_profile.get_email_or_panic()
         );
 
         // get a list of all users
@@ -462,7 +461,10 @@ mod tests {
                 .expect("find_user_by_id should not fail");
             match u {
                 Some(found_user) => {
-                    trace!("found user with email: {}", found_user.user_profile.email)
+                    trace!(
+                        "found user with email: {}",
+                        found_user.user_profile.get_email_or_panic()
+                    )
                 }
                 None => panic!("failed to find user that we just inserted"),
             }
@@ -475,7 +477,10 @@ mod tests {
             let result = user_db.delete_user(&user.id).await;
             match result {
                 Ok(_) => {
-                    trace!("deleted user with email: {}", &user.user_profile.email);
+                    trace!(
+                        "deleted user with email: {}",
+                        &user.user_profile.get_email_or_panic()
+                    );
                 }
                 Err(e) => {
                     panic!("failed to delete user. error: {:#?}", e)
@@ -500,28 +505,33 @@ mod tests {
         for i in 1..=5 {
             let password = format!("long_password_that_is_ a test {}", i);
             let password_hash = hash(&password, DEFAULT_COST).unwrap();
+            let pii = PersonalInformation {
+                email: format!("test{}@example.com", i),
+                phone_number: SERVICE_CONFIG.test_phone_number.to_owned(),
+                first_name: format!("Test{}", i),
+                last_name: format!("User{}", i),
+            };
             let user = PersistUser {
                 partition_key: 1,
                 id: PersistUser::get_id(),
                 password_hash: Some(password_hash.to_owned()),
                 user_profile: UserProfile {
                     user_type: UserType::Connected,
-                    email: format!("test{}@example.com", i),
-                    first_name: format!("Test{}", i),
-                    last_name: format!("User{}", i),
+                    pii: Some(pii),
                     display_name: format!("Test User{}", i),
-                    phone_number: SERVICE_CONFIG.test_phone_number.to_owned(),
                     picture_url: format!("https://example.com/pic{}.jpg", i),
                     foreground_color: format!("#00000{}", i),
                     background_color: format!("#FFFFFF{}", i),
                     text_color: format!("0000000"),
                     games_played: Some(10 * i as u16),
                     games_won: Some(5 * i as u16),
+                    user_id: None,
                 },
                 validated_email: false,
                 validated_phone: false,
                 phone_code: None,
                 roles: vec![Role::User, Role::TestUser],
+                local_user_owner_id: None,
             };
 
             users.push(user);

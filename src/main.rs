@@ -95,7 +95,7 @@ async fn main() -> std::io::Result<()> {
         .await
 }
 
- fn setup_cosmos() -> Result<(), ServiceResponse> {
+fn setup_cosmos() -> Result<(), ServiceResponse> {
     verify_or_create_account(
         &SERVICE_CONFIG.resource_group,
         &SERVICE_CONFIG.cosmos_account,
@@ -175,7 +175,10 @@ fn create_unauthenticated_service() -> Scope {
                 web::post().to(user_handlers::register_handler),
             )
             .route("/users/login", web::post().to(user_handlers::login_handler))
-            .route("/test/verify-service", web::post().to(user_handlers::verify_handler)) /* TEST ONLY */
+            .route(
+                "/test/verify-service",
+                web::post().to(user_handlers::verify_handler),
+            ) /* TEST ONLY */
             .route(
                 "/users/validate-email/{token}",
                 web::get().to(user_handlers::validate_email),
@@ -206,6 +209,7 @@ fn user_service() -> Scope {
     web::scope("/users")
         .route("", web::get().to(user_handlers::list_users_handler))
         .route("/{id}", web::delete().to(user_handlers::delete_handler))
+        .route("", web::put().to(user_handlers::update_profile_handler))
         .route(
             "/{id}",
             web::get().to(user_handlers::find_user_by_id_handler),
@@ -346,21 +350,28 @@ pub async fn init_env_logger(min_level: LevelFilter, cosmos_log_level: LevelFilt
 #[cfg(test)]
 mod tests {
     use crate::{
-        create_test_service,
+        create_service, create_test_service,
         games_service::game_container::game_messages::GameHeader,
         init_env_logger,
-        middleware::{request_context_mw::{RequestContext, TestContext}, service_config::SERVICE_CONFIG},
-        setup_test,
-        shared::shared_models::{ClientUser, ServiceResponse, UserProfile, UserType},
-        user_service::users::{login, register, verify_cosmosdb}, setup_cosmos, create_service,
+        middleware::{
+            request_context_mw::TestContext,
+            service_config::SERVICE_CONFIG,
+        },
+        setup_cosmos, setup_test,
+        shared::
+            shared_models::{ClientUser, ServiceResponse, UserProfile},
+        
+        test::{
+            test_helpers::test::{register_test_users, TestHelpers},
+            test_proxy::TestProxy,
+        },
+
     };
 
     use actix_web::{http::header, test};
 
     use log::trace;
     use reqwest::StatusCode;
-
-
 
     #[tokio::test]
     async fn test_version_and_log_intialized() {
@@ -380,28 +391,14 @@ mod tests {
     #[tokio::test]
     async fn create_user_login_check_profile() {
         let mut app = create_test_service!();
-        
+
         setup_test!(&app, false);
 
         const USER_1_PASSWORD: &'static str = "password";
 
         // 1. Register the user
-        let mut user1_profile = UserProfile {
-            user_type: UserType::Connected,
-            email: "testuser@example.com".into(),
-            first_name: "Test".into(),
-            last_name: "User".into(),
-            display_name: "TestUser".into(),
-            phone_number: crate::middleware::service_config::SERVICE_CONFIG
-                .test_phone_number
-                .to_owned(),
-            picture_url: "https://example.com/photo.jpg".into(),
-            foreground_color: "#000000".into(),
-            background_color: "#FFFFFF".into(),
-            text_color: "#000000".into(),
-            games_played: Some(10),
-            games_won: Some(1),
-        };
+        let mut user1_profile = UserProfile::new_test_user();
+
         let req = test::TestRequest::post()
             .uri("/api/v1/users/register")
             .append_header((header::CONTENT_TYPE, "application/json"))
@@ -445,7 +442,7 @@ mod tests {
             .uri("/api/v1/users/login")
             .append_header((GameHeader::TEST, TestContext::as_json(false)))
             .append_header((GameHeader::PASSWORD, USER_1_PASSWORD))
-            .append_header((GameHeader::EMAIL, user1_profile.email.clone()))
+            .append_header((GameHeader::EMAIL, user1_profile.get_email_or_panic()))
             .to_request();
 
         let resp = test::call_service(&mut app, req).await;
@@ -481,7 +478,7 @@ mod tests {
         assert!(
             profile_from_service
                 .user_profile
-                .is_equal_byval(&user1_profile),
+                .is_equal_by_val(&user1_profile),
             "profile returned by service different than the one sent in"
         );
     }
@@ -508,54 +505,58 @@ mod tests {
 
     async fn test_validate_phone() {
         init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
-        let mut app = create_test_service!();
+        let app = create_test_service!();
         setup_test!(&app, false);
 
-        let request_context = RequestContext::test_default(false);
-        let mut profile = UserProfile::new_test_user();
-        profile.phone_number = SERVICE_CONFIG.test_phone_number.clone();
-        // setup
-        let _response = verify_cosmosdb(&request_context).await;
+        let mut proxy = TestProxy::new(&app, None);
 
-        let sr = register("password", &profile, &request_context)
+        //
+        //   login as the admin and create the test users
+        let admin_token = TestHelpers::admin_login().await;
+        proxy.set_auth_token(&Some(admin_token));
+        proxy.set_test_context(&Some(TestContext::new(true)));
+        let test_users = register_test_users(&proxy).await;
+
+        let mut profile = test_users[0].clone();
+
+        // set test header
+
+        // login as the first test user
+
+        let auth_token = proxy
+            .login(&profile.pii.as_ref().unwrap().email, "password")
             .await
-            .expect("this should work");
-        let _client_user = sr.to_client_user().expect("This should be a client user");
+            .get_token()
+            .expect("login should work and it should return the token");
 
-        let response = login(&profile.email, "password", &request_context)
+        assert!(auth_token.len() > 0);
+        proxy.set_auth_token(&Some(auth_token));
+        //
+        //  set the phone number
+        profile.pii.as_mut().unwrap().phone_number = SERVICE_CONFIG.test_phone_number.clone();
+
+        // update the profile
+
+        let service_response = proxy.update_profile(&profile).await;
+        assert!(service_response.status.is_success());
+
+        // lookup profile
+
+        let new_profile = proxy
+            .get_profile()
             .await
-            .expect("login should succeed");
+            .get_client_users()
+            .unwrap()
+            .pop()
+            .unwrap()
+            .user_profile
+            .clone();
 
-        let auth_token = response.get_token().expect("an auth token!");
-
-        let req = test::TestRequest::post()
-            .uri("/auth/api/v1/users/phone/send-code")
-            .append_header((header::CONTENT_TYPE, "application/json"))
-            .append_header((GameHeader::TEST, TestContext::as_json(false)))
-            .append_header(("Authorization", auth_token.clone()))
-            .to_request();
-
-        let response = test::call_service(&mut app, req).await;
-        assert_eq!(response.status(), 200);
-
-        let body = test::read_body(response).await;
-        let phone_code = ServiceResponse::json_to_token(std::str::from_utf8(&body).unwrap())
-            .expect("should be jwt")
-            .1;
-
-        let req = test::TestRequest::post()
-            .uri(&format!("/auth/api/v1/users/phone/validate/{}", phone_code))
-            .append_header((header::CONTENT_TYPE, "application/json"))
-            .append_header((GameHeader::TEST, TestContext::as_json(false)))
-            .append_header(("Authorization", auth_token))
-            .to_request();
-        let response = test::call_service(&mut app, req).await;
-        assert_eq!(response.status(), 200);
+        assert!(new_profile.is_equal_by_val(&profile));
     }
     #[tokio::test]
     async fn test_setup() {
         init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Trace).await;
         setup_cosmos().expect("can't continue if setup fails!");
     }
-
 }

@@ -1,11 +1,13 @@
 [
     {
         "UserType": "Connected",
-        "Email": "john.doe@example.com",
-        "FirstName": "John",
-        "LastName": "Doe",
+        "Pii": {
+            "Email": "john.doe@example.com",
+            "FirstName": "John",
+            "LastName": "Doe",
+            "PhoneNumber": "+12065551234"
+        },
         "DisplayName": "John (Test)",
-        "PhoneNumber": "+12065551234",
         "PictureUrl": "https://example.com/images/john.jpg",
         "ForegroundColor": "#00000000",
         "BackgroundColor": "#FFFFFF",
@@ -15,11 +17,13 @@
     },
     {
         "UserType": "Connected",
-        "Email": "jane.smith@example.com",
-        "FirstName": "Jane",
-        "LastName": "Smith",
+        "Pii": {
+            "Email": "jane.smith@example.com",
+            "FirstName": "Jane",
+            "LastName": "Smith",
+            "PhoneNumber": "+12065556789"
+        },
         "DisplayName": "Jane (Test)",
-        "PhoneNumber": "+12065556789",
         "PictureUrl": "https://example.com/images/jane.jpg",
         "ForegroundColor": "#00000000",
         "BackgroundColor": "#FFFFFF",
@@ -29,11 +33,14 @@
     },
     {
         "UserType": "Connected",
-        "Email": "alice.jones@example.com",
-        "FirstName": "Alice",
-        "LastName": "Jones",
+        "Pii": {
+            "Email": "alice.jones@example.com",
+            "FirstName": "Alice",
+            "LastName": "Jones",
+            "PhoneNumber": "+12065551235"
+        },
+      
         "DisplayName": "Alice (Test)",
-        "PhoneNumber": "+12065551235",
         "PictureUrl": "https://example.com/images/alice.jpg",
         "ForegroundColor": "#00000000",
         "BackgroundColor": "#FFFFFF",
@@ -43,11 +50,13 @@
     },
     {
         "UserType": "Connected",
-        "Email": "bob.brown@example.com",
-        "FirstName": "Bob",
-        "LastName": "Brown",
+        "Pii": {
+            "Email": "bob.brown@example.com",
+            "FirstName": "Bob",
+            "LastName": "Brown",
+            "PhoneNumber": "+12065554321"
+        },
         "DisplayName": "Bob (Test)",
-        "PhoneNumber": "+12065554321",
         "PictureUrl": "https://example.com/images/bob.jpg",
         "ForegroundColor": "#00000000",
         "BackgroundColor": "#FFFFFF",
@@ -57,11 +66,13 @@
     },
     {
         "UserType": "Connected",
-        "Email": "charlie.green@example.com",
-        "FirstName": "Charlie",
-        "LastName": "Green",
+        "Pii": {
+            "Email": "charlie.green@example.com",
+            "FirstName": "Charlie",
+            "LastName": "Green",
+            "PhoneNumber": "+12065553210"
+        },
         "DisplayName": "Charlie (Test)",
-        "PhoneNumber": "+12065553210",
         "PictureUrl": "https://example.com/images/charlie.jpg",
         "ForegroundColor": "#00000000",
         "BackgroundColor": "#FFFFFF",

@@ -9,14 +9,14 @@ use crate::azure_setup::azure_wrapper::{
     cosmos_account_exists, cosmos_collection_exists, cosmos_database_exists, key_vault_get_secret,
     key_vault_save_secret, keyvault_exists, send_email, send_text_message, verify_login_or_panic,
 };
-use crate::middleware::security_context::{ KeyKind, SecurityContext};
+use crate::middleware::security_context::{KeyKind, SecurityContext};
 use crate::middleware::service_config::SERVICE_CONFIG;
 use crate::shared::service_models::{Claims, PersistUser, Role};
 /**
  * this module implements the WebApi to create the database/collection, list all the users, and to create/find/delete
  * a User document in CosmosDb
  */
-use crate::{ new_ok_response, new_unauthorized_response, trace_function};
+use crate::{bad_request_from_string, new_ok_response, new_unauthorized_response, trace_function};
 
 use crate::games_service::long_poller::long_poller::LongPoller;
 
@@ -114,11 +114,17 @@ async fn internal_register_user(
     roles: &mut Vec<Role>,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
+    let email = match &profile_in.pii {
+        Some(pii) => pii.email.clone(),
+        None => return Err(bad_request_from_string!("no email specified")),
+    };
+
     if request_context
         .database
-        .find_user_by_email(&profile_in.email)
+        .find_user_by_email(&email)
         .await
-        .is_ok() // you can't register twice!
+        .is_ok()
+    // you can't register twice!
     {
         return Err(ServiceResponse::new(
             "User already exists",
@@ -129,7 +135,7 @@ async fn internal_register_user(
     }
     // this lets us bootstrap the system -- my assumption is that if you can set the environment variable, then you are
     // an admin.
-    if profile_in.email == request_context.config.admin_email {
+    if email == request_context.config.admin_email {
         if request_context.is_test() {
             return Err(ServiceResponse::new(
                 "Should not have test context",
@@ -185,8 +191,33 @@ pub async fn register(
     profile_in: &UserProfile,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
+    if request_context.is_test() {
+        return new_unauthorized_response!(
+            "can't create a test user through this api.  use register-test-user"
+        );
+    }
     internal_register_user(password, profile_in, &mut vec![Role::User], request_context).await
 }
+
+pub async fn update_profile(
+    profile_in: &UserProfile,
+    request_context: &RequestContext,
+) -> Result<ServiceResponse, ServiceResponse> {
+    let claims = request_context.claims.as_ref().unwrap();
+
+    let mut persist_user = request_context
+        .database
+        .find_user_by_id(&claims.id)
+        .await?
+        .expect("user id must be found because auth_mw succeeded");
+    persist_user.update_profile(&profile_in);
+
+    request_context
+        .database
+        .update_or_create_user(&persist_user)
+        .await
+}
+
 ///
 /// the big difference between register_user and register_test_user is that the latter is authenticated and only
 /// somebody in the admin group can add a test user.
@@ -258,12 +289,15 @@ pub async fn login(
     if is_password_match {
         let claims = Claims::new(
             &user.id,
-            &user.user_profile.email,
+            username,
             24 * 60 * 60,
             &user.roles,
             &request_context.test_context,
         );
-        let token_result = request_context.security_context.login_keys.sign_claims(&claims);
+        let token_result = request_context
+            .security_context
+            .login_keys
+            .sign_claims(&claims);
         match token_result {
             Ok(token) => {
                 let _ = LongPoller::add_user(&user.id, &user.user_profile).await;
@@ -389,7 +423,10 @@ pub async fn validate_email(token: &str) -> Result<ServiceResponse, ServiceRespo
         .join("");
 
     let security_context = SecurityContext::cached_secrets();
-    let claims = match security_context.validation_keys.validate_token(&decoded_token) {
+    let claims = match security_context
+        .validation_keys
+        .validate_token(&decoded_token)
+    {
         Some(c) => c,
         None => return new_unauthorized_response!(""),
     };
@@ -520,6 +557,11 @@ async fn internal_send_phone_code(
         }
     };
 
+    let phone_number = match &persist_user.user_profile.pii {
+        Some(pii) => pii.phone_number.clone(),
+        None => return Err(bad_request_from_string!("no phone number in profile")),
+    };
+
     persist_user.phone_code = Some(code.to_string());
     request_context
         .database
@@ -531,7 +573,7 @@ async fn internal_send_phone_code(
                    code: {}",
         code
     );
-    send_text_message(&persist_user.user_profile.phone_number, &msg)
+    send_text_message(&phone_number, &msg)
 }
 
 /// Validates a phone code for a given user.
@@ -563,7 +605,7 @@ pub async fn validate_phone(
     let mut persist_user = match request_context.database.find_user_by_id(&user_id).await? {
         Some(u) => u,
         None => {
-            return Ok(ServiceResponse {
+            return Err(ServiceResponse {
                 message: format!("id {} not found", user_id),
                 status: StatusCode::NOT_FOUND,
                 response_type: ResponseType::NoData,
@@ -635,7 +677,8 @@ mod tests {
 
     use crate::{
         create_test_service, games_service::game_container::game_messages::GameHeader,
-        init_env_logger, middleware::service_config::SERVICE_CONFIG, setup_test, test::test_helpers::test::TestHelpers,
+        init_env_logger, middleware::service_config::SERVICE_CONFIG, setup_test,
+        test::test_helpers::test::TestHelpers,
     };
 
     use super::*;
@@ -647,7 +690,7 @@ mod tests {
 
         let request_context = RequestContext::test_default(false);
         let mut profile = UserProfile::new_test_user();
-        profile.phone_number = SERVICE_CONFIG.test_phone_number.clone();
+        profile.pii.as_mut().unwrap().phone_number = SERVICE_CONFIG.test_phone_number.clone();
         // setup
         let response = verify_cosmosdb(&request_context).await;
 
@@ -675,7 +718,8 @@ mod tests {
 
         let request_context = RequestContext::test_default(false);
         let mut profile = UserProfile::new_test_user();
-        profile.email = SERVICE_CONFIG.test_email.clone();
+        profile.pii.as_mut().unwrap().email = SERVICE_CONFIG.test_email.clone();
+
         // setup
         let response = verify_cosmosdb(&request_context).await;
 
@@ -687,7 +731,7 @@ mod tests {
         let result = send_validation_email(
             &host_name,
             &client_user.id,
-            &profile.email,
+            &profile.get_email_or_panic(),
             &request_context,
         );
         match result {
@@ -719,7 +763,7 @@ mod tests {
 
     async fn test_login(use_cosmos: bool) {
         let token = TestHelpers::admin_login().await;
-        
+
         let request_context = RequestContext::test_default(use_cosmos);
         let profile = UserProfile::new_test_user();
         // setup
@@ -732,17 +776,22 @@ mod tests {
         let client_user = sr.to_client_user().expect("This should be a client user");
         request_context
             .database
-            .find_user_by_email(&client_user.user_profile.email)
+            .find_user_by_email(&client_user.user_profile.pii.unwrap().email)
             .await
             .expect("we just put this here!");
 
         // Test login with correct credentials
-        let response = login(&profile.email, "password", &request_context)
+        let response = login(&profile.get_email_or_panic(), "password", &request_context)
             .await
             .expect("login should succeed");
 
         // Test login with incorrect credentials
-        let response = login(&profile.email, "wrong_password", &request_context).await;
+        let response = login(
+            &profile.get_email_or_panic(),
+            "wrong_password",
+            &request_context,
+        )
+        .await;
         match response {
             Ok(_) => panic!("this should be an error!"),
             Err(e) => {
@@ -768,8 +817,16 @@ mod tests {
             &None,
         );
         let request_context = RequestContext::test_default(false);
-        let token = request_context.security_context.login_keys.sign_claims(&claims).unwrap();
-        let token_claims = request_context.security_context.login_keys.validate_token(&token).unwrap();
+        let token = request_context
+            .security_context
+            .login_keys
+            .sign_claims(&claims)
+            .unwrap();
+        let token_claims = request_context
+            .security_context
+            .login_keys
+            .validate_token(&token)
+            .unwrap();
         assert_eq!(token_claims, claims);
     }
 }

@@ -83,6 +83,14 @@ pub async fn get_profile_handler(request_context: RequestContext) -> HttpRespons
         .unwrap_or_else(|sr| sr.to_http_response())
 }
 
+pub async fn update_profile_handler(request_context: RequestContext,   profile_in: web::Json<UserProfile>) -> HttpResponse {
+    super::users::update_profile(&profile_in, &request_context)
+        .await
+        .map(|sr| sr.to_http_response())
+        .unwrap_or_else(|sr| sr.to_http_response())
+}
+
+
 // Find user by ID
 pub async fn find_user_by_id_handler(
     request_context: RequestContext,

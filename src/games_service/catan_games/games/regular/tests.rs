@@ -11,7 +11,8 @@ mod tests {
             shared::game_enums::{Direction, GameAction, GamePhase, GameState},
             tiles::{tile_enums::TileResource, tile_key::TileKey},
         },
-        shared::shared_models::{ClientUser,  UserProfile, UserType}, middleware::service_config::SERVICE_CONFIG, 
+        middleware::service_config::SERVICE_CONFIG,
+        shared::shared_models::{ClientUser, UserProfile, UserType},
     };
     use std::io::Write;
     use std::{collections::HashMap, fs::File};
@@ -23,19 +24,22 @@ mod tests {
         println!("test_regular_game");
         let mut game = create_game(); // GameState::AddingPlayers
         test_add_players(&mut game);
-        game = game.set_next_state().expect("set_next_state shouldn't fail");
+        game = game
+            .set_next_state()
+            .expect("set_next_state shouldn't fail");
         assert_eq!(game.current_state(), GameState::ChoosingBoard);
         test_shuffle(&mut game);
         test_shuffle(&mut game);
-        game = game.set_next_state().expect("set_next_state shouldn't fail"); // GameState::SettingPlayerOrder
+        game = game
+            .set_next_state()
+            .expect("set_next_state shouldn't fail"); // GameState::SettingPlayerOrder
         assert_eq!(game.current_state(), GameState::SettingPlayerOrder);
         test_player_order(&mut game);
 
-        game = game.set_next_state().expect("set_next_state shouldn't fail"); // GameState::AllocateResourcesForward
-        assert_eq!(
-            game.current_state(),
-            GameState::AllocateResourceForward
-        );
+        game = game
+            .set_next_state()
+            .expect("set_next_state shouldn't fail"); // GameState::AllocateResourcesForward
+        assert_eq!(game.current_state(), GameState::AllocateResourceForward);
         test_allocate_resources(&mut game);
 
         test_serialization(&game);
@@ -187,27 +191,12 @@ mod tests {
         println!("create_game");
         let user = ClientUser {
             id: "1".to_owned(),
-            user_profile: UserProfile {
-                user_type: UserType::Connected,
-                email: "test@example.com".to_string(),
-                first_name: "John".to_string(),
-                last_name: "Doe".to_string(),
-                display_name: "johndoe".to_string(),
-                phone_number: SERVICE_CONFIG.test_phone_number.to_owned(),
-                picture_url: "https://example.com/picture.jpg".to_string(),
-                foreground_color: "#000000".to_string(),
-                background_color: "#FFFFFF".to_string(),
-                text_color: format!("0000000"),
-                games_played: Some(10),
-                games_won: Some(2),
-            },
+            user_profile: UserProfile::new_test_user(),
         };
         RegularGame::new(&user)
     }
     fn test_add_players(game: &mut RegularGame) {
-        let expected_actions = vec![
-            GameAction::AddPlayer,
-        ];
+        let expected_actions = vec![GameAction::AddPlayer];
         verify_state_and_actions(
             game,
             "test_add_players",
@@ -218,39 +207,13 @@ mod tests {
         //  create 2 more users and add them to the game
         let user1 = ClientUser {
             id: "2".to_owned(),
-            user_profile: UserProfile {
-                user_type: UserType::Connected,
-                email: "test@example.com".to_string(),
-                first_name: "Doug".to_string(),
-                last_name: "Doe".to_string(),
-                display_name: "johndoe".to_string(),
-                phone_number: SERVICE_CONFIG.test_phone_number.to_owned(),
-                picture_url: "https://example.com/picture.jpg".to_string(),
-                foreground_color: "#000000".to_string(),
-                background_color: "#FFFFFF".to_string(),
-                text_color: format!("0000000"),
-                games_played: Some(10),
-                games_won: Some(2),
-            },
+            user_profile: UserProfile::new_test_user() 
         };
+
 
         let user2 = ClientUser {
             id: "3".to_owned(),
-
-            user_profile: UserProfile {
-                user_type: UserType::Connected,
-                email: "test@example.com".to_string(),
-                first_name: "Sally".to_string(),
-                last_name: "Doe".to_string(),
-                display_name: "johndoe".to_string(),
-                phone_number: SERVICE_CONFIG.test_phone_number.to_owned(),
-                picture_url: "https://example.com/picture.jpg".to_string(),
-                foreground_color: "#000000".to_string(),
-                background_color: "#FFFFFF".to_string(),
-                text_color: format!("0000000"),
-                games_played: Some(10),
-                games_won: Some(2),
-            },
+            user_profile: UserProfile::new_test_user() 
         };
         game.add_user(&user1);
         game.add_user(&user2);

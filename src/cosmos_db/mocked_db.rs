@@ -71,18 +71,26 @@ async fn update_or_create_user(&self, user: &PersistUser) -> Result<ServiceRespo
         }
     }
 
+
     async fn find_user_by_email(&self, val: &str) -> Result<Option<PersistUser>, ServiceResponse> {
         match MOCKED_DB
             .users
             .read()
             .await
             .iter()
-            .find(|(_key, user)| *user.user_profile.email == *val)
+            .find(|(_key, user)| {
+                // Access email through the pii field
+                match &user.user_profile.pii {
+                    Some(pii) => &pii.email == val,
+                    None => false,
+                }
+            })
         {
             Some(u) => Ok(Some(u.1.clone())),
             None => new_not_found_error!("Not Found"),
         }
     }
+
 }
 
 #[cfg(test)]
