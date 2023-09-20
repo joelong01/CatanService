@@ -4,7 +4,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use azure_data_cosmos::CosmosEntity;
 use serde::{Deserialize, Serialize};
 
-use crate::middleware::request_context_mw::TestContext;
+use crate::{middleware::request_context_mw::TestContext, shared::shared_models::UserType};
 
 use super::shared_models::UserProfile;
 use uuid::Uuid;
@@ -35,7 +35,7 @@ pub struct PersistUser {
     pub id: String, // not set by client
     #[serde(rename = "partitionKey")]
     pub partition_key: u64, // the cosmos client seems to care about the spelling of both id and partitionKey
-    pub local_user_owner_id: Option<String>,
+    pub connected_user_id: Option<String>,
     pub password_hash: Option<String>, // when it is pulled from Cosmos, the hash is set
     pub user_profile: UserProfile,
     pub phone_code: Option<String>,
@@ -46,7 +46,7 @@ impl PersistUser {
     pub fn new() -> Self {
         Self {
             id: PersistUser::new_id(),
-            local_user_owner_id: None,
+            connected_user_id: None,
             partition_key: 1,
             password_hash: None,
             user_profile: UserProfile::default(),
@@ -55,14 +55,30 @@ impl PersistUser {
         }
     }
 
- 
-    pub fn from_user_profile(profile: &UserProfile, hash: String) -> Self {
+    pub fn from_local_user(connected_user_id: &str, profile: &UserProfile) -> Self {
+        assert!(profile.user_type == UserType::Local);
         Self {
             id: match &profile.user_id {
                 Some(identifier) => identifier.clone(),
                 None => PersistUser::new_id(),
             },
-            local_user_owner_id: profile.user_id.clone(),
+            connected_user_id: Some(connected_user_id.to_string()),
+            partition_key: 1,
+            password_hash: None,
+            user_profile: profile.clone(),
+            phone_code: None,
+            roles: vec![Role::User],
+        }
+    }
+ 
+    pub fn from_user_profile(profile: &UserProfile, hash: String) -> Self {
+        assert!(profile.user_type == UserType::Connected);
+        Self {
+            id: match &profile.user_id {
+                Some(identifier) => identifier.clone(),
+                None => PersistUser::new_id(),
+            },
+            connected_user_id: profile.user_id.clone(),
             partition_key: 1,
             password_hash: Some(hash.clone()),
             user_profile: profile.clone(),

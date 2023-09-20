@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
+#![allow(unused_imports)]
 
 use bcrypt::{hash, verify};
 use rand::Rng;
@@ -12,6 +13,7 @@ use crate::azure_setup::azure_wrapper::{
 use crate::middleware::security_context::{KeyKind, SecurityContext};
 use crate::middleware::service_config::SERVICE_CONFIG;
 use crate::shared::service_models::{Claims, PersistUser, Role};
+use crate::user_service::user_handlers::find_user_by_id_handler;
 /**
  * this module implements the WebApi to create the database/collection, list all the users, and to create/find/delete
  * a User document in CosmosDb
@@ -21,7 +23,9 @@ use crate::{bad_request_from_string, new_ok_response, new_unauthorized_response,
 use crate::games_service::long_poller::long_poller::LongPoller;
 
 use crate::middleware::request_context_mw::RequestContext;
-use crate::shared::shared_models::{GameError, ResponseType, ServiceResponse, UserProfile};
+use crate::shared::shared_models::{
+    GameError, ResponseType, ServiceResponse, UserProfile, UserType,
+};
 
 use reqwest::StatusCode;
 
@@ -196,11 +200,7 @@ pub async fn update_profile(
 ) -> Result<ServiceResponse, ServiceResponse> {
     let claims = request_context.claims.as_ref().unwrap();
 
-    let mut persist_user = request_context
-        .database
-        .find_user_by_id(&claims.id)
-        .await?
-        .expect("user id must be found because auth_mw succeeded");
+    let mut persist_user = request_context.database.find_user_by_id(&claims.id).await?;
     persist_user.update_profile(&profile_in);
 
     request_context
@@ -242,16 +242,10 @@ pub async fn login(
     password: &str,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    let user = match request_context
+    let user = request_context
         .database
         .find_user_by_email(username)
-        .await?
-    {
-        Some(u) => u,
-        None => {
-            return new_unauthorized_response!("");
-        }
-    };
+        .await?;
 
     let password_hash: String = match user.password_hash {
         Some(p) => p,
@@ -413,17 +407,6 @@ pub async fn get_profile(
         }
     };
 
-    let user = match user {
-        Some(u) => u,
-        None => {
-            return Err(ServiceResponse {
-                message: format!("id {} not found", user_id),
-                status: StatusCode::NOT_FOUND,
-                response_type: ResponseType::NoData,
-                game_error: GameError::NoError(String::default()),
-            });
-        }
-    };
     Ok(ServiceResponse::new(
         "",
         StatusCode::OK,
@@ -432,7 +415,10 @@ pub async fn get_profile(
     ))
 }
 
-pub async fn delete(id: &str, request_context: &RequestContext) -> Result<ServiceResponse, ServiceResponse> {
+pub async fn delete(
+    id: &str,
+    request_context: &RequestContext,
+) -> Result<ServiceResponse, ServiceResponse> {
     let user_id = request_context
         .claims
         .as_ref()
@@ -440,7 +426,7 @@ pub async fn delete(id: &str, request_context: &RequestContext) -> Result<Servic
         .id
         .clone();
 
-    if user_id != id && !request_context.is_caller_in_role(Role::Admin){
+    if user_id != id && !request_context.is_caller_in_role(Role::Admin) {
         return new_unauthorized_response!("only an admin can delete another user");
     }
 
@@ -495,17 +481,7 @@ pub async fn validate_email(token: &str) -> Result<ServiceResponse, ServiceRespo
     );
 
     let id = &claims.id; // Borrowing here.
-    let mut user = match request_context.database.find_user_by_id(id).await? {
-        Some(u) => u,
-        None => {
-            return Ok(ServiceResponse {
-                message: format!("id {} not found", id),
-                status: StatusCode::NOT_FOUND,
-                response_type: ResponseType::NoData,
-                game_error: GameError::NoError(String::default()),
-            });
-        }
-    };
+    let mut user = request_context.database.find_user_by_id(id).await?;
 
     user.user_profile.validated_email = true;
     request_context.database.update_or_create_user(&user).await
@@ -617,17 +593,7 @@ async fn internal_send_phone_code(
     code: i32,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    let mut persist_user = match request_context.database.find_user_by_id(user_id).await? {
-        Some(u) => u,
-        None => {
-            return Ok(ServiceResponse {
-                message: format!("id {} not found", user_id),
-                status: StatusCode::NOT_FOUND,
-                response_type: ResponseType::NoData,
-                game_error: GameError::NoError(String::default()),
-            });
-        }
-    };
+    let mut persist_user = request_context.database.find_user_by_id(user_id).await?;
 
     let phone_number = match &persist_user.user_profile.pii {
         Some(pii) => pii.phone_number.clone(),
@@ -674,17 +640,7 @@ pub async fn validate_phone(
         .id
         .clone();
 
-    let mut persist_user = match request_context.database.find_user_by_id(&user_id).await? {
-        Some(u) => u,
-        None => {
-            return Err(ServiceResponse {
-                message: format!("id {} not found", user_id),
-                status: StatusCode::NOT_FOUND,
-                response_type: ResponseType::NoData,
-                game_error: GameError::NoError(String::default()),
-            });
-        }
-    };
+    let mut persist_user = request_context.database.find_user_by_id(&user_id).await?;
 
     match &persist_user.phone_code {
         // If the stored code matches the provided code, validate the phone.
@@ -719,40 +675,123 @@ pub async fn validate_phone(
 pub async fn rotate_login_keys(
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    if !request_context.is_caller_in_role(Role::Admin) {
-        return new_unauthorized_response!("");
-    }
+    panic!("update this to match the new SecurityContext naming convention");
+    // if !request_context.is_caller_in_role(Role::Admin) {
+    //     return new_unauthorized_response!("");
+    // }
 
-    let kv_name = request_context.config.kv_name.to_owned();
-    let old_name = "oldLoginSecret-test";
-    let new_name = "currentLoginSecret-test";
+    // let kv_name = request_context.config.kv_name.to_owned();
+    // let old_name = "oldLoginSecret-test";
+    // let new_name = "currentLoginSecret-test";
 
-    // make sure the user/service is logged in
-    verify_login_or_panic();
+    // // make sure the user/service is logged in
+    // verify_login_or_panic();
 
-    // verify KV exists
-    keyvault_exists(&kv_name).expect(&format!("Failed to find Key Vault named {}.", kv_name));
+    // // verify KV exists
+    // keyvault_exists(&kv_name).expect(&format!("Failed to find Key Vault named {}.", kv_name));
 
-    let current_primary_login_key = key_vault_get_secret(&kv_name, KeyKind::PRIMARY_KEY)?;
+    // let current_primary_login_key = key_vault_get_secret(&kv_name, KeyKind::PRIMARY_KEY)?;
 
-    let new_key = SecurityContext::generate_jwt_key();
+    // let new_key = SecurityContext::generate_jwt_key();
 
-    key_vault_save_secret(&kv_name, KeyKind::SECONDARY_KEY, &current_primary_login_key)?;
-    key_vault_save_secret(&kv_name, KeyKind::PRIMARY_KEY, &new_key)?;
+    // key_vault_save_secret(&kv_name, KeyKind::SECONDARY_KEY, &current_primary_login_key)?;
+    // key_vault_save_secret(&kv_name, KeyKind::PRIMARY_KEY, &new_key)?;
 
-    return new_ok_response!("");
+    // return new_ok_response!("");
+}
+pub async fn find_user_by_id(
+    id: &str,
+    request_context: &RequestContext,
+) -> Result<ServiceResponse, ServiceResponse> {
+    
+
+    let persist_user = request_context.database.find_user_by_id(&id).await?;
+
+    Ok(ServiceResponse::new(
+        "",
+        StatusCode::OK,
+        ResponseType::Profile(UserProfile::from_persist_user(&persist_user)),
+        GameError::NoError(String::default()),
+    ))
 }
 
+/// a "local user" is a user that can play in the game, but does not participate in the long polling. instead messages
+/// for a local user are sent to the creator's long poller.  Having local users means that you can have a full game
+/// played from only one computer - i do this with my friends where we project the game onto a give 4k tv and use the
+/// physical games assets (cards, dice, etc.) to play the game.  see http://github.com/joelong01/Catan or
+/// http://github.com/joelong01/CatanTs
+///
+/// local users are linked to ConnectedUsers via the PersisProfile via local_user_owner_id
+/// local users have no PII
+///
+pub async fn create_local_user(
+    profile_in: &mut UserProfile,
+    request_context: &RequestContext,
+) -> Result<ServiceResponse, ServiceResponse> {
+    let user_id = request_context
+        .claims
+        .as_ref()
+        .expect("auth_mw should have added this or rejected the call")
+        .id
+        .clone();
+
+    profile_in.pii = None;
+    profile_in.user_type = UserType::Local;
+    profile_in.games_played = Some(0);
+    profile_in.games_won = Some(0);
+    //
+    //  create a hash that is extremely unlikely to be guessed so that the user can't login
+
+    let persist_user = PersistUser::from_local_user(&user_id, &profile_in);
+
+    request_context
+        .database
+        .update_or_create_user(&persist_user)
+        .await
+}
+
+///
+/// only an admin or the ConnectedUser can update the LocalUser
+pub async fn update_local_user(
+    id: &str,
+    request_context: &RequestContext,
+) -> Result<ServiceResponse, ServiceResponse> {
+    let user_id = request_context
+        .claims
+        .as_ref()
+        .expect("auth_mw should have added this or rejected the call")
+        .id
+        .clone();
+
+    let user = find_user_by_id(&user_id, &request_context).await?;
+
+    if user_id != id && !request_context.is_caller_in_role(Role::Admin) {
+        return new_unauthorized_response!("only an admin can delete another user");
+    }
+
+    todo!()
+}
+///
+/// only an admin or the ConnectedUser can delete the LocalUser
+pub async fn delete_local_user(
+    request_context: &RequestContext,
+) -> Result<ServiceResponse, ServiceResponse> {
+    todo!()
+}
+/// to get the full list of local users we need to
+/// 1. get the PersistProfile of the caller
+/// 2. use the local_user_owner_id to do a query against request_context.database.get_local_users()
+pub async fn get_local_users(
+    request_context: &RequestContext,
+) -> Result<ServiceResponse, ServiceResponse> {
+    todo!()
+}
 #[cfg(test)]
 mod tests {
 
-
-    use crate::{
-        init_env_logger, test::test_helpers::test::TestHelpers,
-    };
+    use crate::{init_env_logger, test::test_helpers::test::TestHelpers};
 
     use super::*;
-
 
     // Test the login function
     #[tokio::test]

@@ -69,8 +69,7 @@ pub async fn new_game(
     let user = request_context
         .database
         .find_user_by_id(user_id)
-        .await?
-        .expect("this is an authenticated call.  find_user_by_id cannot fail");
+        .await?;
 
     //
     //  "if it is a test game and the game has been passed in, use it.  otherwise create a new game and shuffle"

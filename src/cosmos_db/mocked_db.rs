@@ -58,7 +58,7 @@ async fn update_or_create_user(&self, user: &PersistUser) -> Result<ServiceRespo
         }
     }
 
-    async fn find_user_by_id(&self, id: &str) -> Result<Option<PersistUser>, ServiceResponse> {
+    async fn find_user_by_id(&self, id: &str) -> Result<PersistUser, ServiceResponse> {
         match MOCKED_DB
             .users
             .read()
@@ -66,13 +66,13 @@ async fn update_or_create_user(&self, user: &PersistUser) -> Result<ServiceRespo
             .iter()
             .find(|(_key, user)| *user.id == *id)
         {
-            Some(u) => Ok(Some(u.1.clone())),
+            Some(u) => Ok(u.1.clone()),
             None => return new_not_found_error!("Not Found"),
         }
     }
 
 
-    async fn find_user_by_email(&self, val: &str) -> Result<Option<PersistUser>, ServiceResponse> {
+    async fn find_user_by_email(&self, val: &str) -> Result<PersistUser, ServiceResponse> {
         match MOCKED_DB
             .users
             .read()
@@ -86,7 +86,7 @@ async fn update_or_create_user(&self, user: &PersistUser) -> Result<ServiceRespo
                 }
             })
         {
-            Some(u) => Ok(Some(u.1.clone())),
+            Some(u) => Ok(u.1.clone()),
             None => new_not_found_error!("Not Found"),
         }
     }

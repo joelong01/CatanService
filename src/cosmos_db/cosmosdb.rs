@@ -59,8 +59,8 @@ pub trait UserDbTrait {
         user: &PersistUser,
     ) -> Result<ServiceResponse, ServiceResponse>;
     async fn delete_user(&self, unique_id: &str) -> Result<(), ServiceResponse>;
-    async fn find_user_by_id(&self, val: &str) -> Result<Option<PersistUser>, ServiceResponse>;
-    async fn find_user_by_email(&self, val: &str) -> Result<Option<PersistUser>, ServiceResponse>;
+    async fn find_user_by_id(&self, val: &str) -> Result<PersistUser, ServiceResponse>;
+    async fn find_user_by_email(&self, val: &str) -> Result<PersistUser, ServiceResponse>;
     fn get_collection_names(&self, is_test: bool) -> Vec<String> {
         COLLECTION_NAME_VALUES
             .iter()
@@ -328,12 +328,12 @@ impl UserDbTrait for UserDb {
     /**
      *  an api that finds a user by the id in the cosmosdb users collection.
      */
-    async fn find_user_by_id(&self, val: &str) -> Result<Option<PersistUser>, ServiceResponse> {
+    async fn find_user_by_id(&self, val: &str) -> Result<PersistUser, ServiceResponse> {
         let query = format!(r#"SELECT * FROM c WHERE c.id = '{}'"#, val);
         match self.execute_query(CosmosDocType::User, &query).await {
             Ok(users) => {
                 if !users.is_empty() {
-                    Ok(Some(users.first().unwrap().clone())) // clone is necessary because `first()` returns a reference
+                    Ok(users.first().unwrap().clone()) // clone is necessary because `first()` returns a reference
                 } else {
                     new_not_found_error!("not found")
                 }
@@ -344,7 +344,7 @@ impl UserDbTrait for UserDb {
         }
     }
 
-    async fn find_user_by_email(&self, val: &str) -> Result<Option<PersistUser>, ServiceResponse> {
+    async fn find_user_by_email(&self, val: &str) -> Result<PersistUser, ServiceResponse> {
         let query = format!(
             r#"SELECT * FROM c WHERE c.user_profile.Pii.Email = '{}'"#,
             val
@@ -352,8 +352,7 @@ impl UserDbTrait for UserDb {
         match self.execute_query(CosmosDocType::User, &query).await {
             Ok(users) => {
                 if !users.is_empty() {
-                    log::trace!("found user with email={}", val);
-                    Ok(Some(users.first().unwrap().clone()))
+                    Ok(users.first().unwrap().clone())
                 } else {
                     new_not_found_error!("not found")
                 }
@@ -418,8 +417,8 @@ mod tests {
         let test_user = user_db
             .find_user_by_id(&modified_user.id)
             .await
-            .expect("should find this user")
-            .expect("should be Some");
+            .expect("should find this user");
+
         assert!(test_user.user_profile.validated_email);
 
         // find user by email
@@ -441,7 +440,7 @@ mod tests {
         };
 
         assert_eq!(
-            found_user.unwrap().user_profile.get_email_or_panic(),
+            found_user.user_profile.get_email_or_panic(),
             test_user.user_profile.get_email_or_panic()
         );
 
@@ -455,21 +454,14 @@ mod tests {
         };
 
         if let Some(first_user) = users.first() {
-            let u = user_db
+            let found_user = user_db
                 .find_user_by_id(&first_user.id)
                 .await
                 .expect("find_user_by_id should not fail");
-            match u {
-                Some(found_user) => {
-                    trace!(
-                        "found user with email: {}",
-                        found_user.user_profile.get_email_or_panic()
-                    )
-                }
-                None => panic!("failed to find user that we just inserted"),
-            }
-        } else {
-            panic!("the list should not be empty since we just filled it up!")
+            trace!(
+                "found user with email: {}",
+                found_user.user_profile.get_email_or_panic()
+            );
         }
 
         //  delete all the users
@@ -532,7 +524,7 @@ mod tests {
            
                 phone_code: None,
                 roles: vec![Role::User, Role::TestUser],
-                local_user_owner_id: None,
+                connected_user_id: None,
             };
 
             users.push(user);

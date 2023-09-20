@@ -1,10 +1,9 @@
 use crate::{
     get_header_value,
     middleware::{header_extractor::HeadersExtractor, request_context_mw::RequestContext},
-    shared::shared_models::{GameError, ResponseType, ServiceResponse, UserProfile},
+    shared::{shared_models::{GameError, ResponseType, ServiceResponse, UserProfile}, service_models::Role}
 };
 use actix_web::{
-    http::Error,
     web::{self},
     HttpResponse, Responder,
 };
@@ -97,45 +96,35 @@ pub async fn update_profile_handler(
 }
 
 // Find user by ID
-pub async fn find_user_by_id_handler(
-    request_context: RequestContext,
-) -> Result<HttpResponse, Error> {
-    let id = request_context
+pub async fn find_user_by_id_handler(id: web::Path<String>, request_context: RequestContext) -> HttpResponse {
+    let claims_id = request_context
         .claims
+        .as_ref()
         .expect("auth_mw should have added this or rejected the call")
         .id
         .clone();
-    match request_context.database.find_user_by_id(&id).await {
-        Ok(option) => {
-            match option {
-                Some(user) => {
-                    let service_response = ServiceResponse::new(
-                        "",
-                        StatusCode::OK,
-                        ResponseType::Profile(UserProfile::from_persist_user(&user)),
-                        GameError::NoError(String::default()),
-                    );
-                    Ok(service_response.to_http_response())
-                }
-                None => {
-                    // Handle the case where the user is not found.
-                    // You can modify this based on how you want to handle a missing user.
-                    let service_response = ServiceResponse::new(
-                        "",
-                        StatusCode::NOT_FOUND,
-                        ResponseType::NoData, // Assuming ClientUser has a default instance or you could use another placeholder
-                        GameError::NoError(String::default()),
-                    );
-                    Ok(service_response.to_http_response())
-                }
-            }
-        }
-        Err(service_response) => Ok(service_response.to_http_response()),
+
+
+
+    if claims_id != *id && !request_context.is_caller_in_role(Role::Admin) {
+       return ServiceResponse::new(
+            "you can't peak at somebody else's profile!",
+            StatusCode::UNAUTHORIZED,
+            ResponseType::NoData,
+            GameError::HttpError(StatusCode::UNAUTHORIZED)).to_http_response();
     }
+    super::users::find_user_by_id(&id, &request_context)
+        .await
+        .map(|sr| sr.to_http_response())
+        .unwrap_or_else(|sr| sr.to_http_response())
 }
 
+
 // Delete user
-pub async fn delete_handler(id: web::Path<String>, request_context: RequestContext) -> HttpResponse {
+pub async fn delete_handler(
+    id: web::Path<String>,
+    request_context: RequestContext,
+) -> HttpResponse {
     super::users::delete(&id, &request_context)
         .await
         .map(|sr| sr.to_http_response())
@@ -178,19 +167,15 @@ pub async fn validate_phone_handler(
         .unwrap_or_else(|sr| sr.to_http_response())
 }
 
-pub async fn send_phone_code_handler(
-    request_context: RequestContext,
-) -> HttpResponse {
+pub async fn send_phone_code_handler(request_context: RequestContext) -> HttpResponse {
     super::users::send_phone_code(&request_context)
         .await
         .map(|sr| sr.to_http_response())
         .unwrap_or_else(|sr| sr.to_http_response())
 }
 
-pub async fn send_validation_email(request_context: RequestContext,
-) -> HttpResponse {
+pub async fn send_validation_email(request_context: RequestContext) -> HttpResponse {
     super::users::send_validation_email(&request_context)
-
         .map(|sr| sr.to_http_response())
         .unwrap_or_else(|sr| sr.to_http_response())
 }

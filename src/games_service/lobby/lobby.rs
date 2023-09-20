@@ -50,8 +50,7 @@ pub async fn respond_to_invite(
         let persist_user = request_context
             .database
             .find_user_by_id(&invite_response.from_id)
-            .await?
-            .expect("this is an authenticated call.  find_user_by_id cannot fail");
+            .await?;
         GameContainer::add_player(
             &invite_response.game_id,
             &UserProfile::from_persist_user(&persist_user),
