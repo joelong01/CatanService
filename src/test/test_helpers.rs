@@ -71,12 +71,13 @@ pub mod test {
 
             if let Some(test_auth_token) = result.get_token() {
                 test_proxy.set_auth_token(&Some(test_auth_token));
-                let cu = test_proxy
+                let profile = test_proxy
                     .get_profile("Self")
                     .await
                     .to_profile()
                     .expect("this shoudl be there since login worked");
-                let sr = test_proxy.delete_user(&cu).await;
+                let user_id = profile.user_id.expect("a logged in user must have an id!");
+                let sr = test_proxy.delete_user(&user_id).await;
                 assert!(sr.status.is_success());
             }
         }
@@ -133,6 +134,52 @@ pub mod test {
             assert!(user.pii.is_some());
             assert!(user.user_id.is_some());
         }
+    }
+    /**
+     *  this test deletes all users in the Users-Collection-test Collection
+     *  You cannot run this in parallel with any test that expects test users to be present.
+     *  in general, i've found parallel tests with state requirements (e.g. the users in the db) are not 
+     *  compatible.
+     */
+    #[tokio::test]
+    async fn delete_test_users() {
+        init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
+        let app = create_test_service!();
+        let mut proxy = TestProxy::new(&app, Some(TestContext::new(true, None)));
+        delete_all_test_users(&mut proxy).await;
+        //
+        //  make sure that deleting empty works
+        delete_all_test_users(&mut proxy).await;
+    }
+    pub async fn delete_all_test_users<S>(proxy: &mut TestProxy<'_, S>)
+    // Add the expected lifetime and generic type for the function signature
+    where
+        S: Service<Request, Response = ActixServiceResponse<EitherBody<BoxBody>>, Error = Error>
+            + 'static,
+    {
+        let admin_token = TestHelpers::admin_login().await;
+        proxy.set_auth_token(&Some(admin_token));
+        let profiles = proxy
+            .get_all_users()
+            .await
+            .to_profile_vec()
+            .expect("should at least be an empty vec!");
+
+        for profile in profiles {
+            let service_response = proxy
+                .delete_user(&profile.user_id.unwrap())
+                .await;
+
+            assert!(service_response.status.is_success());
+                
+        }
+
+        let profiles = proxy
+        .get_all_users()
+        .await
+        .to_profile_vec()
+        .expect("should at least be an empty vec!");
+        assert!(profiles.len() == 0);
     }
 
     pub async fn register_test_users<S>(proxy: &mut TestProxy<'_, S>) -> Vec<UserProfile>
@@ -213,7 +260,7 @@ pub mod test {
                 .expect("ADMIN_PROFILE_JSON not found in environment - unable to continue");
 
             // Read the file
-            let mut file = File::open(admin_json_path)
+            let mut file = File::open(admin_json_path.clone())
                 .expect("if this fails, update ADMIN_PROFILE_JSON to point to the right file");
             let mut contents = String::new();
             file.read_to_string(&mut contents)
@@ -221,7 +268,7 @@ pub mod test {
 
             // Deserialize the JSON string into UserProfile
             let profile = serde_json::from_str::<UserProfile>(&contents).expect(
-                "This should deserialize.  if it fails, make sure the JSON is in PascalCase",
+                &format!("This should deserialize.  if it fails, make sure the Admin Profile at {} JSON is in PascalCase", &admin_json_path)
             );
 
             profile

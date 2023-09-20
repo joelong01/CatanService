@@ -37,8 +37,6 @@ pub struct PersistUser {
     pub partition_key: u64, // the cosmos client seems to care about the spelling of both id and partitionKey
     pub local_user_owner_id: Option<String>,
     pub password_hash: Option<String>, // when it is pulled from Cosmos, the hash is set
-    pub validated_email: bool,         // has the mail been validated?
-    pub validated_phone: bool,         // has the phone number been validated?
     pub user_profile: UserProfile,
     pub phone_code: Option<String>,
     pub roles: Vec<Role>,
@@ -52,8 +50,6 @@ impl PersistUser {
             partition_key: 1,
             password_hash: None,
             user_profile: UserProfile::default(),
-            validated_email: false,
-            validated_phone: false,
             phone_code: None,
             roles: vec![Role::User],
         }
@@ -70,8 +66,6 @@ impl PersistUser {
             partition_key: 1,
             password_hash: Some(hash.clone()),
             user_profile: profile.clone(),
-            validated_email: false,
-            validated_phone: false,
             phone_code: None,
             roles: vec![Role::User],
         }

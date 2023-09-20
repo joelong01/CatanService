@@ -223,6 +223,10 @@ fn user_service() -> Scope {
             web::post().to(user_handlers::send_phone_code_handler),
         )
         .route(
+            "/email/send-validation-email",
+            web::post().to(user_handlers::send_validation_email),
+        )
+        .route(
             "/register-test-user",
             web::post().to(user_handlers::register_test_user_handler),
         )
@@ -307,7 +311,10 @@ fn longpoll_service() -> Scope {
 }
 
 fn profile_service() -> Scope {
-    web::scope("profile").route("/{email}", web::get().to(user_handlers::get_profile_handler))
+    web::scope("profile").route(
+        "/{email}",
+        web::get().to(user_handlers::get_profile_handler),
+    )
 }
 
 lazy_static! {
@@ -353,26 +360,13 @@ mod tests {
         create_service, create_test_service,
         games_service::game_container::game_messages::GameHeader,
         init_env_logger,
-        middleware::{
-            request_context_mw::TestContext,
-            service_config::SERVICE_CONFIG,
-        },
+        middleware::{request_context_mw::TestContext, service_config::SERVICE_CONFIG},
         setup_cosmos, setup_test,
-
-        
-        test::{
-            test_helpers::test::register_test_users,
-            test_proxy::TestProxy,
-        },
-
+        test::{test_helpers::test::{register_test_users, delete_all_test_users}, test_proxy::TestProxy},
     };
-
-
-
 
     use actix_web::test;
     use reqwest::StatusCode;
-
 
     #[tokio::test]
     async fn test_version_and_log_intialized() {
@@ -392,29 +386,33 @@ mod tests {
     #[tokio::test]
     async fn create_user_login_check_profile() {
         init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
-     
-        let  app = create_test_service!();
+
+        let app = create_test_service!();
         setup_test!(&app, false);
         let use_cosmos = true;
         let mut proxy = TestProxy::new(&app, Some(TestContext::new(use_cosmos, None)));
-       
+
         let test_users = register_test_users(&mut proxy).await;
-        let service_response = proxy.login(&test_users[0].clone().pii.expect("pii should exist").email, "password").await;
+        let service_response = proxy
+            .login(
+                &test_users[0].clone().pii.expect("pii should exist").email,
+                "password",
+            )
+            .await;
         assert!(service_response.status.is_success());
 
-        let auth_token = service_response.get_token().expect("auth token should exist");
+        let auth_token = service_response
+            .get_token()
+            .expect("auth token should exist");
         proxy.set_auth_token(&Some(auth_token));
         let service_response = proxy.get_profile("Self").await;
         let profile = service_response.to_profile().expect("profile should exist");
         let first = test_users
-        .first()
-        .and_then(|user| user.pii.as_ref()).unwrap();
-        
-    
+            .first()
+            .and_then(|user| user.pii.as_ref())
+            .unwrap();
 
         assert_eq!(&profile.pii.as_ref().unwrap().email, first.email.as_str());
-        
-        
     }
     #[tokio::test]
     async fn test_setup_no_test_header() {
@@ -437,17 +435,18 @@ mod tests {
 
     #[tokio::test]
 
-    async fn test_validate_phone() {
+    async fn test_validate_phone_and_email() {
         init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
         let app = create_test_service!();
         let code = 569342;
         let mut proxy = TestProxy::new(&app, Some(TestContext::new(true, Some(code))));
+        delete_all_test_users(&mut proxy).await;
+
         let users = register_test_users(&mut proxy).await;
 
         let mut profile = users[0].clone();
         assert!(profile.pii.is_some());
         assert!(profile.user_id.is_some());
-
 
         // login as the first test user
 
@@ -460,13 +459,24 @@ mod tests {
         assert!(auth_token.len() > 0);
         proxy.set_auth_token(&Some(auth_token));
         //
-        //  set the phone number
+        //  set the phone number and email
         profile.pii.as_mut().unwrap().phone_number = SERVICE_CONFIG.test_phone_number.clone();
-
+        profile.pii.as_mut().unwrap().email = SERVICE_CONFIG.test_email.clone();
         // update the profile
-
         let service_response = proxy.update_profile(&profile).await;
         assert!(service_response.status.is_success());
+
+        //
+        // we've change the email, which is encoded in the token and used as truth by the service -
+        // so login again and get a new token
+        let auth_token = proxy
+            .login(&profile.pii.as_ref().unwrap().email, "password")
+            .await
+            .get_token()
+            .expect("login should work and it should return the token");
+        assert!(auth_token.len() > 0);
+        proxy.set_auth_token(&Some(auth_token));
+        
 
         // lookup profile
 
@@ -478,17 +488,47 @@ mod tests {
 
         // they better be the same!
         assert!(new_profile.is_equal_by_val(&profile));
-        
+
         // send the phone code.  somebody is going to get a text...
         // the actual code is defined above and set in the test context, so that we can verify it
         let service_response = proxy.send_phone_code().await;
         assert!(service_response.status.is_success());
 
         //
-        //  send the verification
+        //  validate with the phone
         let service_response = proxy.validate_phone_code(code).await;
         assert!(service_response.status.is_success());
 
+        //
+        // send validation email
+        let service_response = proxy.send_validation_email().await;
+        assert!(service_response.status.is_success());
+        let url_str = service_response
+            .get_url()
+            .expect("should be the validation url");
+        //
+        //  now we have to get the claim from the URL so we can pass it to the proxy
+        let parts: Vec<&str> = url_str.rsplitn(2, '/').collect();
+        assert_eq!(parts.len(), 2);
+        let encoded_token = parts[0].clone();
+            
+        // validate with the token
+        proxy.set_auth_token(&None);
+        let service_response = proxy.validate_email(encoded_token).await;
+        assert!(service_response.status.is_success());
+
+        // get the profile
+
+        let service_response = proxy.get_profile("Self").await;
+        assert!(service_response.status.is_success());
+        let profile = service_response.to_profile().expect("you should be able to get your own profile.");
+        assert!(profile.validated_email);
+        assert!(profile.validated_phone);
+        //
+        // delete the users to put us back to a known state.  this is particularly important because we modified one
+        // of the users and the tests can check the input vs. output of the user profile and the profile in the db will
+        // be different than the profile in the .json that is used to add test users and tests will assert.
+        delete_all_test_users(&mut proxy).await;
 
     }
     #[tokio::test]

@@ -277,6 +277,8 @@ pub mod test {
                 text_color: "#000000".into(),
                 games_played: Some(0),
                 games_won: Some(0),
+                validated_email: false,
+                validated_phone: false,
             };
 
             let client_user = proxy

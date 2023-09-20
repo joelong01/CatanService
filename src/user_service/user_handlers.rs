@@ -135,8 +135,8 @@ pub async fn find_user_by_id_handler(
 }
 
 // Delete user
-pub async fn delete_handler(request_context: RequestContext) -> HttpResponse {
-    super::users::delete(&request_context)
+pub async fn delete_handler(id: web::Path<String>, request_context: RequestContext) -> HttpResponse {
+    super::users::delete(&id, &request_context)
         .await
         .map(|sr| sr.to_http_response())
         .unwrap_or_else(|sr| sr.to_http_response())
@@ -183,6 +183,14 @@ pub async fn send_phone_code_handler(
 ) -> HttpResponse {
     super::users::send_phone_code(&request_context)
         .await
+        .map(|sr| sr.to_http_response())
+        .unwrap_or_else(|sr| sr.to_http_response())
+}
+
+pub async fn send_validation_email(request_context: RequestContext,
+) -> HttpResponse {
+    super::users::send_validation_email(&request_context)
+
         .map(|sr| sr.to_http_response())
         .unwrap_or_else(|sr| sr.to_http_response())
 }

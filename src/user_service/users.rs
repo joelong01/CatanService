@@ -432,7 +432,7 @@ pub async fn get_profile(
     ))
 }
 
-pub async fn delete(request_context: &RequestContext) -> Result<ServiceResponse, ServiceResponse> {
+pub async fn delete(id: &str, request_context: &RequestContext) -> Result<ServiceResponse, ServiceResponse> {
     let user_id = request_context
         .claims
         .as_ref()
@@ -440,7 +440,11 @@ pub async fn delete(request_context: &RequestContext) -> Result<ServiceResponse,
         .id
         .clone();
 
-    let result = request_context.database.delete_user(&user_id).await;
+    if user_id != id && !request_context.is_caller_in_role(Role::Admin){
+        return new_unauthorized_response!("only an admin can delete another user");
+    }
+
+    let result = request_context.database.delete_user(id).await;
 
     match result {
         Ok(..) => Ok(ServiceResponse::new(
@@ -503,7 +507,7 @@ pub async fn validate_email(token: &str) -> Result<ServiceResponse, ServiceRespo
         }
     };
 
-    user.validated_email = true;
+    user.user_profile.validated_email = true;
     request_context.database.update_or_create_user(&user).await
 }
 
@@ -540,13 +544,15 @@ pub fn get_validation_url(
 /// returns an error or a ServiceResponse that has the validation URL embedded in it.  RegistgerUser should call
 /// this and drop the Ok() response. the Ok() response is useful for the test cases.
 pub fn send_validation_email(
-    host: &str,
-    id: &str,
-    email: &str,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
     trace_function!("send_validation_email");
-    let url = get_validation_url(host, id, email, &request_context);
+    let host_name = std::env::var("HOST_NAME").expect("HOST_NAME must be set");
+    let claims = request_context
+        .claims
+        .clone()
+        .expect("claims are set by auth middleware, or the call is rejected");
+    let url = get_validation_url(&host_name, &claims.id, &claims.sub, &request_context);
     let msg = format!(
         "Thank you for registering with our Service.\n\n\
          Click on this link to validate your email: {}\n\n\
@@ -554,7 +560,7 @@ pub fn send_validation_email(
         url
     );
     let result = send_email(
-        email,
+        &claims.sub,
         &SERVICE_CONFIG.service_email,
         "Please validate your email",
         &msg,
@@ -590,19 +596,16 @@ pub async fn send_phone_code(
         .id
         .clone();
 
-        let random_code: i32 = rand::thread_rng().gen_range(100_000..=999_999);
+    let random_code: i32 = rand::thread_rng().gen_range(100_000..=999_999);
 
-        let code: i32 = request_context
-            .test_context
-            .as_ref()
-            .and_then(|test_ctx| test_ctx.phone_code.as_ref())
-            .copied()
-            .unwrap_or(random_code);
-        
+    let code: i32 = request_context
+        .test_context
+        .as_ref()
+        .and_then(|test_ctx| test_ctx.phone_code.as_ref())
+        .copied()
+        .unwrap_or(random_code);
 
-   
-    let sr =  internal_send_phone_code(&user_id, code, request_context).await;
-
+    let sr = internal_send_phone_code(&user_id, code, request_context).await;
 
     sr
 }
@@ -686,7 +689,7 @@ pub async fn validate_phone(
     match &persist_user.phone_code {
         // If the stored code matches the provided code, validate the phone.
         Some(c) if c.to_string() == code => {
-            persist_user.validated_phone = true;
+            persist_user.user_profile.validated_phone = true;
             persist_user.phone_code = None;
             request_context
                 .database
@@ -742,53 +745,14 @@ pub async fn rotate_login_keys(
 
 #[cfg(test)]
 mod tests {
-    use actix_web::test;
+
 
     use crate::{
-        create_test_service, games_service::game_container::game_messages::GameHeader,
-        init_env_logger, middleware::service_config::SERVICE_CONFIG, setup_test,
-        test::test_helpers::test::TestHelpers,
+        init_env_logger, test::test_helpers::test::TestHelpers,
     };
 
-    
     use super::*;
-    #[tokio::test]
-    async fn test_validate_email() {
-        init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Error).await;
-        let app = create_test_service!();
-        setup_test!(&app, false);
 
-        let request_context = RequestContext::test_default(false);
-        let mut profile = UserProfile::new_test_user(None);
-        profile.pii.as_mut().unwrap().email = SERVICE_CONFIG.test_email.clone();
-
-        // setup
-        let response = verify_cosmosdb(&request_context).await;
-
-        let sr = register("password", &profile, &request_context)
-            .await
-            .expect("this should work");
-        let client_user = sr.to_profile().expect("This should be a client user");
-        let host_name = std::env::var("HOST_NAME").expect("HOST_NAME must be set");
-        let result = send_validation_email(
-            &host_name,
-            &client_user.user_id.unwrap(),
-            &profile.get_email_or_panic(),
-            &request_context,
-        );
-        match result {
-            Ok(service_response) => {
-                let url = service_response.get_url().expect("this should be a URL!");
-                let req = test::TestRequest::get().uri(&url).to_request();
-                let resp = test::call_service(&app, req).await;
-                assert!(resp.status().is_success());
-            }
-            Err(sr) => {
-                log::error!("{}", sr);
-                panic!("should not have failed to send an email");
-            }
-        }
-    }
 
     // Test the login function
     #[tokio::test]

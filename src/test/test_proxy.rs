@@ -342,8 +342,8 @@ where
         self.get("/auth/api/v1/users", None).await
     }
 
-    pub async fn delete_user(&self, profile: &UserProfile) -> ServiceResponse {
-        let url = format!("/auth/api/v1/users/{}", profile.user_id.clone().unwrap());
+    pub async fn delete_user(&self, user_id: &str) -> ServiceResponse {
+        let url = format!("/auth/api/v1/users/{}", user_id);
         self.delete(&url, None).await
     }
 
@@ -360,6 +360,16 @@ where
     pub async fn validate_phone_code(&self, code: i32 ) -> ServiceResponse {
         let url= format!("/auth/api/v1/users/phone/validate/{}", code);
         self.post::<()>(&url, None, None).await
+    }
+
+    pub async fn send_validation_email(&self)-> ServiceResponse {
+        let url= "/auth/api/v1/users/email/send-validation-email";
+        self.post::<()>(url, None, None).await
+    }
+
+    pub async fn validate_email(&self, token: &str)-> ServiceResponse {
+        let url= format!("/api/v1/users/validate-email/{}", token);
+        self.get(&url, None).await
     }
 
 }

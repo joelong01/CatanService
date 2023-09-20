@@ -13,7 +13,9 @@
         "BackgroundColor": "#FFFFFF",
         "TextColor": "#00000000",
         "GamesPlayed": 5,
-        "GamesWon": 2
+        "GamesWon": 2, 
+        "ValidatedEmail": false,
+        "ValidatedPhone": false
     },
     {
         "UserType": "Connected",
@@ -29,7 +31,9 @@
         "BackgroundColor": "#FFFFFF",
         "TextColor": "#00000000",
         "GamesPlayed": 7,
-        "GamesWon": 5
+        "GamesWon": 5,
+        "ValidatedEmail": false,
+        "ValidatedPhone": false
     },
     {
         "UserType": "Connected",
@@ -46,7 +50,9 @@
         "BackgroundColor": "#FFFFFF",
         "TextColor": "#00000000",
         "GamesPlayed": 3,
-        "GamesWon": 2
+        "GamesWon": 2,
+        "ValidatedEmail": false,
+        "ValidatedPhone": false
     },
     {
         "UserType": "Connected",
@@ -62,7 +68,9 @@
         "BackgroundColor": "#FFFFFF",
         "TextColor": "#00000000",
         "GamesPlayed": 6,
-        "GamesWon": 4
+        "GamesWon": 4,
+        "ValidatedEmail": false,
+        "ValidatedPhone": false
     },
     {
         "UserType": "Connected",
@@ -78,6 +86,8 @@
         "BackgroundColor": "#FFFFFF",
         "TextColor": "#00000000",
         "GamesPlayed": 4,
-        "GamesWon": 3
+        "GamesWon": 3,
+        "ValidatedEmail": false,
+        "ValidatedPhone": false
     }
 ]

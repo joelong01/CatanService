@@ -145,6 +145,8 @@ pub struct UserProfile {
     pub text_color: String,
     pub games_played: Option<u16>,
     pub games_won: Option<u16>,
+    pub validated_email: bool,         // has the mail been validated?
+    pub validated_phone: bool,         // has the phone number been validated?
 }
 impl Default for UserProfile {
     fn default() -> Self {
@@ -159,6 +161,8 @@ impl Default for UserProfile {
             text_color: String::default(),
             games_played: None,
             games_won: None,
+            validated_email: false,
+            validated_phone: false
         }
     }
 }
@@ -188,6 +192,8 @@ impl UserProfile {
             && self.text_color == other.text_color
             && self.games_played.unwrap_or(0) == other.games_played.unwrap_or(0)
             && self.games_won.unwrap_or(0) == other.games_won.unwrap_or(0)
+            && self.validated_email == other.validated_email
+            && self.validated_phone == other.validated_phone
     }
 
     pub fn get_email_or_panic(&self) -> String {
@@ -203,6 +209,8 @@ impl UserProfile {
         self.foreground_color = other.foreground_color.clone();
         self.background_color = other.background_color.clone();
         self.text_color = other.text_color.clone();
+        self.validated_email = other.validated_email;
+        self.validated_phone = other.validated_phone;
 
         // Update optional fields if the other has a value:
         if let Some(ref other_id) = other.user_id {
@@ -282,6 +290,8 @@ impl UserProfile {
             text_color: String::default(),
             games_played: None,
             games_won: None,
+            validated_email: false,
+            validated_phone: false
         }
     }
 }
@@ -391,6 +401,13 @@ impl ServiceResponse {
         }
     }
 
+    pub fn to_profile_vec(&self) -> Option<Vec<UserProfile>> {
+        match self.response_type.clone() {
+            ResponseType::Profiles(data) => Some(data),
+            _ => None,
+        }
+    }
+
     pub fn profile_from_json(json: &str) -> Option<(ServiceResponse, UserProfile)> {
         let service_response: ServiceResponse = match serde_json::from_str(json) {
             Ok(sr) => sr,
@@ -402,16 +419,16 @@ impl ServiceResponse {
         }
     }
 
-    pub fn to_profile_vec(json: &str) -> Option<(ServiceResponse, Vec<UserProfile>)> {
-        let service_response: ServiceResponse = match serde_json::from_str(json) {
-            Ok(sr) => sr,
-            Err(_) => return None,
-        };
-        match service_response.response_type.clone() {
-            ResponseType::Profiles(client_users) => Some((service_response, client_users)),
-            _ => None,
-        }
-    }
+    // pub fn to_profile_vec(json: &str) -> Option<(ServiceResponse, Vec<UserProfile>)> {
+    //     let service_response: ServiceResponse = match serde_json::from_str(json) {
+    //         Ok(sr) => sr,
+    //         Err(_) => return None,
+    //     };
+    //     match service_response.response_type.clone() {
+    //         ResponseType::Profiles(client_users) => Some((service_response, client_users)),
+    //         _ => None,
+    //     }
+    // }
 
     pub fn json_to_token(json: &str) -> Option<(ServiceResponse, String)> {
         let service_response: ServiceResponse = match serde_json::from_str(json) {

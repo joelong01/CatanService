@@ -410,7 +410,7 @@ mod tests {
         // update a user
 
         let mut modified_user = users[0].clone();
-        modified_user.validated_email = true;
+        modified_user.user_profile.validated_email = true;
         let _ = user_db
             .update_or_create_user(&modified_user)
             .await
@@ -420,7 +420,7 @@ mod tests {
             .await
             .expect("should find this user")
             .expect("should be Some");
-        assert!(test_user.validated_email);
+        assert!(test_user.user_profile.validated_email);
 
         // find user by email
         log::trace!(
@@ -526,9 +526,10 @@ mod tests {
                     games_played: Some(10 * i as u16),
                     games_won: Some(5 * i as u16),
                     user_id: None,
+                    validated_email: false,
+                    validated_phone: false,
                 },
-                validated_email: false,
-                validated_phone: false,
+           
                 phone_code: None,
                 roles: vec![Role::User, Role::TestUser],
                 local_user_owner_id: None,
