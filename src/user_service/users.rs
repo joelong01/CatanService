@@ -699,6 +699,10 @@ pub async fn rotate_login_keys(
 
     // return new_ok_response!("");
 }
+
+//
+//  this is used in many places internally and has to work for all callers. - todo: make internal
+//  note: the handler is locked down to admin or Self
 pub async fn find_user_by_id(
     id: &str,
     request_context: &RequestContext,
