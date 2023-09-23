@@ -61,6 +61,7 @@ pub trait UserDbTrait {
     async fn delete_user(&self, unique_id: &str) -> Result<(), ServiceResponse>;
     async fn find_user_by_id(&self, val: &str) -> Result<PersistUser, ServiceResponse>;
     async fn find_user_by_email(&self, val: &str) -> Result<PersistUser, ServiceResponse>;
+    async fn get_connected_users(&self, connected_user_id: &str) -> Result<Vec<PersistUser>, ServiceResponse>;
     fn get_collection_names(&self, is_test: bool) -> Vec<String> {
         COLLECTION_NAME_VALUES
             .iter()
@@ -166,6 +167,9 @@ impl UserDb {
 
         collection_client.collection_name().to_string()
     }
+
+    
+
 }
 
 /**
@@ -343,7 +347,20 @@ impl UserDbTrait for UserDb {
             }
         }
     }
-
+    async fn get_connected_users(&self, connected_user_id: &str) -> Result<Vec<PersistUser>, ServiceResponse>{
+        let query = format!(
+            r#"SELECT * FROM c WHERE c.connected_user_id = '{}'"#,
+            connected_user_id
+        );
+        match self.execute_query(CosmosDocType::User, &query).await {
+            Ok(users) => {
+                Ok(users)
+            }
+            Err(e) => {
+                log_and_return_azure_core_error!(e, "find_user_by_id");
+            }
+        }
+    }
     async fn find_user_by_email(&self, val: &str) -> Result<PersistUser, ServiceResponse> {
         let query = format!(
             r#"SELECT * FROM c WHERE c.user_profile.Pii.Email = '{}'"#,
@@ -362,6 +379,8 @@ impl UserDbTrait for UserDb {
             }
         }
     }
+
+   
 }
 
 #[cfg(test)]

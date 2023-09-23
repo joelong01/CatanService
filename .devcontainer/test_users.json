@@ -7,7 +7,7 @@
             "LastName": "Doe",
             "PhoneNumber": "+12065551234"
         },
-        "DisplayName": "John (Test)",
+        "DisplayName": "John",
         "PictureUrl": "https://example.com/images/john.jpg",
         "ForegroundColor": "#00000000",
         "BackgroundColor": "#FFFFFF",
@@ -25,7 +25,7 @@
             "LastName": "Smith",
             "PhoneNumber": "+12065556789"
         },
-        "DisplayName": "Jane (Test)",
+        "DisplayName": "Jane",
         "PictureUrl": "https://example.com/images/jane.jpg",
         "ForegroundColor": "#00000000",
         "BackgroundColor": "#FFFFFF",
@@ -44,7 +44,7 @@
             "PhoneNumber": "+12065551235"
         },
       
-        "DisplayName": "Alice (Test)",
+        "DisplayName": "Alice",
         "PictureUrl": "https://example.com/images/alice.jpg",
         "ForegroundColor": "#00000000",
         "BackgroundColor": "#FFFFFF",
@@ -62,7 +62,7 @@
             "LastName": "Brown",
             "PhoneNumber": "+12065554321"
         },
-        "DisplayName": "Bob (Test)",
+        "DisplayName": "Bob",
         "PictureUrl": "https://example.com/images/bob.jpg",
         "ForegroundColor": "#00000000",
         "BackgroundColor": "#FFFFFF",
@@ -80,7 +80,7 @@
             "LastName": "Green",
             "PhoneNumber": "+12065553210"
         },
-        "DisplayName": "Charlie (Test)",
+        "DisplayName": "Charlie",
         "PictureUrl": "https://example.com/images/charlie.jpg",
         "ForegroundColor": "#00000000",
         "BackgroundColor": "#FFFFFF",

@@ -1,7 +1,11 @@
+#![allow(dead_code)]
 use crate::{
     get_header_value,
     middleware::{header_extractor::HeadersExtractor, request_context_mw::RequestContext},
-    shared::{shared_models::{GameError, ResponseType, ServiceResponse, UserProfile}, service_models::Role}
+    shared::{
+        service_models::Role,
+        shared_models::{GameError, ResponseType, ServiceResponse, UserProfile},
+    },
 };
 use actix_web::{
     web::{self},
@@ -96,7 +100,10 @@ pub async fn update_profile_handler(
 }
 
 // Find user by ID
-pub async fn find_user_by_id_handler(id: web::Path<String>, request_context: RequestContext) -> HttpResponse {
+pub async fn find_user_by_id_handler(
+    id: web::Path<String>,
+    request_context: RequestContext,
+) -> HttpResponse {
     let claims_id = request_context
         .claims
         .as_ref()
@@ -104,21 +111,20 @@ pub async fn find_user_by_id_handler(id: web::Path<String>, request_context: Req
         .id
         .clone();
 
-
-
     if claims_id != *id && !request_context.is_caller_in_role(Role::Admin) {
-       return ServiceResponse::new(
+        return ServiceResponse::new(
             "you can't peak at somebody else's profile!",
             StatusCode::UNAUTHORIZED,
             ResponseType::NoData,
-            GameError::HttpError(StatusCode::UNAUTHORIZED)).to_http_response();
+            GameError::HttpError(StatusCode::UNAUTHORIZED),
+        )
+        .to_http_response();
     }
     super::users::find_user_by_id(&id, &request_context)
         .await
         .map(|sr| sr.to_http_response())
         .unwrap_or_else(|sr| sr.to_http_response())
 }
-
 
 // Delete user
 pub async fn delete_handler(
@@ -182,6 +188,44 @@ pub async fn send_validation_email(request_context: RequestContext) -> HttpRespo
 
 pub async fn rotate_login_keys_handler(request_context: RequestContext) -> HttpResponse {
     super::users::rotate_login_keys(&request_context)
+        .await
+        .map(|sr| sr.to_http_response())
+        .unwrap_or_else(|sr| sr.to_http_response())
+}
+pub async fn create_local_user_handler(
+    profile_in: web::Json<UserProfile>,
+    request_context: RequestContext,
+) -> HttpResponse {
+    super::users::create_local_user(&profile_in, &request_context)
+        .await
+        .map(|sr| sr.to_http_response())
+        .unwrap_or_else(|sr| sr.to_http_response())
+}
+
+pub async fn update_local_user_handler(
+    profile_in: web::Json<UserProfile>,
+    request_context: RequestContext,
+) -> HttpResponse {
+    super::users::update_local_user(&profile_in, &request_context)
+        .await
+        .map(|sr| sr.to_http_response())
+        .unwrap_or_else(|sr| sr.to_http_response())
+}
+
+pub async fn delete_local_user_handler(
+    id: web::Path<String>,
+    request_context: RequestContext,
+) -> HttpResponse {
+    super::users::delete_local_user(&id, &request_context)
+        .await
+        .map(|sr| sr.to_http_response())
+        .unwrap_or_else(|sr| sr.to_http_response())
+}
+pub async fn get_local_users_handler(
+    id: web::Path<String>,
+    request_context: RequestContext,
+) -> HttpResponse {
+    super::users::get_local_users(&id, &request_context)
         .await
         .map(|sr| sr.to_http_response())
         .unwrap_or_else(|sr| sr.to_http_response())

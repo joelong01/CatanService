@@ -208,11 +208,30 @@ fn create_unauthenticated_service() -> Scope {
 fn user_service() -> Scope {
     web::scope("/users")
         .route("", web::get().to(user_handlers::list_users_handler))
+        .route(
+            "/local",
+            web::post().to(user_handlers::create_local_user_handler),
+        )
+        .route(
+            "/local/{id}",
+            web::get().to(user_handlers::get_local_users_handler),
+        )
+        .route(
+            "/local/{id}",
+            web::delete().to(user_handlers::delete_local_user_handler),
+        )
+        .route(
+            "/local",
+            web::put().to(user_handlers::update_local_user_handler),
+        )
         .route("/{id}", web::delete().to(user_handlers::delete_handler))
-        .route("", web::put().to(user_handlers::update_profile_handler))
         .route(
             "/{id}",
             web::get().to(user_handlers::find_user_by_id_handler),
+        )
+        .route(
+            "/{id}",
+            web::put().to(user_handlers::update_profile_handler),
         )
         .route(
             "/phone/validate/{code}",
@@ -235,7 +254,9 @@ fn user_service() -> Scope {
             web::post().to(user_handlers::rotate_login_keys_handler),
         )
 }
+// fn local_user_service() -> Scope {
 
+// }
 /**
  * Creates a set of lobby-related services under the "/lobby" path.
  * These endpoints allow for handling lobby operations within the game, such as inviting and joining games.
@@ -362,7 +383,10 @@ mod tests {
         init_env_logger,
         middleware::{request_context_mw::TestContext, service_config::SERVICE_CONFIG},
         setup_cosmos, setup_test,
-        test::{test_helpers::test::{register_test_users, delete_all_test_users}, test_proxy::TestProxy},
+        test::{
+            test_helpers::test::{delete_all_test_users, register_test_users},
+            test_proxy::TestProxy,
+        },
     };
 
     use actix_web::test;
@@ -392,7 +416,7 @@ mod tests {
         let use_cosmos = true;
         let mut proxy = TestProxy::new(&app, Some(TestContext::new(use_cosmos, None)));
 
-        let test_users = register_test_users(&mut proxy).await;
+        let test_users = register_test_users(&mut proxy, None).await;
         let service_response = proxy
             .login(
                 &test_users[0].clone().pii.expect("pii should exist").email,
@@ -440,9 +464,8 @@ mod tests {
         let app = create_test_service!();
         let code = 569342;
         let mut proxy = TestProxy::new(&app, Some(TestContext::new(true, Some(code))));
-        delete_all_test_users(&mut proxy).await;
-
-        let users = register_test_users(&mut proxy).await;
+        let admin_auth_token = delete_all_test_users(&mut proxy).await;
+        let users = register_test_users(&mut proxy, Some(admin_auth_token)).await;
 
         let mut profile = users[0].clone();
         assert!(profile.pii.is_some());
@@ -476,7 +499,6 @@ mod tests {
             .expect("login should work and it should return the token");
         assert!(auth_token.len() > 0);
         proxy.set_auth_token(&Some(auth_token));
-        
 
         // lookup profile
 
@@ -511,7 +533,7 @@ mod tests {
         let parts: Vec<&str> = url_str.rsplitn(2, '/').collect();
         assert_eq!(parts.len(), 2);
         let encoded_token = parts[0].clone();
-            
+
         // validate with the token
         proxy.set_auth_token(&None);
         let service_response = proxy.validate_email(encoded_token).await;
@@ -521,7 +543,9 @@ mod tests {
 
         let service_response = proxy.get_profile("Self").await;
         assert!(service_response.status.is_success());
-        let profile = service_response.to_profile().expect("you should be able to get your own profile.");
+        let profile = service_response
+            .to_profile()
+            .expect("you should be able to get your own profile.");
         assert!(profile.validated_email);
         assert!(profile.validated_phone);
         //
@@ -529,7 +553,6 @@ mod tests {
         // of the users and the tests can check the input vs. output of the user profile and the profile in the db will
         // be different than the profile in the .json that is used to add test users and tests will assert.
         delete_all_test_users(&mut proxy).await;
-
     }
     #[tokio::test]
     async fn test_setup() {

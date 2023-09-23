@@ -1,7 +1,13 @@
 #![allow(dead_code)]
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{shared::{shared_models::{GameError, ResponseType, ServiceResponse, UserProfile}, service_models::PersistUser}, log_return_bad_id, new_not_found_error};
+use crate::{
+    log_return_bad_id, new_not_found_error,
+    shared::{
+        service_models::PersistUser,
+        shared_models::{GameError, ResponseType, ServiceResponse, UserProfile},
+    },
+};
 use async_trait::async_trait;
 use log::trace;
 use reqwest::StatusCode;
@@ -34,7 +40,10 @@ impl UserDbTrait for TestDb {
         Ok(MOCKED_DB.users.read().await.values().cloned().collect())
     }
 
-async fn update_or_create_user(&self, user: &PersistUser) -> Result<ServiceResponse, ServiceResponse> {
+    async fn update_or_create_user(
+        &self,
+        user: &PersistUser,
+    ) -> Result<ServiceResponse, ServiceResponse> {
         let mut map = MOCKED_DB.users.write().await;
         let result = map.insert(user.id.clone(), user.clone());
         match result {
@@ -54,7 +63,7 @@ async fn update_or_create_user(&self, user: &PersistUser) -> Result<ServiceRespo
             Some(_) => Ok(()),
             None => {
                 log_return_bad_id!(unique_id, "testdb::delete_user");
-            },
+            }
         }
     }
 
@@ -70,35 +79,45 @@ async fn update_or_create_user(&self, user: &PersistUser) -> Result<ServiceRespo
             None => return new_not_found_error!("Not Found"),
         }
     }
-
+    async fn get_connected_users(
+        &self,
+        connected_user_id: &str,
+    ) -> Result<Vec<PersistUser>, ServiceResponse> {
+        let mut local_profiles = Vec::new();
+    
+        // Collect the values into a Vec
+        let profiles: Vec<PersistUser> = MOCKED_DB.users.read().await.values().cloned().collect();
+    
+        for profile in profiles {
+            if let Some(id) = &profile.connected_user_id {
+                if *id == *connected_user_id {
+                    local_profiles.push(profile);
+                }
+            }
+        }
+    
+        Ok(local_profiles)
+    }
+    
+    
 
     async fn find_user_by_email(&self, val: &str) -> Result<PersistUser, ServiceResponse> {
-        match MOCKED_DB
-            .users
-            .read()
-            .await
-            .iter()
-            .find(|(_key, user)| {
-                // Access email through the pii field
-                match &user.user_profile.pii {
-                    Some(pii) => &pii.email == val,
-                    None => false,
-                }
-            })
-        {
+        match MOCKED_DB.users.read().await.iter().find(|(_key, user)| {
+            // Access email through the pii field
+            match &user.user_profile.pii {
+                Some(pii) => &pii.email == val,
+                None => false,
+            }
+        }) {
             Some(u) => Ok(u.1.clone()),
             None => new_not_found_error!("Not Found"),
         }
     }
-
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        cosmos_db::cosmosdb::test_db_e2e,
-        middleware::request_context_mw::RequestContext,
-    };
+    use crate::{cosmos_db::cosmosdb::test_db_e2e, middleware::request_context_mw::RequestContext};
 
     #[tokio::test]
 

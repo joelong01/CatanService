@@ -6,7 +6,11 @@ use crate::{
 
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, RwLock};
+use std::{
+    fs::File,
+    io::{Read, Write},
+    sync::{Arc, RwLock},
+};
 
 use super::service_config::SERVICE_CONFIG;
 
@@ -114,8 +118,29 @@ impl SecurityContext {
             .expect("cache should exists and read lock should always be acquired");
         secrets.clone()
     }
-
+    fn get_cache_file() -> Option<String> {
+        match std::env::var("TEST_CRED_CACHE_LOCATION") {
+            Ok(path) => {
+                let cred_cache = format!("{}/keys.json", path);
+                Some(cred_cache)
+            }
+            Err(_) => None,
+        }
+    }
     pub(crate) fn new() -> Self {
+        if let Some(cred_cache) = SecurityContext::get_cache_file() {
+            if let Ok(mut file) = File::open(&cred_cache) {
+                let mut json = String::new();
+                if let Err(_) = file.read_to_string(&mut json) {
+                    let _ = std::fs::remove_file(&cred_cache);
+                } else if let Ok(sc) = serde_json::from_str::<SecurityContext>(&json) {
+                    // Successfully deserialized SecurityContext
+                    log::info!("loading keys from cache. this should *not* be production!");
+                    return sc;
+                }
+            }
+        }
+
         match key_vault_get_secret(&SERVICE_CONFIG.kv_name, Self::SECURITY_CONTEXT_SECRET_NAME) {
             Ok(json) => match serde_json::from_str::<SecurityContext>(&json) {
                 Ok(sc) => sc,
@@ -151,6 +176,12 @@ impl SecurityContext {
                     &secrets,
                 ) {
                     log::error!("Failed to save secret in key vault: {}", e);
+                }
+
+                if let Some(cred_cache) = SecurityContext::get_cache_file() {
+                    if let Ok(mut file) = File::open(&cred_cache) {
+                       let _ =  write!(file, "{}", secrets);
+                    }
                 }
             }
             Err(e) => log::error!("Failed to serialize the security context: {}", e),

@@ -18,7 +18,10 @@ use crate::user_service::user_handlers::find_user_by_id_handler;
  * this module implements the WebApi to create the database/collection, list all the users, and to create/find/delete
  * a User document in CosmosDb
  */
-use crate::{bad_request_from_string, new_ok_response, new_unauthorized_response, trace_function};
+use crate::{
+    bad_request_from_string, new_not_found_error, new_ok_response, new_unauthorized_response,
+    new_unexpected_server_error, trace_function, unexpected_server_error_from_string,
+};
 
 use crate::games_service::long_poller::long_poller::LongPoller;
 
@@ -220,9 +223,13 @@ pub async fn register_test_user(
     if !request_context.is_caller_in_role(Role::Admin) {
         return new_unauthorized_response!("");
     }
+
+    let mut profile = profile_in.clone();
+    profile.display_name = format!("{}: [Test]", profile.display_name);
+
     internal_register_user(
         password,
-        profile_in,
+        &profile,
         &mut vec![Role::User, Role::TestUser],
         request_context,
     )
@@ -317,7 +324,7 @@ pub async fn list_users(
     // Get list of users
     match request_context.database.list().await {
         Ok(users) => {
-            let client_users: Vec<UserProfile> = users
+            let user_profiles: Vec<UserProfile> = users
                 .iter()
                 .map(|user| UserProfile::from_persist_user(&user))
                 .collect();
@@ -325,7 +332,7 @@ pub async fn list_users(
             Ok(ServiceResponse::new(
                 "",
                 StatusCode::OK,
-                ResponseType::Profiles(client_users),
+                ResponseType::Profiles(user_profiles),
                 GameError::NoError(String::default()),
             ))
         }
@@ -700,15 +707,10 @@ pub async fn rotate_login_keys(
     // return new_ok_response!("");
 }
 
-//
-//  this is used in many places internally and has to work for all callers. - todo: make internal
-//  note: the handler is locked down to admin or Self
 pub async fn find_user_by_id(
     id: &str,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    
-
     let persist_user = request_context.database.find_user_by_id(&id).await?;
 
     Ok(ServiceResponse::new(
@@ -729,7 +731,7 @@ pub async fn find_user_by_id(
 /// local users have no PII
 ///
 pub async fn create_local_user(
-    profile_in: &mut UserProfile,
+    profile_in: &UserProfile,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
     let user_id = request_context
@@ -738,15 +740,16 @@ pub async fn create_local_user(
         .expect("auth_mw should have added this or rejected the call")
         .id
         .clone();
-
-    profile_in.pii = None;
-    profile_in.user_type = UserType::Local;
-    profile_in.games_played = Some(0);
-    profile_in.games_won = Some(0);
+    let mut profile = profile_in.clone();
+    profile.pii = None;
+    profile.user_type = UserType::Local;
+    profile.games_played = Some(0);
+    profile.games_won = Some(0);
+    profile.display_name = format!("{} [Local]", profile.display_name);
     //
     //  create a hash that is extremely unlikely to be guessed so that the user can't login
 
-    let persist_user = PersistUser::from_local_user(&user_id, &profile_in);
+    let persist_user = PersistUser::from_local_user(&user_id, &profile);
 
     request_context
         .database
@@ -757,43 +760,149 @@ pub async fn create_local_user(
 ///
 /// only an admin or the ConnectedUser can update the LocalUser
 pub async fn update_local_user(
-    id: &str,
+    new_profile: &UserProfile,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    let user_id = request_context
+    // Check that PII is not filled in for local users
+    if new_profile.pii.is_some() {
+        return Err(bad_request_from_string!("Local Users have no PII!"));
+    }
+
+    // Check that UserType is 'Local'
+    if new_profile.user_type != UserType::Local {
+        return Err(bad_request_from_string!("UserType must be 'Local'"));
+    }
+
+    // Ensure user_id is set in the profile
+    let local_user_id = new_profile
+        .user_id
+        .as_ref()
+        .ok_or_else(|| bad_request_from_string!("user_id must be set in profile"))?;
+
+    // Get the authenticated user's ID from claims
+    let id_in_claims = request_context
         .claims
         .as_ref()
         .expect("auth_mw should have added this or rejected the call")
         .id
         .clone();
 
-    let user = find_user_by_id(&user_id, &request_context).await?;
+    // Find the local user by ID
+    let mut local_user = request_context
+        .database
+        .find_user_by_id(local_user_id)
+        .await?;
 
-    if user_id != id && !request_context.is_caller_in_role(Role::Admin) {
+    // Ensure the local user is connected to a connected user
+    let connection_id = local_user
+        .connected_user_id
+        .as_ref()
+        .ok_or_else(|| bad_request_from_string!("id does not correspond to a local user"))?
+        .clone();
+
+    // Check if the local user isn't "connected" to the connected caller and the caller isn't an admin
+    if connection_id != id_in_claims && !request_context.is_caller_in_role(Role::Admin) {
         return new_unauthorized_response!("only an admin can delete another user");
     }
 
-    todo!()
+    // Update the profile
+    local_user.update_profile(new_profile);
+
+    // Save the updated user
+    request_context
+        .database
+        .update_or_create_user(&local_user)
+        .await
 }
+
 ///
 /// only an admin or the ConnectedUser can delete the LocalUser
+/// we use the passed in PK of the local user to look up its profile. then we look at the connected_user value and
+/// make sure it is the PK of the signed in user.  if so, it can be deleted.
+///
 pub async fn delete_local_user(
+    local_user_primary_key: &str,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    todo!()
+    let local_user_profile = request_context
+        .database
+        .find_user_by_id(&local_user_primary_key)
+        .await?;
+
+    if local_user_profile.connected_user_id.is_none() {
+        return Err(bad_request_from_string!("invalid local user id"));
+    }
+
+    let id_in_claims = request_context
+        .claims
+        .as_ref()
+        .expect("auth_mw should have added this or rejected the call")
+        .id
+        .clone();
+
+    let connected_id = match local_user_profile.connected_user_id {
+        Some(id) => id,
+        None => {
+            return new_not_found_error!("no connected id");
+        }
+    };
+
+    if id_in_claims == connected_id || request_context.is_caller_in_role(Role::Admin) {
+        request_context
+            .database
+            .delete_user(&local_user_primary_key)
+            .await?;
+        return new_ok_response!("");
+    }
+
+    return new_unauthorized_response!("");
 }
-/// to get the full list of local users we need to
-/// 1. get the PersistProfile of the caller
-/// 2. use the local_user_owner_id to do a query against request_context.database.get_local_users()
+
 pub async fn get_local_users(
+    connected_user_id: &str,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    todo!()
+    let id_in_claims = request_context
+        .claims
+        .as_ref()
+        .expect("auth_mw should have added this or rejected the call")
+        .id
+        .clone();
+
+    let connected_id = if connected_user_id == "Self" {
+        id_in_claims.clone()
+    } else {
+        connected_user_id.to_string()
+    };
+    if id_in_claims == connected_id || request_context.is_caller_in_role(Role::Admin) {
+        let users = request_context
+            .database
+            .get_connected_users(&connected_id)
+            .await?;
+        let user_profiles: Vec<UserProfile> = users
+            .iter()
+            .map(|user| UserProfile::from_persist_user(&user))
+            .collect();
+        return Ok(ServiceResponse::new(
+            "",
+            StatusCode::OK,
+            ResponseType::Profiles(user_profiles),
+            GameError::NoError(String::default()),
+        ));
+    };
+
+    return new_unauthorized_response!("");
 }
 #[cfg(test)]
 mod tests {
 
-    use crate::{init_env_logger, test::test_helpers::test::TestHelpers};
+    use tracing::info;
+
+    use crate::{
+        create_test_service, init_env_logger,
+        middleware::request_context_mw::TestContext,
+        test::{test_helpers::test::*, test_proxy::TestProxy},
+    };
 
     use super::*;
 
@@ -802,6 +911,104 @@ mod tests {
     async fn test_login_mocked() {
         init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Trace).await;
         test_login(false).await;
+    }
+
+    #[tokio::test]
+    async fn test_local_users() {
+        init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
+        let app = create_test_service!();
+        let code = 569342;
+        let mut proxy = TestProxy::new(&app, Some(TestContext::new(true, Some(code))));
+
+        let auth_token = delete_all_test_users(&mut proxy).await;
+        let users = register_test_users(&mut proxy, Some(auth_token)).await;
+        //
+        // i'm logged in as the admin
+        let last_id = users
+            .last()
+            .and_then(|user| user.user_id.as_ref())
+            .map(|id| id.clone())
+            .unwrap_or_else(|| panic!("UserProfile should have an id!"));
+
+        info!("deleting user: {}", &last_id);
+        proxy.delete_user(&last_id).await;
+
+        info!("logging in as test user");
+        // login as the test user that is going to create the local user and set the auth token in the proxy
+        let first_user = users.first().unwrap().clone();
+        let service_response = proxy
+            .login(&first_user.get_email_or_panic(), "password")
+            .await;
+        assert!(service_response.status.is_success());
+        let test_token = service_response
+            .get_token()
+            .expect("login needs to return a token");
+        proxy.set_auth_token(&Some(test_token));
+
+        info!("creating local users");
+        // now we are logged in as the first test user...create a test local user connected to the first user
+        let service_response = proxy
+            .create_local_user(&users.last().unwrap().clone())
+            .await;
+        assert!(service_response.status.is_success());
+        for i in 0..3 {
+            let service_response = proxy
+                .create_local_user(&UserProfile::new_test_user(None))
+                .await;
+            assert!(service_response.status.is_success());
+        }
+
+        info!("getting local users");
+        let service_response = proxy.get_local_users("Self").await;
+        assert!(service_response.status.is_success());
+        let local_user_profiles = service_response
+            .to_profile_vec()
+            .expect("there should be 4 users in this vec");
+        assert_eq!(local_user_profiles.len(), 4);
+
+        let first_id = users
+            .first()
+            .and_then(|user| user.user_id.as_ref())
+            .map(|id| id.clone())
+            .unwrap_or_else(|| panic!("UserProfile should have an id!"));
+
+        info!("deleting local users");
+        let service_response = proxy.delete_local_user(&first_id).await;
+        assert!(service_response.status.is_client_error()); // this is the user_id of the connected user, not the local user
+
+        let first_id = local_user_profiles
+            .first()
+            .and_then(|user| user.user_id.as_ref())
+            .map(|id| id.clone())
+            .unwrap_or_else(|| panic!("UserProfile should have an id!"));
+
+        let service_response = proxy.delete_local_user(&first_id).await;
+        assert!(service_response.status.is_success());
+        let service_response = proxy.get_local_users("Self").await;
+        assert!(service_response.status.is_success());
+        let local_user_profiles = service_response
+            .to_profile_vec()
+            .expect("there should be 3 users in this vec");
+        assert_eq!(local_user_profiles.len(), 3);
+        // testing update_local_user
+        info!("updating local users");
+        let mut first_profile = local_user_profiles
+            .first()
+            .expect("we know this has 3 elemements in it")
+            .clone();
+
+        first_profile.games_won = Some(1);
+        let service_response = proxy.update_local_user(&first_profile).await;
+        assert!(service_response.status.is_success());
+
+        //
+        //   get the profiles
+        let service_response = proxy.get_local_users("Self").await;
+        assert!(service_response.status.is_success());
+        let local_user_profiles = service_response
+            .to_profile_vec()
+            .expect("there should be 3 users in this vec");
+        assert_eq!(local_user_profiles.len(), 3);
     }
 
     #[tokio::test]

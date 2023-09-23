@@ -52,6 +52,12 @@
             "default": ""
         },
         {
+            "environmentVariable": "TEST_CRED_CACHE_LOCATION",
+            "description": "the location to store the cached creds when running tests",
+            "shellscript": "",
+            "default": ""
+        },
+        {
             "environmentVariable": "ADMIN_PASSWORD",
             "description": "the password for the admin account",
             "shellscript": "",

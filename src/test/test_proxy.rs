@@ -372,5 +372,26 @@ where
         self.get(&url, None).await
     }
 
+    pub async fn create_local_user(&self, new_profile: &UserProfile) -> ServiceResponse {
+        let url = "/auth/api/v1/users/local";
+        self.post::<&UserProfile>(url, None, Some(new_profile))
+            .await
+    }
+    pub async fn update_local_user(&self, new_profile: &UserProfile) -> ServiceResponse {
+        let url = "/auth/api/v1/users/local";
+        self.put::<&UserProfile>(url, None, Some(new_profile))
+            .await
+    }
+    pub async fn delete_local_user(&self, id: &str) -> ServiceResponse {
+        let url = format!("/auth/api/v1/users/local/{}", id);
+        self.delete(&url, None)
+            .await
+    }
+    pub async fn get_local_users(&self, id: &str) -> ServiceResponse {
+        let url = format!("/auth/api/v1/users/local/{}", id);
+        self.get(&url, None)
+            .await
+    }
+
 }
 

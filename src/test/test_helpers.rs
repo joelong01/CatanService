@@ -3,6 +3,7 @@ pub mod test {
     #![allow(dead_code)]
     use actix_http::StatusCode;
     use actix_web::test;
+    use tracing::info;
 
     use crate::middleware::request_context_mw::{RequestContext, TestContext};
     use crate::middleware::security_context::SecurityContext;
@@ -129,7 +130,7 @@ pub mod test {
         let mut proxy = TestProxy::new(&app, Some(TestContext::new(true, None)));
         //  setup_test!(&app, true);
 
-        let users = register_test_users(&mut proxy).await;
+        let users = register_test_users(&mut proxy, None).await;
         for user in users {
             assert!(user.pii.is_some());
             assert!(user.user_id.is_some());
@@ -151,14 +152,15 @@ pub mod test {
         //  make sure that deleting empty works
         delete_all_test_users(&mut proxy).await;
     }
-    pub async fn delete_all_test_users<S>(proxy: &mut TestProxy<'_, S>)
+    pub async fn delete_all_test_users<S>(proxy: &mut TestProxy<'_, S>) -> String
     // Add the expected lifetime and generic type for the function signature
     where
         S: Service<Request, Response = ActixServiceResponse<EitherBody<BoxBody>>, Error = Error>
             + 'static,
     {
+        info!("deleting all test users");
         let admin_token = TestHelpers::admin_login().await;
-        proxy.set_auth_token(&Some(admin_token));
+        proxy.set_auth_token(&Some(admin_token.clone()));
         let profiles = proxy
             .get_all_users()
             .await
@@ -180,34 +182,46 @@ pub mod test {
         .to_profile_vec()
         .expect("should at least be an empty vec!");
         assert!(profiles.len() == 0);
+        admin_token
     }
 
-    pub async fn register_test_users<S>(proxy: &mut TestProxy<'_, S>) -> Vec<UserProfile>
-    // Add the expected lifetime and generic type for the function signature
+    pub async fn register_test_users<S>(
+        proxy: &mut TestProxy<'_, S>,
+        admin_token: Option<String>,
+    ) -> Vec<UserProfile>
     where
         S: Service<Request, Response = ActixServiceResponse<EitherBody<BoxBody>>, Error = Error>
             + 'static,
     {
-        let admin_token = TestHelpers::admin_login().await;
+        info!("registering test users");
+    
+        // Use the provided admin_token if it's Some, otherwise generate a new one
+        let admin_token = if let Some(token) = admin_token {
+            token
+        } else {
+            TestHelpers::admin_login().await
+        };
         proxy.set_auth_token(&Some(admin_token));
+    
         let test_users = TestHelpers::load_test_users_from_config();
         let mut profiles = Vec::new();
+    
         for user in test_users.iter() {
             let service_response = proxy.register_test_user(user, "password").await;
             if service_response.status.is_success() {
                 let profile = service_response.to_profile().expect("should be a profile");
-
+    
                 profiles.push(profile.clone());
-
+    
                 let pretty_json =
                     serde_json::to_string_pretty(&profile).expect("Failed to pretty-print JSON");
-
+    
                 // Check if the pretty-printed JSON contains any underscores
                 assert!(
                     !pretty_json.contains('_'),
                     "JSON contains an underscore character"
                 );
-
+    
                 log::trace!("registered client_user: {:#?}", pretty_json);
             } else {
                 log::trace!("{} already registered", user.display_name.clone());
@@ -219,12 +233,15 @@ pub mod test {
                 profiles.push(profile.clone());
             }
         }
+    
         profiles
     }
+    
 
     pub struct TestHelpers {}
     impl TestHelpers {
         pub async fn admin_login() -> String {
+            info!("logging in as admin");
             let profile = TestHelpers::load_admin_profile_from_config();
 
             let admin_pwd = env::var("ADMIN_PASSWORD")

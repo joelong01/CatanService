@@ -56,6 +56,18 @@ macro_rules! new_unexpected_server_error {
 }
 
 #[macro_export]
+macro_rules! unexpected_server_error_from_string {
+    ($msg:expr ) => {{
+        ServiceResponse::new(
+            $msg,
+            StatusCode::INTERNAL_SERVER_ERROR,
+            ResponseType::NoData,
+            GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
+        )
+    }};
+}
+
+#[macro_export]
 macro_rules! new_ok_response {
     ($msg:expr) => {
         Ok(ServiceResponse::new(
