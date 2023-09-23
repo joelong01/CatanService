@@ -4,7 +4,7 @@ use crate::{
     games_service::{
         catan_games::games::regular::regular_game::RegularGame, player::player::Player, shared::game_enums::{GameAction, GameState},
     },
-    shared::models::{ClientUser, GameError},
+    shared::shared_models::{UserProfile, GameError},
 };
 
 use std::{
@@ -20,7 +20,7 @@ use crate::games_service::{
     shared::game_enums::Direction,
     tiles::{tile::Tile, tile_key::TileKey},
 };
-use crate::shared::models::PersistUser;
+use crate::shared::service_models::PersistUser;
 
 use super::game_info_trait::GameInfoTrait;
 
@@ -44,7 +44,7 @@ pub trait GameTrait<'a> {
         Self: Sized;
     fn debug(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result;
 
-    fn add_user(&mut self, user: &ClientUser);
+    fn add_user(&mut self, user: &UserProfile);
     fn shuffle(&mut self);
     fn set_player_order(&mut self, id_order: Vec<String>) -> Result<(), GameError>;
     fn get_next_player(&mut self) -> Player;

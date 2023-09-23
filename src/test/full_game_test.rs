@@ -5,23 +5,28 @@ pub mod test {
     #![allow(unused_variables)]
     use crate::{
         games_service::shared::game_enums::CatanGames,
-        shared::proxy::ServiceProxy,
+        middleware::request_context_mw::TestContext,
+        shared::{
+            proxy::ServiceProxy,
+            shared_models::{PersonalInformation, UserType},
+        },
         test::{
-            client0::{Handler0, save_game, load_game, TEST_GAME_LOC},
+            client0::{load_game, save_game, Handler0, TEST_GAME_LOC},
             client1::Handler1,
             client2::Handler2,
             test_structs::{init_test_logger, ClientThreadHandler, HOST_URL},
-        }, middleware::environment_mw::TestContext,
+        },
     };
 
     use std::{
+        env,
         os::unix::thread,
         sync::Arc,
         time::{Duration, Instant},
     };
 
     use crate::{
-        create_app, create_test_service, full_info,
+        create_service, create_test_service, full_info,
         games_service::{
             game_container::{
                 self,
@@ -30,7 +35,7 @@ pub mod test {
             shared::game_enums::GameState,
         },
         setup_test,
-        shared::models::{ClientUser, ServiceResponse, UserProfile},
+        shared::shared_models::{ServiceResponse, UserProfile},
         trace_thread_info,
     };
     use crate::{games_service::game_container::game_messages::ErrorData, init_env_logger};
@@ -51,12 +56,12 @@ pub mod test {
         time::sleep,
     };
     use url::Url;
-/**
- * if you ever change the game structure, you are going to need a new copy of it. this will 
- * start a game and get a new board.  be careful because if you have specific logic around
- * the layout, that will all break...you might instead just merge the old with the new, preserving
- * the tile layout.
- */
+    /**
+     * if you ever change the game structure, you are going to need a new copy of it. this will
+     * start a game and get a new board.  be careful because if you have specific logic around
+     * the layout, that will all break...you might instead just merge the old with the new, preserving
+     * the tile layout.
+     */
     async fn save_game_test() {
         start_server().await.unwrap();
         trace_thread_info!("test_thread", "created server");
@@ -69,7 +74,10 @@ pub mod test {
         //
         //  setup the test database
         trace_thread_info!("test_thread", "setting up service");
-        let proxy = ServiceProxy::new(Some(TestContext{use_cosmos_db: false}), HOST_URL);
+        let proxy = ServiceProxy::new_non_auth(
+            Some(TestContext::new(false, None)),
+            HOST_URL,
+        );
         let response = proxy.setup().await;
         response.assert_success("setup should not fail");
         assert!(response.status.is_success(), "error: {:#?}", response);
@@ -78,19 +86,12 @@ pub mod test {
         //  create new users to play our game
         const CLIENT_COUNT: &'static usize = &1;
         trace_thread_info!("test_thread", "creating users");
-        let test_users: Vec<ClientUser> = register_test_users(*CLIENT_COUNT).await;
+        let test_users: Vec<UserProfile> = register_test_users(*CLIENT_COUNT).await;
         assert_eq!(test_users.len(), *CLIENT_COUNT);
-
-        // login and get auth_token
-        let auth_token = proxy
-            .login("joe@longshotdev.com", "password")
-            .await
-            .get_token()
-            .expect("successful login should have a JWT token in the ServiceResponse");
 
         // start a game
         let returned_game = proxy
-            .new_game(CatanGames::Regular, &auth_token, None)
+            .new_game(CatanGames::Regular, None)
             .await
             .get_game()
             .expect("Should have a RegularGame returned in the body");
@@ -100,7 +101,6 @@ pub mod test {
 
         let test_game = load_game().expect(&format!("Test game should be in {}", TEST_GAME_LOC));
         assert_eq!(test_game, returned_game);
-
     }
 
     #[actix_rt::test]
@@ -118,7 +118,10 @@ pub mod test {
         //
         //  setup the test database
         trace_thread_info!("test_thread", "setting up service");
-        let proxy = ServiceProxy::new(Some(TestContext{use_cosmos_db: false}), HOST_URL);
+        let proxy = ServiceProxy::new_non_auth(
+            Some(TestContext::new(false, None)),
+            HOST_URL,
+        );
         let response = proxy.setup().await;
         response.assert_success("setup should not fail");
         assert!(response.status.is_success(), "error: {:#?}", response);
@@ -127,7 +130,7 @@ pub mod test {
         //  create new users to play our game
         const CLIENT_COUNT: &'static usize = &3;
         trace_thread_info!("test_thread", "creating users");
-        let test_users: Vec<ClientUser> = register_test_users(*CLIENT_COUNT).await;
+        let mut test_users: Vec<UserProfile> = register_test_users(*CLIENT_COUNT).await;
         assert_eq!(test_users.len(), *CLIENT_COUNT);
         //
         //  these are the handlers for clients0, clients1, and clients2
@@ -144,7 +147,12 @@ pub mod test {
             trace_thread_info!("test_thread", "creating clients: {}", i);
 
             let (tx, rx) = mpsc::channel::<CatanMessage>(32);
-            let username = test_users[i].user_profile.email.clone();
+            let username = test_users[i]
+                .pii
+                .as_mut()
+                .unwrap()
+                .email
+                .clone();
             trace_thread_info!(
                 "test_thread",
                 "starting polling thread for {}",
@@ -193,7 +201,7 @@ pub mod test {
         let url = Url::parse(HOST_URL).expect("Global test URL should always parse");
         let host = url.host_str().expect("URL better have a host...");
         let port = url.port().expect("port needs to be set");
-        let server = HttpServer::new(move || create_app!())
+        let server = HttpServer::new(move || create_service!())
             .bind(format!("{}:{}", host, port))?
             .run();
 
@@ -234,9 +242,12 @@ pub mod test {
         }
     }
 
-    async fn register_test_users(count: usize) -> Vec<ClientUser> {
-        let mut test_users: Vec<ClientUser> = Vec::new();
-        let proxy = ServiceProxy::new(Some(TestContext{use_cosmos_db: false}), HOST_URL);
+    async fn register_test_users(count: usize) -> Vec<UserProfile> {
+        let mut test_users: Vec<UserProfile> = Vec::new();
+        let proxy = ServiceProxy::new_non_auth(
+            Some(TestContext::new(false, None)),
+            HOST_URL,
+        );
         let first_names = vec!["Joe", "James", "Doug"];
         let last_names = vec!["Winner", "Loser", "Longestroad"];
         let email_names = vec![
@@ -248,24 +259,33 @@ pub mod test {
             trace_thread_info!("TestThread", "creating: {}", first_names[i].clone());
 
             let user_profile = UserProfile {
-                email: email_names[i].into(),
-                first_name: first_names[i].into(),
-                last_name: last_names[i].into(),
+                user_id: None,
+                user_type: UserType::Connected,
+                pii: Some(PersonalInformation {
+                    email: email_names[i].into(),
+                    phone_number: crate::middleware::service_config::SERVICE_CONFIG
+                        .test_phone_number
+                        .to_owned(),
+                    first_name: first_names[i].into(),
+                    last_name: last_names[i].into(),
+                }),
+
                 display_name: format!("{}:({})", first_names[i].clone(), i),
-                phone_number: crate::middleware::environment_mw::CATAN_ENV.test_phone_number.to_owned(),
                 picture_url: "https://example.com/photo.jpg".into(),
                 foreground_color: "#000000".into(),
                 background_color: "#FFFFFF".into(),
                 text_color: "#000000".into(),
                 games_played: Some(0),
                 games_won: Some(0),
+                validated_email: false,
+                validated_phone: false,
             };
 
             let client_user = proxy
                 .register(&user_profile, "password")
                 .await
                 .assert_success("Register should succeed")
-                .get_client_user()
+                .to_profile()
                 .expect("Register should have a ClientUser in the body");
             test_users.push(client_user);
         }

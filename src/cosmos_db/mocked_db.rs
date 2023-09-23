@@ -1,13 +1,19 @@
 #![allow(dead_code)]
 use std::{collections::HashMap, sync::Arc};
 
-use crate::shared::models::{GameError, PersistUser, ResponseType, ServiceResponse};
-use azure_core::{
-    error::{ErrorKind, Result as AzureResult},
-    Error,
+use crate::{
+    log_return_bad_id, new_not_found_error,
+    shared::{
+        service_models::PersistUser,
+        shared_models::{GameError, ResponseType, ServiceResponse, UserProfile},
+    },
 };
+use async_trait::async_trait;
 use log::trace;
+use reqwest::StatusCode;
 use tokio::sync::RwLock;
+
+use super::cosmosdb::UserDbTrait;
 lazy_static::lazy_static! {
     // Initialize singleton lobby instance
     static ref MOCKED_DB: Arc<TestDb> = Arc::new(TestDb::new());
@@ -22,33 +28,46 @@ impl TestDb {
             users: Arc::new(RwLock::new(HashMap::new())),
         }
     }
-    pub async fn setupdb() -> AzureResult<()> {
+}
+#[async_trait]
+impl UserDbTrait for TestDb {
+    async fn setupdb(&self) -> Result<(), ServiceResponse> {
         MOCKED_DB.users.write().await.clear();
         Ok(())
     }
 
-    pub async fn list() -> AzureResult<Vec<PersistUser>> {
+    async fn list(&self) -> Result<Vec<PersistUser>, ServiceResponse> {
         Ok(MOCKED_DB.users.read().await.values().cloned().collect())
     }
 
-    pub async fn update_or_create_user(user: &PersistUser) -> AzureResult<()> {
+    async fn update_or_create_user(
+        &self,
+        user: &PersistUser,
+    ) -> Result<ServiceResponse, ServiceResponse> {
         let mut map = MOCKED_DB.users.write().await;
         let result = map.insert(user.id.clone(), user.clone());
         match result {
             None => trace!("user id {} added", user.id.clone()),
-            Some(_) => trace!("user id {} updated", user.id.clone())
+            Some(_) => trace!("user id {} updated", user.id.clone()),
         }
-        Ok(())
+        Ok(ServiceResponse::new(
+            "created",
+            StatusCode::CREATED,
+            ResponseType::Profile(UserProfile::from_persist_user(user)),
+            GameError::NoError(String::default()),
+        ))
     }
 
-    pub async fn delete_user(unique_id: &str) -> AzureResult<()> {
+    async fn delete_user(&self, unique_id: &str) -> Result<(), ServiceResponse> {
         match MOCKED_DB.users.write().await.remove(unique_id) {
             Some(_) => Ok(()),
-            None => Err(Error::new(ErrorKind::MockFramework, "User Not found")),
+            None => {
+                log_return_bad_id!(unique_id, "testdb::delete_user");
+            }
         }
     }
 
-    pub async fn find_user_by_id(id: &str) -> Result<PersistUser, ServiceResponse> {
+    async fn find_user_by_id(&self, id: &str) -> Result<PersistUser, ServiceResponse> {
         match MOCKED_DB
             .users
             .read()
@@ -57,148 +76,58 @@ impl TestDb {
             .find(|(_key, user)| *user.id == *id)
         {
             Some(u) => Ok(u.1.clone()),
-            None => Err(ServiceResponse::new(
-                "",
-                reqwest::StatusCode::NOT_FOUND,
-                ResponseType::NoData,
-                GameError::BadId(id.to_owned()),
-            )),
+            None => return new_not_found_error!("Not Found"),
         }
     }
+    async fn get_connected_users(
+        &self,
+        connected_user_id: &str,
+    ) -> Result<Vec<PersistUser>, ServiceResponse> {
+        let mut local_profiles = Vec::new();
+    
+        // Collect the values into a Vec
+        let profiles: Vec<PersistUser> = MOCKED_DB.users.read().await.values().cloned().collect();
+    
+        for profile in profiles {
+            if let Some(id) = &profile.connected_user_id {
+                if *id == *connected_user_id {
+                    local_profiles.push(profile);
+                }
+            }
+        }
+    
+        Ok(local_profiles)
+    }
+    
+    
 
-    pub async fn find_user_by_email(val: &str) -> Result<PersistUser, ServiceResponse> {
-        match MOCKED_DB
-            .users
-            .read()
-            .await
-            .iter()
-            .find(|(_key, user)| *user.user_profile.email == *val)
-        {
+    async fn find_user_by_email(&self, val: &str) -> Result<PersistUser, ServiceResponse> {
+        match MOCKED_DB.users.read().await.iter().find(|(_key, user)| {
+            // Access email through the pii field
+            match &user.user_profile.pii {
+                Some(pii) => &pii.email == val,
+                None => false,
+            }
+        }) {
             Some(u) => Ok(u.1.clone()),
-            None => Err(ServiceResponse::new(
-                "",
-                reqwest::StatusCode::NOT_FOUND,
-                ResponseType::NoData,
-                GameError::BadId(val.to_owned()),
-            )),
+            None => new_not_found_error!("Not Found"),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::{cosmos_db::cosmosdb::test_db_e2e, middleware::request_context_mw::RequestContext};
 
-    use crate::{
-        init_env_logger,
-        middleware::environment_mw::CATAN_ENV,
-        shared::{models::UserProfile, utility::get_id},
-    };
-
-    use super::*;
-    use bcrypt::{hash, DEFAULT_COST};
-    use log::trace;
     #[tokio::test]
 
     async fn test_e2e() {
-        init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Error).await;
+        // test_db_e2e(Some(TestContext {
+        //     use_cosmos_db: false,
+        // }))
+        // .await;
 
-        // create the database -- note this will DELETE the database as well
-        match TestDb::setupdb().await {
-            Ok(..) => trace!("created test db and collection"),
-            Err(e) => panic!("failed to setup database and collection {}", e),
-        }
-        // create users and add them to the database
-        let users = create_users();
-        for user in users {
-            match TestDb::update_or_create_user(&user).await {
-                Ok(..) => trace!("created user {}", user.user_profile.email),
-                Err(e) => panic!("failed to create user.  err: {}", e),
-            }
-
-            let result = TestDb::update_or_create_user(&user).await;
-            assert!(result.is_err());
-        }
-
-        // try to create the same user again:
-
-        // get a list of all users
-        let users: Vec<PersistUser> = match TestDb::list().await {
-            Ok(u) => {
-                trace!("all_users returned success");
-                u
-            }
-            Err(e) => panic!("failed to setup database and collection {}", e),
-        };
-
-        if let Some(first_user) = users.first() {
-            let u = TestDb::find_user_by_id(&first_user.id).await;
-            match u {
-                Ok(found_user) => {
-                    trace!("found user with email: {}", found_user.user_profile.email)
-                }
-                Err(e) => panic!("failed to find user that we just inserted. error: {:#?}", e),
-            }
-        } else {
-            panic!("the list should not be empty since we just filled it up!")
-        }
-        //
-        //  delete all the users
-        for user in users {
-            let result = TestDb::delete_user(&user.id).await;
-            match result {
-                Ok(_) => {
-                    trace!("deleted user with email: {}", &user.user_profile.email);
-                }
-                Err(e) => {
-                    panic!("failed to delete user. error: {:#?}", e)
-                }
-            }
-        }
-
-        // get the list of users again -- should be empty
-        let users: Vec<PersistUser> = match TestDb::list().await {
-            Ok(u) => {
-                trace!("all_users returned success");
-                u
-            }
-            Err(e) => panic!("failed to setup database and collection {}", e),
-        };
-        if users.len() != 0 {
-            panic!("we deleted all the test users but list() found some!");
-        }
-    }
-
-    fn create_users() -> Vec<PersistUser> {
-        let mut users = Vec::new();
-
-        for i in 1..=5 {
-            let password = format!("long_password_that_is_ a test {}", i);
-            let password_hash = hash(&password, DEFAULT_COST).unwrap();
-            let user = PersistUser {
-                partition_key: 1,
-                id: get_id(),
-                password_hash: Some(password_hash.to_owned()),
-                user_profile: UserProfile {
-                    email: format!("test{}@example.com", i),
-                    first_name: format!("Test{}", i),
-                    last_name: format!("User{}", i),
-                    display_name: format!("Test User{}", i),
-                    phone_number: CATAN_ENV.test_phone_number.to_owned(),
-                    picture_url: format!("https://example.com/pic{}.jpg", i),
-                    foreground_color: format!("#00000{}", i),
-                    background_color: format!("#FFFFFF{}", i),
-                    text_color: format!("0000000"),
-                    games_played: Some(10 * i as u16),
-                    games_won: Some(5 * i as u16),
-                },
-                validated_email: false,
-                validated_phone: false,
-                phone_code: None
-            };
-
-            users.push(user);
-        }
-
-        users
+        let context = RequestContext::test_default(false);
+        test_db_e2e(&context).await;
     }
 }

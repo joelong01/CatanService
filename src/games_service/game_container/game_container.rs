@@ -6,7 +6,7 @@ use crate::{
         catan_games::games::regular::regular_game::RegularGame,
         long_poller::long_poller::LongPoller,
     },
-    shared::models::{ClientUser, GameError, ResponseType, ServiceResponse},
+    shared::shared_models::{UserProfile, GameError, ResponseType, ServiceResponse},
 
 };
 
@@ -68,7 +68,7 @@ impl GameContainer {
      */
     pub async fn add_player(
         game_id: &str,
-        client_user: &ClientUser,
+        client_user: &UserProfile,
     ) -> Result<ServiceResponse, ServiceResponse> {
 
 
@@ -95,7 +95,7 @@ impl GameContainer {
         let mut players = Vec::new();
         let (game, _) = GameContainer::current_game(game_id).await?;
         for p in game.players.values() {
-            players.push(p.user_data.id.clone());
+            players.push(p.profile.user_id.clone().unwrap());
         }
 
         Ok(players)

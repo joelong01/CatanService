@@ -43,6 +43,185 @@ macro_rules! log_return_err {
 }
 
 #[macro_export]
+macro_rules! new_unexpected_server_error {
+    ( $e:expr, $msg:expr ) => {{
+        log::error!("\t{}\n {:#?}", $msg, $e);
+        Err(ServiceResponse::new(
+            $msg,
+            StatusCode::INTERNAL_SERVER_ERROR,
+            ResponseType::ErrorInfo(format!("Error: {}", $e)),
+            GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
+        ));
+    }};
+}
+
+#[macro_export]
+macro_rules! unexpected_server_error_from_string {
+    ($msg:expr ) => {{
+        ServiceResponse::new(
+            $msg,
+            StatusCode::INTERNAL_SERVER_ERROR,
+            ResponseType::NoData,
+            GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
+        )
+    }};
+}
+
+#[macro_export]
+macro_rules! new_ok_response {
+    ($msg:expr) => {
+        Ok(ServiceResponse::new(
+            $msg,
+            StatusCode::OK,
+            ResponseType::NoData,
+            GameError::NoError(String::default()),
+        ))
+    };
+}
+
+#[macro_export]
+macro_rules! new_unauthorized_response {
+    ($msg:expr) => {
+        Err(ServiceResponse::new(
+            $msg,
+            StatusCode::UNAUTHORIZED,
+            ResponseType::NoData,
+            GameError::HttpError(StatusCode::UNAUTHORIZED)))
+    };
+}
+
+#[macro_export]
+macro_rules! log_return_not_found {
+    ( $e:expr, $msg:expr ) => {{
+        log::error!("\t{}\n {:#?}", $e, $e);
+        return Err(ServiceResponse::new(
+            $msg,
+            StatusCode::NOT_FOUND,
+            ResponseType::ErrorInfo(format!("Error: {}", $e)),
+            GameError::HttpError,
+        ));
+    }};
+}
+
+#[macro_export]
+macro_rules! new_not_found_error {
+    ($msg:expr ) => {{
+        Err(ServiceResponse::new(
+            $msg,
+            StatusCode::NOT_FOUND,
+            ResponseType::NoData,
+            GameError::HttpError(StatusCode::NOT_FOUND),
+        ))
+    }};
+}
+
+#[macro_export]
+macro_rules! log_return_bad_id {
+    ( $id:expr,$msg:expr ) => {{
+        use reqwest::StatusCode;
+        log::error!("badid in {}", $msg);
+        return Err(ServiceResponse::new(
+            $msg,
+            StatusCode::NOT_FOUND,
+            ResponseType::NoData,
+            GameError::BadId($id.to_owned()),
+        ));
+    }};
+}
+
+#[macro_export]
+macro_rules! log_return_bad_request {
+    ( $e:expr, $msg:expr ) => {{
+        log::error!("\t{}\n {:#?}", $e, $e);
+        return Err(ServiceResponse::new(
+            $msg,
+            StatusCode::BAD_REQUEST,
+            ResponseType::ErrorInfo(format!("Error: {}", $e)),
+            GameError::HttpError,
+        ));
+    }};
+}
+
+#[macro_export]
+macro_rules! bad_request_from_string {
+    ($msg:expr ) => {{
+        use reqwest::StatusCode;
+        ServiceResponse::new(
+            $msg,
+            StatusCode::BAD_REQUEST,
+            ResponseType::NoData,
+            GameError::HttpError(StatusCode::BAD_REQUEST),
+        )
+    }};
+}
+
+#[macro_export]
+macro_rules! log_and_return_azure_core_error {
+    ( $e:expr, $msg:expr ) => {{
+        use crate::macros::convert_status_code;
+        log::error!("\t{}\n {:#?}", $msg, $e);
+
+        let status_code = match $e.as_http_error() {
+            Some(http_err) => convert_status_code(http_err.status()),
+            None => reqwest::StatusCode::INTERNAL_SERVER_ERROR, // Default status code
+        };
+
+        return Err(ServiceResponse {
+            message: format!("{}: {:#?}", $msg, $e),
+            status: status_code,
+            response_type: ResponseType::ErrorInfo(format!("Error: {:#?}", $e)),
+            game_error: GameError::HttpError(status_code),
+        });
+    }};
+}
+
+pub fn convert_status_code(azure_status: azure_core::StatusCode) -> reqwest::StatusCode {
+    // Convert the azure_core::StatusCode into its underlying u16 representation.
+    let as_u16 = azure_status.into();
+
+    // Convert the u16 representation back into a reqwest::StatusCode.
+    reqwest::StatusCode::from_u16(as_u16).unwrap()
+}
+
+#[macro_export]
+macro_rules! az_error_to_service_response {
+    ( $cmd:expr, $stderr:expr ) => {{
+        use reqwest::StatusCode;
+        use crate::shared::shared_models::ResponseType::AzError;
+        use crate::shared::shared_models::GameError;
+
+        let msg = format!("command: {}\n Error: {:#?}", $cmd, $stderr);
+        log::error!("{}", &msg);
+
+        Err(ServiceResponse {
+            message: String::default(),
+            status: StatusCode::BAD_REQUEST,
+            response_type: AzError(msg.clone()),
+            game_error: GameError::AzError($stderr),
+        })
+    }};
+}
+
+#[macro_export]
+macro_rules! log_return_serde_error {
+    (  $e:expr, $hint:expr) => {{
+        use reqwest::StatusCode;
+        use crate::shared::models::ResponseType::SerdeError;
+        use crate::shared::models::GameError;
+
+        let msg = format!("serde_json error: {} Message: {:#?}", $e, $hint);
+        log::error!("{}", &msg);
+
+        return Err(ServiceResponse {
+            message: String::default(),
+            status: StatusCode::BAD_REQUEST,
+            response_type: SerdeError(msg.clone()),
+            game_error: GameError::SerdeError,
+        });
+    }};
+}
+
+#[macro_export]
 macro_rules! serialize_as_array {
     ($key:ty, $value:ty) => {
         fn serialize_as_array_impl<S>(
@@ -65,10 +244,10 @@ macro_rules! setup_test {
     ($app:expr, $use_cosmos_db:expr) => {{
         use actix_web::http::header;
         use actix_web::test;
-
-        let test_context = TestContext::new($use_cosmos_db);
+        use crate::middleware::request_context_mw::TestContext;
+        let test_context = TestContext::new($use_cosmos_db, None);
         let request = test::TestRequest::post()
-            .uri("/api/v1/test/setup")
+            .uri("/api/v1/test/verify-service")
             .append_header((header::CONTENT_TYPE, "application/json"))
             .append_header((
                 GameHeader::TEST,
@@ -81,22 +260,23 @@ macro_rules! setup_test {
     }};
 }
 
-
 #[macro_export]
-macro_rules! create_app {
+macro_rules! create_service {
     () => {{
         use crate::create_unauthenticated_service;
         use crate::AuthenticationMiddlewareFactory;
         use actix_cors::Cors;
-        use actix_web::{middleware::Logger, web, App};
+        use actix_web::{web, App};
 
+        use crate::{
+            action_service, game_service, lobby_service, longpoll_service, profile_service,
+            user_service,
+        };
 
-        use crate::{game_service, lobby_service, longpoll_service, profile_service, user_service, action_service};
+        use crate::middleware::request_context_mw::RequestContextMiddleware;
 
-        use crate::middleware::environment_mw::RequestContextMiddleware;
-        
         App::new()
-            .wrap(Logger::default())
+          //  .wrap(Logger::default())
             .wrap(RequestContextMiddleware)
             .wrap(Cors::permissive())
             .service(create_unauthenticated_service()) // Make sure this function is in scope
@@ -108,8 +288,7 @@ macro_rules! create_app {
                     .service(game_service())
                     .service(longpoll_service())
                     .service(profile_service())
-                    .service(action_service())
-                    
+                    .service(action_service()),
             )
     }};
 }
@@ -117,13 +296,13 @@ macro_rules! create_app {
 #[macro_export]
 macro_rules! create_test_service {
     () => {{
-        use crate::create_app;
+        use crate::create_service;
         use crate::init_env_logger;
         use actix_web::test;
 
         init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Error).await;
 
-        let app = test::init_service(create_app!()).await;
+        let app = test::init_service(create_service!()).await;
         app
     }};
 }
@@ -142,12 +321,10 @@ macro_rules! log_thread_info {
     };
 }
 
-
 #[macro_export]
 macro_rules! trace_thread_info {
-
     ($from:expr, $($arg:tt)*) => {{
-       //  log::trace!("{}:{},{},{}", file!(), line!(), $from, format!($($arg)*))
+        //  log::trace!("{}:{},{},{}", file!(), line!(), $from, format!($($arg)*))
     }};
 }
 #[macro_export]
@@ -155,10 +332,10 @@ macro_rules! trace_function {
     ($function:expr) => {{
         use scopeguard::defer;
         use std::time::Instant;
-        
+
         let enter_time = Instant::now();
         println!("Entering {}", $function);
-        
+
         defer! {
             let elapsed = enter_time.elapsed();
             let duration_in_nanos = elapsed.as_secs() * 1_000_000_000 + elapsed.subsec_nanos() as u64;

@@ -8,7 +8,7 @@ use crate::{
         catan_games::traits::game_trait::GameTrait, game_container::game_container::GameContainer,
         shared::game_enums::GameAction,
     },
-    shared::header_extractor::HeadersExtractor,
+
     user_service::user_handlers::create_http_response,
 };
 

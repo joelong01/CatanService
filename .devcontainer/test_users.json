@@ -1,0 +1,93 @@
+[
+    {
+        "UserType": "Connected",
+        "Pii": {
+            "Email": "john.doe@example.com",
+            "FirstName": "John",
+            "LastName": "Doe",
+            "PhoneNumber": "+12065551234"
+        },
+        "DisplayName": "John",
+        "PictureUrl": "https://example.com/images/john.jpg",
+        "ForegroundColor": "#00000000",
+        "BackgroundColor": "#FFFFFF",
+        "TextColor": "#00000000",
+        "GamesPlayed": 5,
+        "GamesWon": 2, 
+        "ValidatedEmail": false,
+        "ValidatedPhone": false
+    },
+    {
+        "UserType": "Connected",
+        "Pii": {
+            "Email": "jane.smith@example.com",
+            "FirstName": "Jane",
+            "LastName": "Smith",
+            "PhoneNumber": "+12065556789"
+        },
+        "DisplayName": "Jane",
+        "PictureUrl": "https://example.com/images/jane.jpg",
+        "ForegroundColor": "#00000000",
+        "BackgroundColor": "#FFFFFF",
+        "TextColor": "#00000000",
+        "GamesPlayed": 7,
+        "GamesWon": 5,
+        "ValidatedEmail": false,
+        "ValidatedPhone": false
+    },
+    {
+        "UserType": "Connected",
+        "Pii": {
+            "Email": "alice.jones@example.com",
+            "FirstName": "Alice",
+            "LastName": "Jones",
+            "PhoneNumber": "+12065551235"
+        },
+      
+        "DisplayName": "Alice",
+        "PictureUrl": "https://example.com/images/alice.jpg",
+        "ForegroundColor": "#00000000",
+        "BackgroundColor": "#FFFFFF",
+        "TextColor": "#00000000",
+        "GamesPlayed": 3,
+        "GamesWon": 2,
+        "ValidatedEmail": false,
+        "ValidatedPhone": false
+    },
+    {
+        "UserType": "Connected",
+        "Pii": {
+            "Email": "bob.brown@example.com",
+            "FirstName": "Bob",
+            "LastName": "Brown",
+            "PhoneNumber": "+12065554321"
+        },
+        "DisplayName": "Bob",
+        "PictureUrl": "https://example.com/images/bob.jpg",
+        "ForegroundColor": "#00000000",
+        "BackgroundColor": "#FFFFFF",
+        "TextColor": "#00000000",
+        "GamesPlayed": 6,
+        "GamesWon": 4,
+        "ValidatedEmail": false,
+        "ValidatedPhone": false
+    },
+    {
+        "UserType": "Connected",
+        "Pii": {
+            "Email": "charlie.green@example.com",
+            "FirstName": "Charlie",
+            "LastName": "Green",
+            "PhoneNumber": "+12065553210"
+        },
+        "DisplayName": "Charlie",
+        "PictureUrl": "https://example.com/images/charlie.jpg",
+        "ForegroundColor": "#00000000",
+        "BackgroundColor": "#FFFFFF",
+        "TextColor": "#00000000",
+        "GamesPlayed": 4,
+        "GamesWon": 3,
+        "ValidatedEmail": false,
+        "ValidatedPhone": false
+    }
+]

@@ -16,6 +16,12 @@
             "default": ""
         },
         {
+            "environmentVariable": "AZURE_LOCATION",
+            "description": "the location for your Azure Datacenter",
+            "shellscript": "",
+            "default": "uswest3"
+        },
+        {
             "environmentVariable": "KEV_VAULT_NAME",
             "description": "the name of the keyvault used by the app",
             "shellscript": "",
@@ -32,6 +38,36 @@
             "description": "the name of the User database",
             "shellscript": "",
             "default": "Users-db"
+        },
+        {
+            "environmentVariable": "ADMIN_EMAIL",
+            "description": "the email of the admin",
+            "shellscript": "",
+            "default": ""
+        },
+        {
+            "environmentVariable": "ADMIN_PROFILE_JSON",
+            "description": "the location of a JSON doc that has the admin profile",
+            "shellscript": "",
+            "default": ""
+        },
+        {
+            "environmentVariable": "TEST_CRED_CACHE_LOCATION",
+            "description": "the location to store the cached creds when running tests",
+            "shellscript": "",
+            "default": ""
+        },
+        {
+            "environmentVariable": "ADMIN_PASSWORD",
+            "description": "the password for the admin account",
+            "shellscript": "",
+            "default": ""
+        },
+        {
+            "environmentVariable": "TEST_USERS_JSON",
+            "description": "the location of a JSON doc that has test users",
+            "shellscript": "",
+            "default": "./test_users.json"
         },
         {
             "environmentVariable": "RUST_LOG",

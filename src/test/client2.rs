@@ -7,11 +7,11 @@ use std::time::Duration;
 
 use crate::games_service::game_container::game_messages::InvitationResponseData;
 
-use crate::middleware::environment_mw::TestContext;
+use crate::middleware::request_context_mw::TestContext;
 use crate::{crack_game_update, wait_for_message};
 use crate::{
     games_service::game_container::game_messages::CatanMessage, log_thread_info,
-    shared::models::ClientUser, trace_thread_info,
+    shared::shared_models::UserProfile, trace_thread_info,
 };
 use crate::{shared::proxy::ServiceProxy, test::test_structs::HOST_URL};
 
@@ -31,18 +31,20 @@ impl ClientThreadHandler for Handler2 {
 }
 
 pub(crate) async fn client2_thread(mut rx: Receiver<CatanMessage>) {
-    let proxy = ServiceProxy::new(Some(TestContext{use_cosmos_db: false}), HOST_URL);
-    let auth_token = proxy
-        .login("doug@longshotdev.com", "password")
-        .await
-        .get_token()
-        .expect("successful login should have a JWT token in the ServiceResponse");
+    let proxy = ServiceProxy::new(
+        "doug@longshotdev.com",
+        "password",
+        Some(TestContext::new(false, None)),
+        HOST_URL,
+    )
+    .await
+    .expect("login to work");
 
     let name = "Doug";
-    let my_info: ClientUser = proxy
-        .get_profile(&auth_token)
+    let my_info: UserProfile = proxy
+        .get_profile("Self")
         .await
-        .get_client_user()
+        .to_profile()
         .expect("Successful call to get_profile should have a ClientUser in the body");
 
     trace_thread_info!(name, "Waiting for 500ms");
@@ -67,7 +69,7 @@ pub(crate) async fn client2_thread(mut rx: Receiver<CatanMessage>) {
     if let CatanMessage::Invite(invite) = message.clone() {
         let response = InvitationResponseData::from_invitation(true, &invite);
         proxy
-            .invitation_response(&response, &auth_token)
+            .invitation_response(&response)
             .await
             .assert_success("accept invite should succeed)");
         game_id = invite.game_id.clone();

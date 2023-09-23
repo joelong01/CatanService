@@ -20,8 +20,8 @@ use crate::games_service::{
     tiles::{self, tile::Tile, tile_enums::TileResource, tile_key::TileKey},
 };
 
-use crate::shared::models::{ClientUser, GameError, ServiceResponse};
-use crate::shared::{models::PersistUser, utility::get_id};
+use crate::shared::shared_models::{UserProfile, GameError, ServiceResponse};
+use crate::shared::service_models::PersistUser;
 
 use actix_web::Resource;
 use rand::seq::SliceRandom;
@@ -74,11 +74,11 @@ impl RegularGame {
     /// # Returns
     ///
     /// A new RegularGame instance.
-    pub fn new(creator: &ClientUser) -> Self {
+    pub fn new(creator: &UserProfile) -> Self {
         let player = {
             let user = creator.clone();
             Player {
-                user_data: user.clone(),
+                profile: user.clone(),
                 roads: vec![],
                 buildings: vec![],
                 harbors: vec![],
@@ -95,7 +95,7 @@ impl RegularGame {
         let buildings = Self::setup_buildings(&mut tiles);
 
         let mut players = HashMap::new();
-        let user_id = creator.id.clone();
+        let user_id = creator.user_id.clone().unwrap();
         players.insert(user_id.clone(), player);
 
         let harbors: HashMap<HarborKey, Harbor> = game_info
@@ -105,7 +105,7 @@ impl RegularGame {
             .collect();
 
         Self {
-            id: get_id(),
+            id: PersistUser::new_id(),
             players,
             tiles,
             harbors,
@@ -128,15 +128,16 @@ impl RegularGame {
      *  so that the operation can be undone by simply going to the previous game struct
      */
 
-    pub fn add_user(&self, profile: &ClientUser) -> Result<Self, ServiceResponse> {
-        if self.players.contains_key(&profile.id) {
-            return Err(ServiceResponse::new_bad_id("user_id already exists", &profile.id));
+    pub fn add_user(&self, profile: &UserProfile) -> Result<Self, ServiceResponse> {
+        let user_id = profile.user_id.clone().unwrap();
+        if self.players.contains_key(&user_id) {
+            return Err(ServiceResponse::new_bad_id("user_id already exists", &user_id));
         }
 
         let mut clone = self.clone();
         let player = {
             Player {
-                user_data: profile.clone(),
+                profile: profile.clone(),
                 roads: vec![],
                 buildings: vec![],
                 harbors: vec![],
@@ -147,7 +148,7 @@ impl RegularGame {
                 state: CalculatedState::default(),
             }
         };
-        clone.players.insert(profile.id.clone(), player);
+        clone.players.insert(user_id.clone(), player);
         Ok(clone)
     }
 
@@ -467,11 +468,11 @@ impl<'a> GameTrait<'a> for RegularGame {
         write!(f, " }}")
     }
 
-    fn add_user(&mut self, user: &ClientUser) {
-        self.players.insert(user.id.clone(), {
+    fn add_user(&mut self, user: &UserProfile) {
+        self.players.insert(user.user_id.clone().unwrap(), {
             let user = user;
             Player {
-                user_data: user.clone(),
+                profile: user.clone(),
                 roads: vec![],
                 buildings: vec![],
                 harbors: vec![],

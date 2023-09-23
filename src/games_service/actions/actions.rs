@@ -8,7 +8,7 @@ use crate::{
         catan_games::traits::game_trait::GameTrait, game_container::game_container::GameContainer,
         shared::game_enums::GameAction,
     },
-    shared::models::{GameError, ResponseType, ServiceResponse},
+    shared::shared_models::{GameError, ResponseType, ServiceResponse},
     user_service::user_handlers::create_http_response,
 };
 
@@ -20,7 +20,7 @@ pub async fn next(game_id: &str) -> Result<ServiceResponse, ServiceResponse> {
                 &format!("invalid game id: {}", game_id),
                 StatusCode::NOT_FOUND,
                 ResponseType::ErrorInfo(format!("{:#?}", e)),
-                GameError::HttpError,
+                GameError::HttpError(StatusCode::NOT_FOUND),
             ))
         }
     };
@@ -30,7 +30,7 @@ pub async fn next(game_id: &str) -> Result<ServiceResponse, ServiceResponse> {
             "failed to delete user",
             StatusCode::BAD_REQUEST,
             ResponseType::NoData,
-            GameError::HttpError,
+            GameError::HttpError(StatusCode::BAD_REQUEST),
         ));
     }
 
@@ -44,7 +44,7 @@ pub async fn next(game_id: &str) -> Result<ServiceResponse, ServiceResponse> {
         "",
         StatusCode::OK,
         ResponseType::ValidActions(game_clone.valid_actions(can_redo)),
-        GameError::NoError,
+        GameError::NoError(String::default()),
     ))
 }
 /**
@@ -60,7 +60,7 @@ pub async fn valid_actions(game_id: &str) -> Result<ServiceResponse, ServiceResp
                 &format!("invalid game id: {}", game_id),
                 StatusCode::NOT_FOUND,
                 ResponseType::ErrorInfo(format!("{:#?}", e)),
-                GameError::HttpError,
+                GameError::HttpError(StatusCode::NOT_FOUND),
             ))
         }
     };
@@ -68,6 +68,6 @@ pub async fn valid_actions(game_id: &str) -> Result<ServiceResponse, ServiceResp
         "",
         StatusCode::OK,
         ResponseType::ValidActions(game.valid_actions(can_redo)),
-        GameError::NoError,
+        GameError::NoError(String::default()),
     ))
 }

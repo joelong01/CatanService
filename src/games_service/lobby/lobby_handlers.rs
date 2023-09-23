@@ -1,13 +1,9 @@
 #![allow(unused_variables)]
-use actix_web::{
-    HttpRequest, HttpResponse, web,
-};
+use actix_web::{web, HttpRequest, HttpResponse};
 
 use crate::{
     games_service::game_container::game_messages::{Invitation, InvitationResponseData},
-    get_header_value,
-    middleware::environment_mw::RequestContext,
-    shared::header_extractor::HeadersExtractor,
+    middleware::{request_context_mw::RequestContext, header_extractor::HeadersExtractor}
 };
 
 pub async fn get_lobby(_req: HttpRequest) -> HttpResponse {
@@ -16,8 +12,16 @@ pub async fn get_lobby(_req: HttpRequest) -> HttpResponse {
         .map(|sr| sr.to_http_response())
         .unwrap_or_else(|sr| sr.to_http_response())
 }
-pub async fn post_invite(headers: HeadersExtractor, invite: web::Json<Invitation>) -> HttpResponse {
-    let from_id = get_header_value!(user_id, headers);
+pub async fn post_invite(
+    headers: HeadersExtractor,
+    invite: web::Json<Invitation>,
+    request_context: RequestContext,
+) -> HttpResponse {
+    let from_id = &request_context
+        .claims
+        .as_ref()
+        .expect("auth_mw should set this for all authenticated APIs")
+        .id;
     let invite: &Invitation = &invite;
 
     super::lobby::post_invite(&from_id, invite)

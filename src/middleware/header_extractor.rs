@@ -46,7 +46,8 @@ impl FromRequest for HeadersExtractor {
 #[macro_export]
 macro_rules! get_header_value {
     ($header:ident, $headers:expr) => {{
-        use crate::shared::models::{GameError, ResponseType, ServiceResponse};
+        use crate::shared::shared_models::{GameError, ResponseType, ServiceResponse};
+        use reqwest::StatusCode;
         match $headers.$header {
             Some(v) => v,
             None => {
@@ -55,7 +56,7 @@ macro_rules! get_header_value {
                     &msg,
                     reqwest::StatusCode::BAD_REQUEST,
                     ResponseType::NoData,
-                    GameError::HttpError,
+                    GameError::HttpError(StatusCode::BAD_REQUEST),
                 );
                 return HttpResponse::BadRequest().json(response);
             }

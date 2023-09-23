@@ -9,8 +9,9 @@ use crate::{
         shared::game_enums::GameAction,
     },
     log_thread_info,
-    shared::models::ClientUser,
-    trace_thread_info, wait_for_message, middleware::environment_mw::TestContext,
+    middleware::request_context_mw::TestContext,
+    shared::shared_models::UserProfile,
+    trace_thread_info, wait_for_message,
 };
 use crate::{
     games_service::shared::game_enums::CatanGames, shared::proxy::ServiceProxy,
@@ -36,19 +37,19 @@ impl ClientThreadHandler for Handler0 {
  *  thread
  */
 pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
-    let proxy = ServiceProxy::new(Some(TestContext{use_cosmos_db: false}), HOST_URL);
-    let auth_token = proxy
-        .login("joe@longshotdev.com", "password")
-        .await
-        .get_token()
-        .expect("successful login should have a JWT token in the ServiceResponse");
+    let proxy = ServiceProxy::new(
+        "joe@longshotdev.com",
+        "password",
+        Some(TestContext::new(false, None)),
+        HOST_URL,
+    ).await.expect("login to succeed");
 
     let name = "Main(Joe)";
 
-    let my_info: ClientUser = proxy
-        .get_profile(&auth_token)
+    let my_info: UserProfile = proxy
+        .get_profile("Self")
         .await
-        .get_client_user()
+        .to_profile()
         .expect("Successful call to get_profile should have a ClientUser in the body");
 
     trace_thread_info!(name, "Waiting for 500ms");
@@ -67,7 +68,7 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
 
     let test_game = load_game().expect(&format!("Test game should be in {}", TEST_GAME_LOC));
     let returned_game = proxy
-        .new_game(CatanGames::Regular, &auth_token, Some(&test_game))
+        .new_game(CatanGames::Regular, Some(&test_game))
         .await
         .get_game()
         .expect("Should have a RegularGame returned in the body");
@@ -81,32 +82,32 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
     // get the lobby
     trace_thread_info!(name, "Getting Lobby.");
     let lobby = proxy
-        .get_lobby(&auth_token)
+        .get_lobby()
         .await
-        .get_client_users()
+        .get_profile_vec()
         .expect("Vec<> should be in body");
 
     trace_thread_info!(name, "get_lobby returned: {:#?}", lobby);
 
     for lobby_user in lobby {
-        let my_clone = my_info.clone();
-        let profile = my_clone.user_profile;
-        if lobby_user.id == my_clone.id {
+        let cloned_profile = my_info.clone();
+
+        if lobby_user.user_id == cloned_profile.user_id {
             continue; // don't invite myself
         }
         let invite_message = "Join my game!".to_string();
         let invitation = Invitation {
-            from_id: my_clone.id.clone(),
-            from_name: profile.display_name.clone(),
-            to_id: lobby_user.id.clone(),
-            to_name: lobby_user.user_profile.display_name.clone(),
+            from_id: cloned_profile.user_id.clone().unwrap(),
+            from_name: cloned_profile.display_name.clone(),
+            to_id: lobby_user.user_id.clone().unwrap(),
+            to_name: lobby_user.display_name.clone(),
             message: invite_message.clone(),
-            from_picture: profile.picture_url.clone(),
+            from_picture: cloned_profile.picture_url.clone(),
             game_id: game_id.to_owned(),
         };
         trace_thread_info!(name, "Sending GameInvite");
         let response = proxy
-            .send_invite(&invitation, &auth_token)
+            .send_invite(&invitation)
             .await
             .assert_success("send_invite should not fail");
     }
@@ -126,7 +127,7 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
         }
 
         let actions = proxy
-            .get_actions(&game_id, &auth_token)
+            .get_actions(&game_id)
             .await
             .assert_success("get actions to succeed")
             .get_actions()
@@ -139,7 +140,7 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
     trace_thread_info!(name, "all players accepted: {:#?}", players);
 
     proxy
-        .start_game(&game_id, &auth_token)
+        .start_game(&game_id)
         .await
         .assert_success("start should not fail");
     let message = wait_for_message!(name, rx);
@@ -156,7 +157,7 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
     // what actions can I take?
 
     let actions = proxy
-        .get_actions(&game_id, &auth_token)
+        .get_actions(&game_id)
         .await
         .assert_success("get actions to succeed")
         .get_actions()
@@ -194,11 +195,7 @@ pub fn load_game() -> Result<RegularGame, Box<dyn std::error::Error>> {
             let game: RegularGame = match serde_json::from_str(&contents) {
                 Ok(game) => game,
                 Err(e) => {
-                    log_thread_info!(
-                        "load_game",
-                        "failed to parse game from JSON: {:#?}",
-                        e
-                    );
+                    log_thread_info!("load_game", "failed to parse game from JSON: {:#?}", e);
                     return Err(Box::new(e));
                 }
             };
@@ -217,4 +214,3 @@ pub fn load_game() -> Result<RegularGame, Box<dyn std::error::Error>> {
         }
     }
 }
-

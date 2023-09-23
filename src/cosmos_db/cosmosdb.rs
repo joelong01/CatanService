@@ -1,51 +1,80 @@
 #![allow(dead_code)]
+use crate::{
+    log_and_return_azure_core_error,
+    middleware::service_config::ServiceConfig,
+    new_not_found_error,
+    shared::service_models::PersistUser,
+    shared::shared_models::{UserProfile, GameError, ResponseType},
+};
 use std::collections::HashMap;
-
-use crate::middleware::environment_mw::RequestContext;
-use crate::shared::models::{GameError, PersistUser, ResponseType};
 
 /**
  *  this is the class that calls directly to CosmosDb --
  */
-use crate::{log_return_err, shared::models::ServiceResponse};
+use crate::{log_return_err, shared::shared_models::ServiceResponse};
 use azure_core::error::{ErrorKind, Result as AzureResult};
 use azure_data_cosmos::prelude::{
     AuthorizationToken, CollectionClient, CosmosClient, DatabaseClient, Query, QueryCrossPartition,
 };
 
+use async_trait::async_trait;
 use futures::StreamExt;
 use log::info;
-
 /**
  *  we have 3 cosmos collections that we are currently using:  User, Profile, and (eventually) Game.
  *  this just makes sure we consistently use them throughout the code.
  */
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
-pub enum CosmosCollectionName {
+pub enum CosmosDocType {
     User,
     Profile,
     Game,
 }
 
-struct CosmosCollectionNameValues {
-    pub name: CosmosCollectionName,
+pub struct CosmosCollectionNameValues {
+    pub name: CosmosDocType,
     pub value: &'static str,
 }
 
-static COLLECTION_NAME_VALUES: [CosmosCollectionNameValues; 3] = [
+pub static COLLECTION_NAME_VALUES: [CosmosCollectionNameValues; 3] = [
     CosmosCollectionNameValues {
-        name: CosmosCollectionName::User,
-        value: "User-Collection",
+        name: CosmosDocType::User,
+        value: "Users-Collection",
     },
     CosmosCollectionNameValues {
-        name: CosmosCollectionName::Profile,
+        name: CosmosDocType::Profile,
         value: "Profile-Collection",
     },
     CosmosCollectionNameValues {
-        name: CosmosCollectionName::Game,
+        name: CosmosDocType::Game,
         value: "Game-Collection",
     },
 ];
+#[async_trait]
+pub trait UserDbTrait {
+    async fn setupdb(&self) -> Result<(), ServiceResponse>;
+    async fn list(&self) -> Result<Vec<PersistUser>, ServiceResponse>;
+    async fn update_or_create_user(
+        &self,
+        user: &PersistUser,
+    ) -> Result<ServiceResponse, ServiceResponse>;
+    async fn delete_user(&self, unique_id: &str) -> Result<(), ServiceResponse>;
+    async fn find_user_by_id(&self, val: &str) -> Result<PersistUser, ServiceResponse>;
+    async fn find_user_by_email(&self, val: &str) -> Result<PersistUser, ServiceResponse>;
+    async fn get_connected_users(&self, connected_user_id: &str) -> Result<Vec<PersistUser>, ServiceResponse>;
+    fn get_collection_names(&self, is_test: bool) -> Vec<String> {
+        COLLECTION_NAME_VALUES
+            .iter()
+            .map(|name_value| {
+                if is_test {
+                    format!("{}-Test", name_value.value)
+                } else {
+                    name_value.value.to_string()
+                }
+            })
+            .collect()
+    }
+}
 
 /**
  *  this is a convinient way to pass around meta data about CosmosDb.  UserDb will also expose methods for calling
@@ -54,9 +83,95 @@ static COLLECTION_NAME_VALUES: [CosmosCollectionNameValues; 3] = [
 pub struct UserDb {
     client: Option<CosmosClient>,
     database: Option<DatabaseClient>,
-    collection_clients: HashMap<CosmosCollectionName, CollectionClient>,
+    collection_clients: HashMap<CosmosDocType, CollectionClient>,
     database_name: String,
 }
+
+impl UserDb {
+    pub fn new(is_test: bool, service_config: &'static ServiceConfig) -> Self {
+        let client = public_client(&service_config.cosmos_account, &service_config.cosmos_token);
+        let database_name;
+        if is_test {
+            database_name = service_config.cosmos_database_name.clone() + "-test";
+        } else {
+            database_name = service_config.cosmos_database_name.clone();
+        }
+
+        let database = client.database_client(database_name.clone());
+
+        //
+        //  we have array of name/value pairs for the document types we support and its corresponding name in cosmosdb
+        //  here we loop over that array and crate a map of doc type -> cosmos_db collection names and then use the
+        //  name to create a CollectionClient.  Then we add it to docType -> CollectionClient map so that everywhere
+        //  else in the code we can do a lookup based on the kind of document we are accessing to the CollectionClient
+        //  needed to manipulate it in CosmosDb
+
+        let mut collection_clients: HashMap<CosmosDocType, CollectionClient> = HashMap::new();
+        for item in &COLLECTION_NAME_VALUES {
+            let collection_name: String;
+            if is_test {
+                collection_name = format!("{}-test", item.value);
+            } else {
+                collection_name = item.value.to_owned();
+            }
+            let client = database.collection_client(collection_name);
+            collection_clients.insert(item.name, client); // now we have a map of (say) CosmosCollectionName::User to "User-db-test"
+        }
+
+        Self {
+            client: Some(client),
+            database: Some(database),
+            collection_clients,
+            database_name,
+        }
+    }
+    /**
+     * Execute an arbitrary query against the user database and return a list of users
+     */
+    async fn execute_query(
+        &self,
+        collection_name: CosmosDocType,
+        query_string: &str,
+    ) -> AzureResult<Vec<PersistUser>> {
+        let mut users = Vec::new();
+        let query = Query::new(query_string.to_string());
+        let collection = self.collection_clients.get(&collection_name).unwrap();
+        let mut stream = collection
+            .query_documents(query)
+            .query_cross_partition(QueryCrossPartition::Yes)
+            .into_stream::<serde_json::Value>();
+        //
+        // this just matches what list does, but only returns the first one
+
+        while let Some(response) = stream.next().await {
+            match response {
+                Ok(response) => {
+                    for doc in response.documents() {
+                        let user: PersistUser = serde_json::from_value(doc.clone())?;
+                        users.push(user);
+                    }
+                    return Ok(users); // return user if found
+                }
+                Err(e) => {
+                    log_return_err!(e)
+                }
+            }
+        }
+        Err(azure_core::Error::new(ErrorKind::Other, "User not found")) // return error if user not found
+    }
+    fn collection_name(&self, col_type: &CosmosDocType) -> String {
+        let collection_client = self
+            .collection_clients
+            .get(col_type)
+            .expect("this should be set in ::new");
+
+        collection_client.collection_name().to_string()
+    }
+
+    
+
+}
+
 /**
  *  We only use the public client in this sample.
  *
@@ -84,50 +199,24 @@ fn public_client(account: &str, token: &str) -> CosmosClient {
  *      user_db.create(...)
  */
 
-impl UserDb {
-    pub async fn new(context: &RequestContext) -> Self {
-        let client = public_client(&context.env.cosmos_account, &context.env.cosmos_token);
-        let database_name = context.database_name().clone();
-
-        let database = client.database_client(database_name.clone());
-        let mut collection_clients: HashMap<CosmosCollectionName, CollectionClient> =
-            HashMap::new();
-        for item in &COLLECTION_NAME_VALUES {
-            let collection_name: String;
-            if context.is_test() {
-                collection_name = format!("{}-test", item.value);
-            } else {
-                collection_name = item.value.to_owned();
-            }
-            let client = database.collection_client(collection_name);
-            collection_clients.insert(item.name, client); // now we have a map of (say) CosmosCollectionName::User to "User-db-test"
-        }
-
-        Self {
-            client: Some(client),
-            database: Some(database),
-            collection_clients,
-            database_name,
-        }
-    }
-
+#[async_trait]
+impl UserDbTrait for UserDb {
     /**
      *  setup the database to make the sample work.  NOTE:  this will DELETE the database first.  to call this:
      *
      *  let userdb = UserDb::new();
      *  userdb.setupdb()
      */
-    pub async fn setupdb(&self) -> Result<(), azure_core::Error> {
+    async fn setupdb(&self) -> Result<(), ServiceResponse> {
         info!("Deleting existing database");
 
         match self.database.as_ref().unwrap().delete_database().await {
             Ok(..) => info!("\tDeleted {} database", self.database_name),
             Err(e) => {
-                if format!("{}", e).contains("404") {
-                    info!("\tDatabase {} not found", self.database_name);
-                } else {
-                    log_return_err!(e)
-                }
+                log_and_return_azure_core_error!(
+                    e,
+                    &format!("Error deleting database: {}", self.database_name)
+                );
             }
         }
 
@@ -140,7 +229,12 @@ impl UserDb {
             .await
         {
             Ok(..) => info!("\tCreated database"),
-            Err(e) => log_return_err!(e),
+            Err(e) => {
+                log_and_return_azure_core_error!(
+                    e,
+                    &format!("Error creatting database: {}", self.database_name)
+                );
+            }
         }
 
         info!("Creating collections");
@@ -160,7 +254,15 @@ impl UserDb {
                         collection_client.collection_name()
                     );
                 }
-                Err(e) => log_return_err!(e),
+                Err(e) => {
+                    log_and_return_azure_core_error!(
+                        e,
+                        &format!(
+                            "Error creating collection: {}",
+                            collection_client.collection_name()
+                        )
+                    );
+                }
             }
         }
         Ok(())
@@ -168,144 +270,117 @@ impl UserDb {
     /**
      *  this will return *all* (non paginated) Users in the collection
      */
-    pub async fn list(&self) -> AzureResult<Vec<PersistUser>> {
+    async fn list(&self) -> Result<Vec<PersistUser>, ServiceResponse> {
         let query = r#"SELECT * FROM c WHERE c.partitionKey=1"#;
-        match self.execute_query(CosmosCollectionName::User, query).await {
+        match self.execute_query(CosmosDocType::User, query).await {
             Ok(users) => Ok(users),
-            Err(e) => log_return_err!(e),
+            Err(e) => log_and_return_azure_core_error!(e, &format!("error in list()")),
         }
-    }
-    /**
-     * Execute an arbitrary query against the user database and return a list of users
-     */
-    async fn execute_query(
-        &self,
-        collection_name: CosmosCollectionName,
-        query_string: &str,
-    ) -> AzureResult<Vec<PersistUser>> {
-        let mut users = Vec::new();
-        let query = Query::new(query_string.to_string());
-        let collection = self.collection_clients.get(&collection_name).unwrap();
-        let mut stream = collection
-            .query_documents(query)
-            .query_cross_partition(QueryCrossPartition::Yes)
-            .into_stream::<serde_json::Value>();
-        //
-        // this just matches what list does, but only returns the first one
-        // we are getting an error right now, but nothing to indicate what the error is.
-        while let Some(response) = stream.next().await {
-            match response {
-                Ok(response) => {
-                    for doc in response.documents() {
-                        let user: PersistUser = serde_json::from_value(doc.clone())?;
-                        users.push(user);
-                    }
-                    return Ok(users); // return user if found
-                }
-                Err(e) => {
-                    log_return_err!(e)
-                }
-            }
-        }
-        Err(azure_core::Error::new(ErrorKind::Other, "User not found")) // return error if user not found
-    }
-
-    fn collection_name(&self, col_type: &CosmosCollectionName) -> String {
-        let collection_client = self
-            .collection_clients
-            .get(col_type)
-            .expect("this should be set in ::new");
-
-        collection_client.collection_name().to_string()
     }
 
     /**
      *  an api that creates a user in the cosmosdb users collection. in this sample, we return
      *  the full User object in the body, giving the client the partitionKey and user id
      */
-    pub async fn update_or_create_user(&self, user: PersistUser) -> Result<(), azure_core::Error> {
-        let collection = self
-            .collection_clients
-            .get(&CosmosCollectionName::User)
-            .unwrap();
+    async fn update_or_create_user(
+        &self,
+        user: &PersistUser,
+    ) -> Result<ServiceResponse, ServiceResponse> {
+        let collection = self.collection_clients.get(&CosmosDocType::User).unwrap();
 
+        log::trace!("{}", serde_json::to_string(&user).unwrap());
         match collection
             .create_document(user.clone())
             .is_upsert(true)
             .await
         {
             Ok(..) => match serde_json::to_string(&user) {
-                Ok(..) => Ok(()),
-                Err(e) => Err(e.into()),
+                Ok(..) => Ok(ServiceResponse::new(
+                    "created",
+                    StatusCode::CREATED,
+                    ResponseType::Profile(UserProfile::from_persist_user(user)),
+                    GameError::NoError(String::default()),
+                )),
+                Err(e) => {
+                    return Err(ServiceResponse::new(
+                        "unexpected serde serlialization error",
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        ResponseType::ErrorInfo(format!("Error: {}", e)),
+                        GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
+                    ))
+                }
             },
-            Err(e) => log_return_err!(e),
+            Err(e) => log_and_return_azure_core_error!(e, "update_or_create_user"),
         }
     }
     /**
      *  delete the user with the unique id
      */
-    pub async fn delete_user(&self, unique_id: &str) -> Result<(), azure_core::Error> {
-        let collection = self
-            .collection_clients
-            .get(&CosmosCollectionName::User)
-            .unwrap();
-        let doc_client = collection.document_client(unique_id, &1)?;
+    async fn delete_user(&self, unique_id: &str) -> Result<(), ServiceResponse> {
+        let collection = self.collection_clients.get(&CosmosDocType::User).unwrap();
+
+        let doc_client = match collection.document_client(unique_id, &1) {
+            Ok(client) => client,
+            Err(e) => log_and_return_azure_core_error!(e, "Failed to get document client"),
+        };
+
         match doc_client.delete_document().await {
             Ok(..) => Ok(()),
-            Err(e) => log_return_err!(e),
+            Err(e) => log_and_return_azure_core_error!(e, "delete_user"),
         }
     }
     /**
      *  an api that finds a user by the id in the cosmosdb users collection.
      */
-    pub async fn find_user_by_id(&self, val: &str) -> Result<PersistUser, ServiceResponse> {
+    async fn find_user_by_id(&self, val: &str) -> Result<PersistUser, ServiceResponse> {
         let query = format!(r#"SELECT * FROM c WHERE c.id = '{}'"#, val);
-        match self.execute_query(CosmosCollectionName::User, &query).await {
+        match self.execute_query(CosmosDocType::User, &query).await {
             Ok(users) => {
                 if !users.is_empty() {
                     Ok(users.first().unwrap().clone()) // clone is necessary because `first()` returns a reference
                 } else {
-                    Err(ServiceResponse::new(
-                        "",
-                        reqwest::StatusCode::NOT_FOUND,
-                        ResponseType::NoData,
-                        GameError::BadId(val.to_owned()),
-                    ))
+                    new_not_found_error!("not found")
                 }
             }
-            Err(e) => Err(ServiceResponse::new(
-                "",
-                reqwest::StatusCode::NOT_FOUND,
-                ResponseType::ErrorInfo(format!("{:#?}", e)),
-                GameError::BadId(val.to_owned()),
-            )),
+            Err(e) => {
+                log_and_return_azure_core_error!(e, "find_user_by_id");
+            }
         }
     }
-    pub async fn find_user_by_email(&self, val: &str) -> Result<PersistUser, ServiceResponse> {
-        let query = format!(r#"SELECT * FROM c WHERE c.user_profile.Email = '{}'"#, val);
-        match self.execute_query(CosmosCollectionName::User, &query).await {
+    async fn get_connected_users(&self, connected_user_id: &str) -> Result<Vec<PersistUser>, ServiceResponse>{
+        let query = format!(
+            r#"SELECT * FROM c WHERE c.connected_user_id = '{}'"#,
+            connected_user_id
+        );
+        match self.execute_query(CosmosDocType::User, &query).await {
+            Ok(users) => {
+                Ok(users)
+            }
+            Err(e) => {
+                log_and_return_azure_core_error!(e, "find_user_by_id");
+            }
+        }
+    }
+    async fn find_user_by_email(&self, val: &str) -> Result<PersistUser, ServiceResponse> {
+        let query = format!(
+            r#"SELECT * FROM c WHERE c.user_profile.Pii.Email = '{}'"#,
+            val
+        );
+        match self.execute_query(CosmosDocType::User, &query).await {
             Ok(users) => {
                 if !users.is_empty() {
-                    log::trace!("found user with email={}", val);
-                    Ok(users.first().unwrap().clone()) // clone is necessary because `first()` returns a reference
+                    Ok(users.first().unwrap().clone())
                 } else {
-                    log::trace!("did not find user with email={}", val);
-                    Err(ServiceResponse::new(
-                        "",
-                        reqwest::StatusCode::NOT_FOUND,
-                        ResponseType::NoData,
-                        GameError::BadId(val.to_owned()),
-                    ))
+                    new_not_found_error!("not found")
                 }
             }
-            Err(e) => Err(ServiceResponse::new(
-                "",
-                reqwest::StatusCode::NOT_FOUND,
-                ResponseType::ErrorInfo(format!("{:#?}", e)),
-                GameError::BadId(val.to_owned()),
-            )),
+            Err(e) => {
+                log_and_return_azure_core_error!(e, "find_user_by_id");
+            }
         }
     }
+
+   
 }
 
 #[cfg(test)]
@@ -313,8 +388,12 @@ mod tests {
 
     use crate::{
         init_env_logger,
-        middleware::environment_mw::{TestContext, CATAN_ENV},
-        shared::{models::UserProfile, utility::get_id},
+        middleware::{request_context_mw::RequestContext, service_config::SERVICE_CONFIG},
+        shared::{
+            service_models::Role,
+            shared_models::{PersonalInformation, UserProfile, UserType},
+        },
+        user_service::users::verify_cosmosdb,
     };
 
     use super::*;
@@ -323,28 +402,25 @@ mod tests {
     #[tokio::test]
 
     async fn test_e2e() {
-        let context = RequestContext::new(
-            Some(TestContext {
-                use_cosmos_db: true,
-            }),
-            &CATAN_ENV,
-        );
-
-        let user_db = UserDb::new(&context).await;
-
+        let context = RequestContext::test_default(true);
+        test_db_e2e(&context).await;
+    }
+    pub async fn test_db_e2e(request_context: &RequestContext) {
+        let user_db = &request_context.database;
         init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Error).await;
-
+        verify_cosmosdb(&request_context)
+            .await
+            .expect("azure should be configured to run these tests");
         // create the database -- note this will DELETE the database as well
         match user_db.setupdb().await {
             Ok(..) => trace!("created test db and collection"),
             Err(e) => panic!("failed to setup database and collection {}", e),
         }
         // create users and add them to the database
-        let users = create_users();
+        let users = create_users().await;
         for user in users.clone() {
-            let user_clone = user.clone();
-            match user_db.update_or_create_user(user_clone.clone()).await {
-                Ok(..) => trace!("created user {}", user.user_profile.email),
+            match user_db.update_or_create_user(&user).await {
+                Ok(..) => trace!("created user {}", user.user_profile.get_email_or_panic()),
                 Err(e) => panic!("failed to create user.  err: {}", e),
             }
         }
@@ -352,21 +428,25 @@ mod tests {
         // update a user
 
         let mut modified_user = users[0].clone();
-        modified_user.validated_email = true;
+        modified_user.user_profile.validated_email = true;
         let _ = user_db
-            .update_or_create_user(modified_user.clone())
+            .update_or_create_user(&modified_user)
             .await
             .expect("update should succeed");
         let test_user = user_db
             .find_user_by_id(&modified_user.id)
             .await
             .expect("should find this user");
-        assert!(test_user.validated_email);
+
+        assert!(test_user.user_profile.validated_email);
 
         // find user by email
-        log::trace!("looking for user {}", test_user.user_profile.email);
+        log::trace!(
+            "looking for user {}",
+            test_user.user_profile.get_email_or_panic()
+        );
         let found_user = match user_db
-            .find_user_by_email(&test_user.user_profile.email)
+            .find_user_by_email(&test_user.user_profile.get_email_or_panic())
             .await
         {
             Ok(user) => user,
@@ -378,7 +458,10 @@ mod tests {
             }
         };
 
-        assert_eq!(found_user.user_profile.email, test_user.user_profile.email);
+        assert_eq!(
+            found_user.user_profile.get_email_or_panic(),
+            test_user.user_profile.get_email_or_panic()
+        );
 
         // get a list of all users
         let users: Vec<PersistUser> = match user_db.list().await {
@@ -390,23 +473,25 @@ mod tests {
         };
 
         if let Some(first_user) = users.first() {
-            let u = user_db.find_user_by_id(&first_user.id).await;
-            match u {
-                Ok(found_user) => {
-                    trace!("found user with email: {}", found_user.user_profile.email)
-                }
-                Err(e) => panic!("failed to find user that we just inserted. error: {:#?}", e),
-            }
-        } else {
-            panic!("the list should not be empty since we just filled it up!")
+            let found_user = user_db
+                .find_user_by_id(&first_user.id)
+                .await
+                .expect("find_user_by_id should not fail");
+            trace!(
+                "found user with email: {}",
+                found_user.user_profile.get_email_or_panic()
+            );
         }
-        //
+
         //  delete all the users
         for user in users {
             let result = user_db.delete_user(&user.id).await;
             match result {
                 Ok(_) => {
-                    trace!("deleted user with email: {}", &user.user_profile.email);
+                    trace!(
+                        "deleted user with email: {}",
+                        &user.user_profile.get_email_or_panic()
+                    );
                 }
                 Err(e) => {
                     panic!("failed to delete user. error: {:#?}", e)
@@ -414,7 +499,7 @@ mod tests {
             }
         }
 
-        // get the list of users again -- should be empty
+        //  get the list of users again -- should be empty
         let users: Vec<PersistUser> = match user_db.list().await {
             Ok(u) => {
                 trace!("all_users returned success");
@@ -426,33 +511,39 @@ mod tests {
             panic!("we deleted all the test users but list() found some!");
         }
     }
-
-    fn create_users() -> Vec<PersistUser> {
+    pub async fn create_users() -> Vec<PersistUser> {
         let mut users = Vec::new();
-
         for i in 1..=5 {
             let password = format!("long_password_that_is_ a test {}", i);
             let password_hash = hash(&password, DEFAULT_COST).unwrap();
+            let pii = PersonalInformation {
+                email: format!("test{}@example.com", i),
+                phone_number: SERVICE_CONFIG.test_phone_number.to_owned(),
+                first_name: format!("Test{}", i),
+                last_name: format!("User{}", i),
+            };
             let user = PersistUser {
                 partition_key: 1,
-                id: get_id(),
+                id: PersistUser::new_id(),
                 password_hash: Some(password_hash.to_owned()),
                 user_profile: UserProfile {
-                    email: format!("test{}@example.com", i),
-                    first_name: format!("Test{}", i),
-                    last_name: format!("User{}", i),
+                    user_type: UserType::Connected,
+                    pii: Some(pii),
                     display_name: format!("Test User{}", i),
-                    phone_number: CATAN_ENV.test_phone_number.to_owned(),
                     picture_url: format!("https://example.com/pic{}.jpg", i),
                     foreground_color: format!("#00000{}", i),
                     background_color: format!("#FFFFFF{}", i),
                     text_color: format!("0000000"),
                     games_played: Some(10 * i as u16),
                     games_won: Some(5 * i as u16),
+                    user_id: None,
+                    validated_email: false,
+                    validated_phone: false,
                 },
-                validated_email: false,
-                validated_phone: false,
-                phone_code: None
+           
+                phone_code: None,
+                roles: vec![Role::User, Role::TestUser],
+                connected_user_id: None,
             };
 
             users.push(user);
@@ -461,3 +552,6 @@ mod tests {
         users
     }
 }
+use reqwest::StatusCode;
+#[cfg(test)]
+pub use tests::test_db_e2e;

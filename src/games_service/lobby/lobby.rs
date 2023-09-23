@@ -9,16 +9,16 @@ use crate::{
         },
         long_poller::long_poller::LongPoller,
     },
-    shared::models::{ClientUser, GameError, ResponseType, ServiceResponse},
-    user_service::users::internal_find_user, middleware::environment_mw::RequestContext,
+    middleware::request_context_mw::RequestContext,
+    shared::shared_models::{UserProfile, GameError, ResponseType, ServiceResponse},
 };
 
 pub async fn get_lobby() -> Result<ServiceResponse, ServiceResponse> {
     return Ok(ServiceResponse::new(
         "",
         StatusCode::OK,
-        ResponseType::ClientUsers(LongPoller::get_available().await),
-        GameError::NoError,
+        ResponseType::Profiles(LongPoller::get_available().await),
+        GameError::NoError(String::default()),
     ));
 }
 pub async fn post_invite(
@@ -47,13 +47,13 @@ pub async fn respond_to_invite(
     if invite_response.accepted {
         // add the user to the Container -- now they are in both the lobby and the game
         // this will release any threads waiting for updates on the game
-
-        let persist_user =
-            internal_find_user("id", &invite_response.from_id, &request_context).await?;
-
+        let persist_user = request_context
+            .database
+            .find_user_by_id(&invite_response.from_id)
+            .await?;
         GameContainer::add_player(
             &invite_response.game_id,
-            &ClientUser::from_persist_user(&persist_user),
+            &UserProfile::from_persist_user(&persist_user),
         )
         .await
         .expect("add_player shouldn't fail.  TODO: handle failure");

@@ -2,20 +2,16 @@ use std::pin::Pin;
 
 use actix::fut::err;
 use actix_service::{Service, Transform};
-use actix_web::{dev::ServiceRequest, dev::ServiceResponse, error::ErrorUnauthorized, Error};
-
-use crate::{
-    games_service::game_container::game_messages::GameHeader, log_thread_info,
-    user_service::users::validate_jwt_token,
+use actix_web::{
+    dev::ServiceRequest, dev::ServiceResponse, error::ErrorUnauthorized, Error, HttpMessage,
 };
+
 use futures::{
     future::{ok, Ready},
     Future,
 };
 
-use reqwest::header::{HeaderName, HeaderValue};
-
-use super::environment_mw::CATAN_ENV;
+use super::request_context_mw::RequestContext;
 
 // AuthenticationMiddlewareFactory serves as a factory to create instances of AuthenticationMiddleware
 // which is the actual middleware component. It implements the Transform trait required by
@@ -70,32 +66,55 @@ where
     // It intercepts each request, checks for the presence and validity of the authorization token,
     // and if the token is missing or invalid, immediately responds with an Unauthorized error.
     // This will also add headers for user_id and email for downstream handlers
-    fn call(&self, mut req: ServiceRequest) -> Self::Future {
+    fn call(&self, req: ServiceRequest) -> Self::Future {
         // fetch the authorization header
         let auth_header = req.headers().get("Authorization");
 
         match auth_header {
             Some(header_value) => {
+                let mut request_context = req
+                    .extensions_mut()
+                    .get_mut::<RequestContext>()
+                    .expect(
+                        "You configured a route to use authentication, \
+                but not ServiceConfig. This won't work.",
+                    )
+                    .clone();
                 let token_str = header_value.to_str().unwrap_or("").replace("Bearer ", "");
-                if let Some(claims) = validate_jwt_token(&token_str, &CATAN_ENV.login_secret_key) {
-                    // Extract the id and sub from the claims
-                    let id = &claims.claims.id;
-                    let sub = &claims.claims.sub;
+                // our token validation logic is predicated on knowing the claim set -- Validation, TestUser, or User
+                // but we don't know that until we crack the token to find the claims.  the Test Header will be set
+                // by the client to tell us if this is a test, and Validation does not use the auth_mw...so check for
+                // the test header, and if is there, use a test claim.  if not, use the normal user claim...the only
+                // time this does not work is if the admin is trying to create new test users -- in which case the admin
+                // has a UserClaim (not TestClaim) and the TestHeader might be set because the Admin does not want to use
+                // cosmos.  We could fix this any number of ways -- follow the TestHeader pattern, which is a "hint" to
+                // this middle ware to use the test keys -- or we can try the user key, if it works use it. if it fails,
+                // try the test key.  this the benefit that the non-test case isn't impacted by the test case.
+                //
 
-                    // Insert the id and sub into the headers
-                    req.headers_mut().insert(
-                        HeaderName::from_static(GameHeader::USER_ID),
-                        HeaderValue::from_str(id).unwrap(),
+                let mut claims = request_context
+                    .security_context
+                    .login_keys
+                    .validate_token(&token_str);
+
+                if claims.is_none() && request_context.is_test() {
+                    claims = request_context
+                        .security_context
+                        .test_keys
+                        .validate_token(&token_str);
+                }
+
+                if claims.is_none() {
+                    let fut = err::<ServiceResponse<B>, _>(
+                        ErrorUnauthorized("No Authorization Header").into(),
                     );
-                    req.headers_mut().insert(
-                        HeaderName::from_static(GameHeader::EMAIL),
-                        HeaderValue::from_str(sub).unwrap(),
-                    );
-                } else {
-                    log_thread_info!("auth_mw", "rejected call: {:#?}", req.request());
-                    let fut = err(ErrorUnauthorized("Unauthorized"));
                     return Box::pin(fut);
                 }
+
+                let claims = claims.unwrap();
+
+                request_context.set_claims(&claims);
+                req.extensions_mut().insert(request_context);
             }
             None => {
                 let fut = err::<ServiceResponse<B>, _>(
@@ -104,7 +123,6 @@ where
                 return Box::pin(fut);
             }
         }
-
         let fut = self.service.call(req);
         Box::pin(fut)
     }

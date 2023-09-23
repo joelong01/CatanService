@@ -11,16 +11,24 @@ mod test;
 mod user_service;
 
 use actix_web::{web, HttpResponse, HttpServer, Scope};
+
+use cosmos_db::cosmosdb::COLLECTION_NAME_VALUES;
 use games_service::actions::action_handlers;
 use games_service::long_poller::long_poller_handler::long_poll_handler;
+use shared::shared_models::ServiceResponse;
+
+use std::env;
 use std::net::ToSocketAddrs;
 
+use crate::azure_setup::azure_wrapper::verify_or_create_account;
+use crate::azure_setup::azure_wrapper::verify_or_create_collection;
+use crate::azure_setup::azure_wrapper::verify_or_create_database;
 use crate::games_service::lobby::lobby_handlers;
 use games_service::game_handlers;
 use lazy_static::lazy_static;
 use log::{error, LevelFilter};
 use middleware::authn_mw::AuthenticationMiddlewareFactory;
-use middleware::environment_mw::CATAN_ENV;
+use middleware::service_config::SERVICE_CONFIG;
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
 use std::sync::atomic::{AtomicBool, Ordering};
 use user_service::user_handlers;
@@ -54,32 +62,75 @@ fn get_host_ip_and_port() -> (String, String) {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     // Access CATAN_SECRETS to force initialization and potentially panic.
-    print!("env_logger set with {:#?}\n", CATAN_ENV.rust_log);
-    print!("ssl key file {:#?}\n", CATAN_ENV.ssl_key_location);
-    print!("ssl cert file {:#?}\n", CATAN_ENV.ssl_cert_location);
+    print!("env_logger set with {:#?}\n", SERVICE_CONFIG.rust_log);
+    print!("ssl key file {:#?}\n", SERVICE_CONFIG.ssl_key_location);
+    print!("ssl cert file {:#?}\n", SERVICE_CONFIG.ssl_cert_location);
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    let args: Vec<String> = env::args().collect();
 
-   let (ip_address, port) = get_host_ip_and_port();
-    
+    if args.len() > 1 && args[1] == "--setup" {
+        setup_cosmos().expect("Setup failed and the app cannot continue.");
+    }
+
+    let (ip_address, port) = get_host_ip_and_port();
+
     println!("Binding to IP: {}:{}", ip_address, port);
 
     //
     //  SSL support
     let mut builder = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
     builder
-        .set_private_key_file(CATAN_ENV.ssl_key_location.to_owned(), SslFiletype::PEM)
+        .set_private_key_file(SERVICE_CONFIG.ssl_key_location.to_owned(), SslFiletype::PEM)
         .unwrap();
     builder
-        .set_certificate_chain_file(CATAN_ENV.ssl_cert_location.to_owned())
+        .set_certificate_chain_file(SERVICE_CONFIG.ssl_cert_location.to_owned())
         .unwrap();
 
     //
     // set up the HttpServer - pass in the broker service as part of App data
     // we use the create_app! macro so that we always create the same shape of app in our tests
-    HttpServer::new(move || create_app!())
+    HttpServer::new(move || create_service!())
         .bind_openssl(format!("{}:{}", ip_address, port), builder)?
         .run()
         .await
+}
+
+fn setup_cosmos() -> Result<(), ServiceResponse> {
+    verify_or_create_account(
+        &SERVICE_CONFIG.resource_group,
+        &SERVICE_CONFIG.cosmos_account,
+        &SERVICE_CONFIG.azure_location,
+    )?;
+
+    verify_or_create_database(
+        &SERVICE_CONFIG.cosmos_account,
+        &SERVICE_CONFIG.cosmos_database_name,
+        &SERVICE_CONFIG.resource_group,
+    )?;
+    let test_db_name = SERVICE_CONFIG.cosmos_database_name.to_string() + "-test";
+    verify_or_create_database(
+        &SERVICE_CONFIG.cosmos_account,
+        &test_db_name,
+        &SERVICE_CONFIG.resource_group,
+    )?;
+
+    for collection in COLLECTION_NAME_VALUES.iter() {
+        verify_or_create_collection(
+            &SERVICE_CONFIG.cosmos_account,
+            &SERVICE_CONFIG.cosmos_database_name,
+            collection.value,
+            &SERVICE_CONFIG.resource_group,
+        )?;
+
+        let test_name = format!("{}-test", collection.value);
+        verify_or_create_collection(
+            &SERVICE_CONFIG.cosmos_account,
+            &test_db_name,
+            &test_name,
+            &SERVICE_CONFIG.resource_group,
+        )?;
+    }
+    Ok(())
 }
 
 /**
@@ -112,7 +163,7 @@ async fn get_version() -> HttpResponse {
  *
  * - Test Setup:
  *   - A special endpoint used only for testing purposes to set up test data.
- *   - URL: `https://localhost:8080/api/v1/test/setup`
+ *   - URL: `https://localhost:8080/api/v1/test/verify-service`
  *   - Method: `POST`
  */
 fn create_unauthenticated_service() -> Scope {
@@ -124,9 +175,12 @@ fn create_unauthenticated_service() -> Scope {
                 web::post().to(user_handlers::register_handler),
             )
             .route("/users/login", web::post().to(user_handlers::login_handler))
-            .route("/test/setup", web::post().to(user_handlers::setup_handler)) /* TEST ONLY */
             .route(
-                "/users/validate_email/{token}",
+                "/test/verify-service",
+                web::post().to(user_handlers::verify_handler),
+            ) /* TEST ONLY */
+            .route(
+                "/users/validate-email/{token}",
                 web::get().to(user_handlers::validate_email),
             ),
     )
@@ -154,15 +208,55 @@ fn create_unauthenticated_service() -> Scope {
 fn user_service() -> Scope {
     web::scope("/users")
         .route("", web::get().to(user_handlers::list_users_handler))
+        .route(
+            "/local",
+            web::post().to(user_handlers::create_local_user_handler),
+        )
+        .route(
+            "/local/{id}",
+            web::get().to(user_handlers::get_local_users_handler),
+        )
+        .route(
+            "/local/{id}",
+            web::delete().to(user_handlers::delete_local_user_handler),
+        )
+        .route(
+            "/local",
+            web::put().to(user_handlers::update_local_user_handler),
+        )
         .route("/{id}", web::delete().to(user_handlers::delete_handler))
         .route(
             "/{id}",
             web::get().to(user_handlers::find_user_by_id_handler),
         )
-        .route("/phone/validate/{code}", web::post().to(user_handlers::validate_phone_handler))
-        .route("/phone/send_code", web::post().to(user_handlers::send_phone_code_handler))
+        .route(
+            "/{id}",
+            web::put().to(user_handlers::update_profile_handler),
+        )
+        .route(
+            "/phone/validate/{code}",
+            web::post().to(user_handlers::validate_phone_handler),
+        )
+        .route(
+            "/phone/send-code",
+            web::post().to(user_handlers::send_phone_code_handler),
+        )
+        .route(
+            "/email/send-validation-email",
+            web::post().to(user_handlers::send_validation_email),
+        )
+        .route(
+            "/register-test-user",
+            web::post().to(user_handlers::register_test_user_handler),
+        )
+        .route(
+            "/rotate-login-keys",
+            web::post().to(user_handlers::rotate_login_keys_handler),
+        )
 }
+// fn local_user_service() -> Scope {
 
+// }
 /**
  * Creates a set of lobby-related services under the "/lobby" path.
  * These endpoints allow for handling lobby operations within the game, such as inviting and joining games.
@@ -238,7 +332,10 @@ fn longpoll_service() -> Scope {
 }
 
 fn profile_service() -> Scope {
-    web::scope("profile").route("", web::get().to(user_handlers::get_profile_handler))
+    web::scope("profile").route(
+        "/{email}",
+        web::get().to(user_handlers::get_profile_handler),
+    )
 }
 
 lazy_static! {
@@ -281,21 +378,21 @@ pub async fn init_env_logger(min_level: LevelFilter, cosmos_log_level: LevelFilt
 #[cfg(test)]
 mod tests {
     use crate::{
-        create_test_service,
-        setup_test,
+        create_service, create_test_service,
         games_service::game_container::game_messages::GameHeader,
         init_env_logger,
-        middleware::environment_mw::{TestContext, RequestContext, CATAN_ENV},
-     
-        shared::models::{ClientUser, ServiceResponse, UserProfile}, user_service::users::{register, login, setup},
+        middleware::{request_context_mw::TestContext, service_config::SERVICE_CONFIG},
+        setup_cosmos, setup_test,
+        test::{
+            test_helpers::test::{delete_all_test_users, register_test_users},
+            test_proxy::TestProxy,
+        },
     };
 
-    use actix_web::{http::header, test};
-
-    use log::trace;
+    use actix_web::test;
     use reqwest::StatusCode;
 
-    #[actix_rt::test]
+    #[tokio::test]
     async fn test_version_and_log_intialized() {
         init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Error).await;
         init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Error).await;
@@ -310,118 +407,43 @@ mod tests {
         assert_eq!(body, "version 1.0");
     }
 
-    #[actix_rt::test]
+    #[tokio::test]
     async fn create_user_login_check_profile() {
-        let mut app = create_test_service!();
+        init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
+
+        let app = create_test_service!();
         setup_test!(&app, false);
+        let use_cosmos = true;
+        let mut proxy = TestProxy::new(&app, Some(TestContext::new(use_cosmos, None)));
 
-        const USER_1_PASSWORD: &'static str = "password";
+        let test_users = register_test_users(&mut proxy, None).await;
+        let service_response = proxy
+            .login(
+                &test_users[0].clone().pii.expect("pii should exist").email,
+                "password",
+            )
+            .await;
+        assert!(service_response.status.is_success());
 
-        // 1. Register the user
-        let mut user1_profile = UserProfile {
-            email: "testuser@example.com".into(),
-            first_name: "Test".into(),
-            last_name: "User".into(),
-            display_name: "TestUser".into(),
-            phone_number: crate::middleware::environment_mw::CATAN_ENV
-                .test_phone_number
-                .to_owned(),
-            picture_url: "https://example.com/photo.jpg".into(),
-            foreground_color: "#000000".into(),
-            background_color: "#FFFFFF".into(),
-            text_color: "#000000".into(),
-            games_played: Some(10),
-            games_won: Some(1),
-        };
-        let req = test::TestRequest::post()
-            .uri("/api/v1/users/register")
-            .append_header((header::CONTENT_TYPE, "application/json"))
-            .append_header((GameHeader::TEST, TestContext::as_json(false)))
-            .append_header((GameHeader::PASSWORD, USER_1_PASSWORD))
-            .set_json(&user1_profile)
-            .to_request();
+        let auth_token = service_response
+            .get_token()
+            .expect("auth token should exist");
+        proxy.set_auth_token(&Some(auth_token));
+        let service_response = proxy.get_profile("Self").await;
+        let profile = service_response.to_profile().expect("profile should exist");
+        let first = test_users
+            .first()
+            .and_then(|user| user.pii.as_ref())
+            .unwrap();
 
-        let response = test::call_service(&mut app, req).await;
-        let status = response.status();
-        let body = test::read_body(response).await;
-        if !status.is_success() {
-            trace!("user_1 already registered");
-            assert_eq!(status, 409);
-            let resp: ServiceResponse =
-                serde_json::from_slice(&body).expect("failed to deserialize into ServiceResponse");
-            assert_eq!(resp.status, 409);
-        } else {
-            //  we get back a service response with a client user in the body
-
-            let client_user: ClientUser =
-                ServiceResponse::to_client_user(std::str::from_utf8(&body).unwrap())
-                    .expect("Service Response should deserialize")
-                    .1;
-
-            let pretty_json =
-                serde_json::to_string_pretty(&client_user).expect("Failed to pretty-print JSON");
-
-            // Check if the pretty-printed JSON contains any underscores
-            assert!(
-                !pretty_json.contains('_'),
-                "JSON contains an underscore character"
-            );
-
-            trace!("registered client_user: {:#?}", pretty_json);
-        }
-
-        // 2. Login the user
-
-        let req = test::TestRequest::post()
-            .uri("/api/v1/users/login")
-            .append_header((GameHeader::TEST, TestContext::as_json(false)))
-            .append_header((GameHeader::PASSWORD, USER_1_PASSWORD))
-            .append_header((GameHeader::EMAIL, user1_profile.email.clone()))
-            .to_request();
-
-        let resp = test::call_service(&mut app, req).await;
-        assert!(resp.status().is_success());
-
-        let body = test::read_body(resp).await;
-        let auth_token = ServiceResponse::json_to_token(std::str::from_utf8(&body).unwrap())
-            .expect("should be jwt")
-            .1;
-
-        assert!(auth_token.len() > 10, "auth token appears invalid");
-
-        // 4. Get profile
-        let req = test::TestRequest::get()
-            .uri("/auth/api/v1/profile")
-            .append_header((header::CONTENT_TYPE, "application/json"))
-            .append_header((GameHeader::TEST, TestContext::as_json(false)))
-            .append_header(("Authorization", auth_token))
-            .to_request();
-
-        let resp = test::call_service(&mut app, req).await;
-        assert_eq!(resp.status(), 200);
-        let body = test::read_body(resp).await;
-        //
-        //  we get a service response where the body is a ClientUser
-        let profile_from_service =
-            ServiceResponse::to_client_user(std::str::from_utf8(&body).unwrap())
-                .expect("Service Response should deserialize")
-                .1;
-
-        user1_profile.games_played = Some(0);
-        user1_profile.games_won = Some(0); // service sets this when regisering.
-        assert!(
-            profile_from_service
-                .user_profile
-                .is_equal_byval(&user1_profile),
-            "profile returned by service different than the one sent in"
-        );
+        assert_eq!(&profile.pii.as_ref().unwrap().email, first.email.as_str());
     }
-    #[actix_rt::test]
+    #[tokio::test]
     async fn test_setup_no_test_header() {
         let mut app = create_test_service!();
 
         let request = test::TestRequest::post()
-            .uri("/api/v1/test/setup")
+            .uri("/api/v1/test/verify-service")
             .to_request();
 
         let response = test::call_service(&mut app, request).await;
@@ -429,7 +451,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 
-    #[actix_rt::test]
+    #[tokio::test]
     pub async fn find_or_create_test_db() {
         let app = create_test_service!();
         setup_test!(&app, false);
@@ -437,50 +459,104 @@ mod tests {
 
     #[tokio::test]
 
-    async fn test_validate_phone() {
+    async fn test_validate_phone_and_email() {
         init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
-        let mut app = create_test_service!();
-        setup_test!(&app, false);
+        let app = create_test_service!();
+        let code = 569342;
+        let mut proxy = TestProxy::new(&app, Some(TestContext::new(true, Some(code))));
+        let admin_auth_token = delete_all_test_users(&mut proxy).await;
+        let users = register_test_users(&mut proxy, Some(admin_auth_token)).await;
 
-        let request_context = RequestContext::test_default(false);
-        let mut profile = UserProfile::new_test_user();
-        profile.phone_number = CATAN_ENV.test_phone_number.clone();
-        // setup
-        let _response = setup(&request_context).await;
+        let mut profile = users[0].clone();
+        assert!(profile.pii.is_some());
+        assert!(profile.user_id.is_some());
 
-        let sr = register("password", &profile, &request_context)
+        // login as the first test user
+
+        let auth_token = proxy
+            .login(&profile.pii.as_ref().unwrap().email, "password")
             .await
-            .expect("this should work");
-        let _client_user = sr.get_client_user().expect("This should be a client user");
+            .get_token()
+            .expect("login should work and it should return the token");
 
-        let response = login(&profile.email, "password", &request_context)
+        assert!(auth_token.len() > 0);
+        proxy.set_auth_token(&Some(auth_token));
+        //
+        //  set the phone number and email
+        profile.pii.as_mut().unwrap().phone_number = SERVICE_CONFIG.test_phone_number.clone();
+        profile.pii.as_mut().unwrap().email = SERVICE_CONFIG.test_email.clone();
+        // update the profile
+        let service_response = proxy.update_profile(&profile).await;
+        assert!(service_response.status.is_success());
+
+        //
+        // we've change the email, which is encoded in the token and used as truth by the service -
+        // so login again and get a new token
+        let auth_token = proxy
+            .login(&profile.pii.as_ref().unwrap().email, "password")
             .await
-            .expect("login should succeed");
+            .get_token()
+            .expect("login should work and it should return the token");
+        assert!(auth_token.len() > 0);
+        proxy.set_auth_token(&Some(auth_token));
 
-        let auth_token = response.get_token().expect("an auth token!");
+        // lookup profile
 
-        let req = test::TestRequest::post()
-            .uri("/auth/api/v1/users/phone/send_code")
-            .append_header((header::CONTENT_TYPE, "application/json"))
-            .append_header((GameHeader::TEST, TestContext::as_json(false)))
-            .append_header(("Authorization", auth_token.clone()))
-            .to_request();
+        let new_profile = proxy
+            .get_profile("Self")
+            .await
+            .to_profile()
+            .expect("should get a profile back from get_profile for an account that can login");
 
-        let response = test::call_service(&mut app, req).await;
-        assert_eq!(response.status(), 200);
+        // they better be the same!
+        assert!(new_profile.is_equal_by_val(&profile));
 
-        let body = test::read_body(response).await;
-        let phone_code = ServiceResponse::json_to_token(std::str::from_utf8(&body).unwrap())
-            .expect("should be jwt")
-            .1;
+        // send the phone code.  somebody is going to get a text...
+        // the actual code is defined above and set in the test context, so that we can verify it
+        let service_response = proxy.send_phone_code().await;
+        assert!(service_response.status.is_success());
 
-        let req = test::TestRequest::post()
-            .uri(&format!("/auth/api/v1/users/phone/validate/{}", phone_code))
-            .append_header((header::CONTENT_TYPE, "application/json"))
-            .append_header((GameHeader::TEST, TestContext::as_json(false)))
-            .append_header(("Authorization", auth_token))
-            .to_request();
-        let response = test::call_service(&mut app, req).await;
-        assert_eq!(response.status(), 200);
+        //
+        //  validate with the phone
+        let service_response = proxy.validate_phone_code(code).await;
+        assert!(service_response.status.is_success());
+
+        //
+        // send validation email
+        let service_response = proxy.send_validation_email().await;
+        assert!(service_response.status.is_success());
+        let url_str = service_response
+            .get_url()
+            .expect("should be the validation url");
+        //
+        //  now we have to get the claim from the URL so we can pass it to the proxy
+        let parts: Vec<&str> = url_str.rsplitn(2, '/').collect();
+        assert_eq!(parts.len(), 2);
+        let encoded_token = parts[0].clone();
+
+        // validate with the token
+        proxy.set_auth_token(&None);
+        let service_response = proxy.validate_email(encoded_token).await;
+        assert!(service_response.status.is_success());
+
+        // get the profile
+
+        let service_response = proxy.get_profile("Self").await;
+        assert!(service_response.status.is_success());
+        let profile = service_response
+            .to_profile()
+            .expect("you should be able to get your own profile.");
+        assert!(profile.validated_email);
+        assert!(profile.validated_phone);
+        //
+        // delete the users to put us back to a known state.  this is particularly important because we modified one
+        // of the users and the tests can check the input vs. output of the user profile and the profile in the db will
+        // be different than the profile in the .json that is used to add test users and tests will assert.
+        delete_all_test_users(&mut proxy).await;
+    }
+    #[tokio::test]
+    async fn test_setup() {
+        init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Trace).await;
+        setup_cosmos().expect("can't continue if setup fails!");
     }
 }

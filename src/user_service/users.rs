@@ -1,41 +1,37 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
+#![allow(unused_imports)]
 
-use rand::{Rng, RngCore};
-use std::sync::atomic::{AtomicBool, Ordering};
+use bcrypt::{hash, verify};
+use rand::Rng;
 use url::form_urlencoded;
 
 use crate::azure_setup::azure_wrapper::{
-    cosmos_account_exists, cosmos_collection_exists, cosmos_database_exists, send_email,
-    send_text_message,
+    cosmos_account_exists, cosmos_collection_exists, cosmos_database_exists, key_vault_get_secret,
+    key_vault_save_secret, keyvault_exists, send_email, send_text_message, verify_login_or_panic,
 };
+use crate::middleware::security_context::{KeyKind, SecurityContext};
+use crate::middleware::service_config::SERVICE_CONFIG;
+use crate::shared::service_models::{Claims, PersistUser, Role};
+use crate::user_service::user_handlers::find_user_by_id_handler;
 /**
  * this module implements the WebApi to create the database/collection, list all the users, and to create/find/delete
  * a User document in CosmosDb
  */
-use crate::cosmos_db::cosmosdb::UserDb;
-use crate::cosmos_db::mocked_db::TestDb;
-use crate::{full_info, trace_function};
+use crate::{
+    bad_request_from_string, new_not_found_error, new_ok_response, new_unauthorized_response,
+    new_unexpected_server_error, trace_function, unexpected_server_error_from_string,
+};
 
 use crate::games_service::long_poller::long_poller::LongPoller;
 
-use crate::middleware::environment_mw::{RequestContext, TestContext, CATAN_ENV};
-use crate::shared::models::{
-    Claims, ClientUser, GameError, PersistUser, ResponseType, ServiceResponse, UserProfile,
+use crate::middleware::request_context_mw::RequestContext;
+use crate::shared::shared_models::{
+    GameError, ResponseType, ServiceResponse, UserProfile, UserType,
 };
 
-use bcrypt::{hash, verify};
-use jsonwebtoken::{
-    decode, encode, Algorithm, DecodingKey, EncodingKey, Header, TokenData, Validation,
-};
-use lazy_static::lazy_static;
 use reqwest::StatusCode;
-use tokio::sync::Mutex;
 
-lazy_static! {
-    static ref DB_SETUP: AtomicBool = AtomicBool::new(false);
-    static ref SETUP_LOCK: Mutex<()> = Mutex::new(());
-}
 /**
  * this sets up CosmosDb to make the sample run. the only prereq is the secrets set in
  * .devconainter/required-secrets.json, this API will call setupdb. this just calls the setupdb api and deals with errors
@@ -44,116 +40,136 @@ lazy_static! {
  * the users database will be created out of band and this path is just for test users.
  */
 
-pub async fn setup(context: &RequestContext) -> Result<ServiceResponse, ServiceResponse> {
+pub async fn verify_cosmosdb(context: &RequestContext) -> Result<ServiceResponse, ServiceResponse> {
     trace_function!("setup");
     let use_cosmos_db = match &context.test_context {
         Some(tc) => tc.use_cosmos_db,
         None => {
-            return Err(ServiceResponse::new(
-                "Test Header must be set",
-                StatusCode::UNAUTHORIZED,
-                ResponseType::NoData,
-                GameError::HttpError,
-            ))
+            return new_unauthorized_response!("Test Header must be set");
         }
     };
 
     if use_cosmos_db {
-        if cosmos_account_exists(&context.env.cosmos_account, &context.env.resource_group).is_err()
+        if cosmos_account_exists(
+            &context.config.cosmos_account,
+            &context.config.resource_group,
+        )
+        .is_err()
         {
             return Err(ServiceResponse::new(
-                &format!("account {} does not exist", context.env.cosmos_account),
+                &format!("account {} does not exist", context.config.cosmos_account),
                 StatusCode::NOT_FOUND,
                 ResponseType::NoData,
-                GameError::HttpError,
+                GameError::HttpError(StatusCode::NOT_FOUND),
             ));
         }
 
         if cosmos_database_exists(
-            &context.env.cosmos_account,
-            &context.env.cosmos_database,
-            &context.env.resource_group,
+            &context.config.cosmos_account,
+            &context.config.cosmos_database_name,
+            &context.config.resource_group,
         )
         .is_err()
         {
             return Err(ServiceResponse::new(
                 &format!(
                     "account {} does exists, but database {} does not",
-                    context.env.cosmos_account, context.env.cosmos_database
+                    context.config.cosmos_account, context.config.cosmos_database_name
                 ),
                 StatusCode::NOT_FOUND,
                 ResponseType::NoData,
-                GameError::HttpError,
+                GameError::HttpError(StatusCode::NOT_FOUND),
             ));
         }
-        for collection in &context.env.cosmos_collections {
+
+        for collection in &context.database.get_collection_names(context.is_test()) {
             let collection_exists = cosmos_collection_exists(
-                &context.env.cosmos_account,
-                &context.env.cosmos_database,
+                &context.config.cosmos_account,
+                &context.config.cosmos_database_name,
                 &collection,
-                &context.env.resource_group,
+                &context.config.resource_group,
             );
 
             if collection_exists.is_err() {
                 let error_message = format!(
                     "account {} exists, database {} exists, but {} does not",
-                    context.env.cosmos_account, context.env.cosmos_database, collection
+                    context.config.cosmos_account, context.config.cosmos_database_name, collection
                 );
 
                 return Err(ServiceResponse::new(
                     &error_message,
                     StatusCode::NOT_FOUND,
                     ResponseType::NoData,
-                    GameError::HttpError,
+                    GameError::HttpError(StatusCode::NOT_FOUND),
                 ));
             }
         }
+    }
+    Ok(ServiceResponse::new(
+        "already exists",
+        StatusCode::ACCEPTED,
+        ResponseType::NoData,
+        GameError::NoError(String::default()),
+    ))
+}
 
-        return Ok(ServiceResponse::new(
-            "already exists",
-            StatusCode::ACCEPTED,
+async fn internal_register_user(
+    password: &str,
+    profile_in: &UserProfile,
+    roles: &mut Vec<Role>,
+    request_context: &RequestContext,
+) -> Result<ServiceResponse, ServiceResponse> {
+    let email = match &profile_in.pii {
+        Some(pii) => pii.email.clone(),
+        None => return Err(bad_request_from_string!("no email specified")),
+    };
+
+    if request_context
+        .database
+        .find_user_by_email(&email)
+        .await
+        .is_ok()
+    // you can't register twice!
+    {
+        return Err(ServiceResponse::new(
+            "User already exists",
+            StatusCode::CONFLICT,
             ResponseType::NoData,
-            GameError::NoError,
+            GameError::HttpError(StatusCode::CONFLICT),
         ));
     }
-
-    if DB_SETUP.load(Ordering::Relaxed) {
-        return Ok(ServiceResponse::new(
-            "already exists",
-            StatusCode::ACCEPTED,
-            ResponseType::NoData,
-            GameError::NoError,
-        ));
+    // this lets us bootstrap the system -- my assumption is that if you can set the environment variable, then you are
+    // an admin.  You can have a test context so that you can create the admin in the mock database.
+    if email == request_context.config.admin_email {
+        roles.push(Role::Admin);
     }
 
-    let _lock_guard = SETUP_LOCK.lock().await;
-
-    if DB_SETUP.load(Ordering::Relaxed) {
-        return Ok(ServiceResponse::new(
-            "already exists",
-            StatusCode::ACCEPTED,
-            ResponseType::NoData,
-            GameError::NoError,
-        ));
-    }
-
-    match TestDb::setupdb().await {
-        Ok(..) => {
-            DB_SETUP.store(true, Ordering::Relaxed);
-            return Ok(ServiceResponse::new(
-                "created",
-                StatusCode::CREATED,
-                ResponseType::NoData,
-                GameError::NoError,
+    // Hash the password
+    let password_hash = match hash(&password, bcrypt::DEFAULT_COST) {
+        Ok(hp) => hp,
+        Err(e) => {
+            let err_message = format!("{:#?}", e);
+            return Err(ServiceResponse::new(
+                "Error Hashing Password",
+                StatusCode::INTERNAL_SERVER_ERROR,
+                ResponseType::ErrorInfo(err_message.to_owned()),
+                GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
             ));
         }
-        Err(e) => Err(ServiceResponse::new(
-            "Bad Request",
-            StatusCode::BAD_REQUEST,
-            ResponseType::ErrorInfo(format!("{:#?}", e)),
-            GameError::HttpError,
-        )),
-    }
+    };
+
+    // Create the user record
+    let mut persist_user = PersistUser::from_user_profile(&profile_in, password_hash.to_owned());
+    // put the generated id into th user profile as well so that the client will see it
+    persist_user.user_profile.user_id = Some(persist_user.id.clone());
+    // ignore the game stats passed in by the client and create a new one
+    persist_user.user_profile.games_played = Some(0);
+    persist_user.user_profile.games_won = Some(0);
+    persist_user.roles = roles.clone();
+    request_context
+        .database
+        .update_or_create_user(&persist_user)
+        .await
 }
 
 /// Registers a new user by hashing the provided password and creating a `PersistUser` record in the database.
@@ -173,75 +189,51 @@ pub async fn register(
     profile_in: &UserProfile,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    if internal_find_user("Email", &profile_in.email, request_context)
-        .await
-        .is_ok()
-    {
-        return Err(ServiceResponse::new(
-            "User already exists",
-            StatusCode::CONFLICT,
-            ResponseType::NoData,
-            GameError::HttpError,
-        ));
+    if request_context.is_test() {
+        return new_unauthorized_response!(
+            "can't create a test user through this api.  use register-test-user"
+        );
     }
-
-    // Hash the password
-    let password_hash = match hash(&password, bcrypt::DEFAULT_COST) {
-        Ok(hp) => hp,
-        Err(e) => {
-            let err_message = format!("{:#?}", e);
-            return Err(ServiceResponse::new(
-                "Error Hashing Password",
-                StatusCode::INTERNAL_SERVER_ERROR,
-                ResponseType::ErrorInfo(err_message.to_owned()),
-                GameError::HttpError,
-            ));
-        }
-    };
-
-    // Create the user record
-    let mut persist_user = PersistUser::from_user_profile(&profile_in, password_hash.to_owned());
-
-    // ignore the game stats passed in by the client and create a new one
-    persist_user.user_profile.games_played = Some(0);
-    persist_user.user_profile.games_won = Some(0);
-    internal_update_user(&persist_user, &request_context).await
+    internal_register_user(password, profile_in, &mut vec![Role::User], request_context).await
 }
 
-async fn internal_update_user(
-    persist_user: &PersistUser,
+pub async fn update_profile(
+    profile_in: &UserProfile,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    // Create the database connection
-    if request_context.use_cosmos_db() {
-        let userdb = UserDb::new(&request_context).await;
+    let claims = request_context.claims.as_ref().unwrap();
 
-        // Save the user record to the database
-        match userdb.update_or_create_user(persist_user.clone()).await {
-            Ok(..) => Ok(ServiceResponse::new(
-                "created",
-                StatusCode::CREATED,
-                ResponseType::ClientUser(ClientUser::from_persist_user(persist_user)),
-                GameError::NoError,
-            )),
-            Err(e) => {
-                return Err(ServiceResponse::new(
-                    "Bad Request",
-                    StatusCode::BAD_REQUEST,
-                    ResponseType::ErrorInfo(format!("{:#?}", e)),
-                    GameError::HttpError,
-                ))
-            }
-        }
-    } else {
-        TestDb::update_or_create_user(&persist_user).await.unwrap();
-        Ok(ServiceResponse::new(
-            "created",
-            StatusCode::CREATED,
-            ResponseType::ClientUser(ClientUser::from_persist_user(persist_user)),
-            GameError::NoError,
-        ))
+    let mut persist_user = request_context.database.find_user_by_id(&claims.id).await?;
+    persist_user.update_profile(&profile_in);
+
+    request_context
+        .database
+        .update_or_create_user(&persist_user)
+        .await
+}
+
+///
+/// the big difference between register_user and register_test_user is that the latter is authenticated and only
+/// somebody in the admin group can add a test user.
+pub async fn register_test_user(
+    password: &str,
+    profile_in: &UserProfile,
+    request_context: &RequestContext,
+) -> Result<ServiceResponse, ServiceResponse> {
+    if !request_context.is_caller_in_role(Role::Admin) {
+        return new_unauthorized_response!("");
     }
+
+    let mut profile = profile_in.clone();
+    profile.display_name = format!("{}: [Test]", profile.display_name);
+
+    internal_register_user(
+        password,
+        &profile,
+        &mut vec![Role::User, Role::TestUser],
+        request_context,
+    )
+    .await
 }
 
 /**
@@ -257,7 +249,11 @@ pub async fn login(
     password: &str,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    let user = internal_find_user("Email", username, request_context).await?;
+    let user = request_context
+        .database
+        .find_user_by_email(username)
+        .await?;
+
     let password_hash: String = match user.password_hash {
         Some(p) => p,
         None => {
@@ -265,7 +261,7 @@ pub async fn login(
                 "user document does not contain a password hash",
                 StatusCode::INTERNAL_SERVER_ERROR,
                 ResponseType::NoData,
-                GameError::HttpError,
+                GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
             ));
         }
     };
@@ -277,7 +273,7 @@ pub async fn login(
                 &format!("Error from bcrypt library: {:#?}", e),
                 StatusCode::INTERNAL_SERVER_ERROR,
                 ResponseType::NoData,
-                GameError::HttpError,
+                GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
             ));
         }
     };
@@ -285,11 +281,15 @@ pub async fn login(
     if is_password_match {
         let claims = Claims::new(
             &user.id,
-            &user.user_profile.email,
+            username,
             24 * 60 * 60,
+            &user.roles,
             &request_context.test_context,
         );
-        let token_result = create_jwt_token(&claims, &request_context.env.login_secret_key);
+        let token_result = request_context
+            .security_context
+            .login_keys
+            .sign_claims(&claims);
         match token_result {
             Ok(token) => {
                 let _ = LongPoller::add_user(&user.id, &user.user_profile).await;
@@ -297,7 +297,7 @@ pub async fn login(
                     "",
                     StatusCode::OK,
                     ResponseType::Token(token),
-                    GameError::NoError,
+                    GameError::NoError("ok".to_owned()),
                 ))
             }
             Err(e) => {
@@ -305,53 +305,12 @@ pub async fn login(
                     "Error Hashing token",
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ResponseType::ErrorInfo(format!("{:#?}", e)),
-                    GameError::HttpError,
+                    GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
                 ));
             }
         }
     } else {
-        return Err(ServiceResponse::new(
-            "invalid password",
-            StatusCode::UNAUTHORIZED,
-            ResponseType::NoData,
-            GameError::HttpError,
-        ));
-    }
-}
-
-pub fn generate_jwt_key() -> String {
-    let mut key = [0u8; 96]; // 96 bytes * 8 bits/byte = 768 bits.
-    rand::thread_rng().fill_bytes(&mut key);
-    openssl::base64::encode_block(&key)
-}
-
-pub fn create_jwt_token(
-    claims: &Claims,
-    secret_key: &str,
-) -> Result<String, Box<dyn std::error::Error>> {
-    let token_result = encode(
-        &Header::new(Algorithm::HS512),
-        &claims,
-        &EncodingKey::from_secret(secret_key.as_ref()),
-    );
-
-    token_result.map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
-}
-pub fn validate_jwt_token(token: &str, secret_key: &str) -> Option<TokenData<Claims>> {
-    let validation = Validation::new(Algorithm::HS512);
-
-    match decode::<Claims>(
-        &token,
-        &DecodingKey::from_secret(secret_key.as_ref()),
-        &validation,
-    ) {
-        Ok(c) => {
-            Some(c) // or however you want to handle a valid token
-        }
-        Err(e) => {
-            full_info!("token NOT VALID: {:?}", e);
-            None
-        }
+        return new_unauthorized_response!("");
     }
 }
 
@@ -362,128 +321,137 @@ pub fn validate_jwt_token(token: &str, secret_key: &str) -> Option<TokenData<Cla
 pub async fn list_users(
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    if request_context.use_cosmos_db() {
-        let userdb = UserDb::new(&request_context).await;
+    // Get list of users
+    match request_context.database.list().await {
+        Ok(users) => {
+            let user_profiles: Vec<UserProfile> = users
+                .iter()
+                .map(|user| UserProfile::from_persist_user(&user))
+                .collect();
 
-        // Get list of users
-        match userdb.list().await {
-            Ok(users) => {
-                let client_users: Vec<ClientUser> = users
-                    .iter()
-                    .map(|user| ClientUser::from_persist_user(&user))
-                    .collect();
-
-                Ok(ServiceResponse::new(
-                    "",
-                    StatusCode::OK,
-                    ResponseType::ClientUsers(client_users),
-                    GameError::NoError,
-                ))
-            }
-            Err(err) => {
-                return Err(ServiceResponse::new(
-                    "",
-                    StatusCode::NOT_FOUND,
-                    ResponseType::ErrorInfo(format!("Failed to retrieve user list: {}", err)),
-                    GameError::HttpError,
-                ));
-            }
+            Ok(ServiceResponse::new(
+                "",
+                StatusCode::OK,
+                ResponseType::Profiles(user_profiles),
+                GameError::NoError(String::default()),
+            ))
         }
-    } else {
-        let client_users: Vec<ClientUser> = TestDb::list()
-            .await
-            .unwrap()
-            .iter()
-            .map(|user| ClientUser::from_persist_user(&user))
-            .collect();
-
-        Ok(ServiceResponse::new(
-            "",
-            StatusCode::OK,
-            ResponseType::ClientUsers(client_users),
-            GameError::NoError,
-        ))
+        Err(err) => {
+            return Err(ServiceResponse::new(
+                "",
+                StatusCode::NOT_FOUND,
+                ResponseType::ErrorInfo(format!("Failed to retrieve user list: {}", err)),
+                GameError::HttpError(StatusCode::NOT_FOUND),
+            ));
+        }
     }
 }
+///
+///     1. email should be id or email
+///         - figure out which one it is by context
+///     2. check the claims -- you can always look up your own profile
+///     3. an admin can look up anybody's profile
 pub async fn get_profile(
-    user_id: &str,
+    id_or_email: &str,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    let user = internal_find_user("id", user_id, request_context).await?;
+    let lookup_value: String;
+
+    let user_id = request_context
+        .claims
+        .as_ref()
+        .expect("auth_mw should have added this or rejected the call")
+        .id
+        .clone();
+
+    let user_email = request_context
+        .claims
+        .as_ref()
+        .expect("auth_mw should have added this or rejected the call")
+        .sub
+        .clone();
+
+    //
+    //  so there can be 3 things to lokup by.  if Self, look in the context
+    //  and lookup by that id.  if it has an @ in it, look up by email.
+    //  only an admin can look up somebody else's profile.
+
+    if id_or_email.to_ascii_lowercase() == "self" {
+        lookup_value = user_id.clone().clone();
+    } else {
+        lookup_value = id_or_email.to_string();
+    }
+
+    // lookup value is either id or email...is it different than the one in the context?
+
+    if lookup_value != user_id
+        && lookup_value != user_email
+        && !request_context.is_caller_in_role(Role::Admin)
+    {
+        // if you aren't the admin, you can only look up your own profile
+        return new_unauthorized_response!("");
+    }
+
+    let user_email = request_context
+        .claims
+        .as_ref()
+        .expect("auth_mw should have added this or rejected the call")
+        .sub
+        .clone();
+
+    let user = match lookup_value.contains("@") {
+        true => {
+            request_context
+                .database
+                .find_user_by_email(&lookup_value)
+                .await?
+        }
+        false => {
+            request_context
+                .database
+                .find_user_by_id(&lookup_value)
+                .await?
+        }
+    };
 
     Ok(ServiceResponse::new(
         "",
         StatusCode::OK,
-        ResponseType::ClientUser(ClientUser::from_persist_user(&user)),
-        GameError::NoError,
+        ResponseType::Profile(UserProfile::from_persist_user(&user)),
+        GameError::NoError(String::default()),
     ))
 }
 
-pub async fn find_user_by_id(
+pub async fn delete(
     id: &str,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    get_profile(id, request_context).await
-}
+    let user_id = request_context
+        .claims
+        .as_ref()
+        .expect("auth_mw should have added this or rejected the call")
+        .id
+        .clone();
 
-pub async fn internal_find_user(
-    prop: &str,
-    val: &str,
-    request_context: &RequestContext,
-) -> Result<PersistUser, ServiceResponse> {
-    if request_context.use_mock_db() {
-        if prop == "id" {
-            return TestDb::find_user_by_id(val).await;
-        } else {
-            return TestDb::find_user_by_email(val).await;
-        }
+    if user_id != id && !request_context.is_caller_in_role(Role::Admin) {
+        return new_unauthorized_response!("only an admin can delete another user");
     }
 
-    let userdb = UserDb::new(request_context).await;
-    if prop == "id" {
-        userdb.find_user_by_id(val).await
-    } else {
-        userdb.find_user_by_email(val).await
-    }
-}
+    let result = request_context.database.delete_user(id).await;
 
-pub async fn delete(
-    id_path: &str,
-    id_token: &str,
-    request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
-    //
-    // unwrap is ok here because our middleware put it there.
-
-    if id_path != id_token {
-        return Err(ServiceResponse::new(
-            "you can only delete yourself",
-            StatusCode::UNAUTHORIZED,
-            ResponseType::NoData,
-            GameError::HttpError,
-        ));
-    }
-
-    let result;
-    if request_context.use_cosmos_db() {
-        let userdb = UserDb::new(&request_context).await;
-        result = userdb.delete_user(&id_path).await
-    } else {
-        result = TestDb::delete_user(&id_path).await;
-    }
     match result {
         Ok(..) => Ok(ServiceResponse::new(
-            &format!("deleted user with id: {}", id_path),
+            &format!("deleted user with id: {}", user_id),
             StatusCode::OK,
             ResponseType::NoData,
-            GameError::NoError,
+            GameError::NoError(String::default()),
         )),
         Err(err) => {
             return Err(ServiceResponse::new(
                 "failed to delete user",
                 StatusCode::BAD_REQUEST,
                 ResponseType::NoData,
-                GameError::HttpError,
+                GameError::HttpError(StatusCode::BAD_REQUEST),
             ))
         }
     }
@@ -494,55 +462,63 @@ pub async fn delete(
 /// get the profile
 /// mark the email as validated
 /// save the profile
-pub async fn validate_email(
-    token: &str,
-    request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
+pub async fn validate_email(token: &str) -> Result<ServiceResponse, ServiceResponse> {
     trace_function!("validate_email");
     let decoded_token = form_urlencoded::parse(token.as_bytes())
         .map(|(key, _)| key)
         .collect::<Vec<_>>()
         .join("");
 
-    if let Some(claims) =
-        validate_jwt_token(&decoded_token, &request_context.env.validation_secret_key)
+    let security_context = SecurityContext::cached_secrets();
+    let claims = match security_context
+        .validation_keys
+        .validate_token(&decoded_token)
     {
-        // Extract the id and sub from the claims
-        let id = &claims.claims.id;
-        let email = &claims.claims.sub;
-        //
-        //  we have to embed the TestContext in the claim because we come through a GET from a URL where
-        //  we can't add headers.
-        let mut ctx = request_context.clone();
-        ctx.test_context = claims.claims.test_context;
-        let mut user = internal_find_user("id", &claims.claims.id, &ctx).await?;
-        user.validated_email = true;
-        return internal_update_user(&user, &ctx).await;
-    } else {
-        return Err(ServiceResponse::new(
-            "unauthorized",
-            StatusCode::UNAUTHORIZED,
-            ResponseType::NoData,
-            GameError::HttpError,
-        ));
-    }
+        Some(c) => c,
+        None => return new_unauthorized_response!(""),
+    };
+
+    //  we have to embed the TestContext in the claim because we come through a GET from a URL where
+    //  we can't add headers.
+    let request_context = RequestContext::new(
+        &Some(claims.clone()),
+        &claims.test_context,
+        &SERVICE_CONFIG,
+        &security_context,
+    );
+
+    let id = &claims.id; // Borrowing here.
+    let mut user = request_context.database.find_user_by_id(id).await?;
+
+    user.user_profile.validated_email = true;
+    request_context.database.update_or_create_user(&user).await
 }
+
 //
-//  url is in the form of host://api/v1/users/validate_email/<token>
+//  url is in the form of host://api/v1/users/validate-email/<token>
 pub fn get_validation_url(
     host: &str,
     id: &str,
     email: &str,
-    test_context: &Option<TestContext>,
+    request_context: &RequestContext,
 ) -> String {
-    let claims = Claims::new(id, email, 60 * 10, test_context); // 10 minutes
-    let token = create_jwt_token(&claims, &CATAN_ENV.validation_secret_key)
+    let claims = Claims::new(
+        id,
+        email,
+        60 * 10,
+        &vec![Role::Validation],
+        &request_context.test_context,
+    ); // 10 minutes
+    let token = request_context
+        .security_context
+        .validation_keys
+        .sign_claims(&claims)
         .expect("Token creation should not fail");
 
     let encoded_token = form_urlencoded::byte_serialize(token.as_bytes()).collect::<String>();
 
     format!(
-        "https://{}/api/v1/users/validate_email/{}",
+        "https://{}/api/v1/users/validate-email/{}",
         host, encoded_token
     )
 }
@@ -551,13 +527,15 @@ pub fn get_validation_url(
 /// returns an error or a ServiceResponse that has the validation URL embedded in it.  RegistgerUser should call
 /// this and drop the Ok() response. the Ok() response is useful for the test cases.
 pub fn send_validation_email(
-    host: &str,
-    id: &str,
-    email: &str,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
     trace_function!("send_validation_email");
-    let url = get_validation_url(host, id, email, &request_context.test_context);
+    let host_name = std::env::var("HOST_NAME").expect("HOST_NAME must be set");
+    let claims = request_context
+        .claims
+        .clone()
+        .expect("claims are set by auth middleware, or the call is rejected");
+    let url = get_validation_url(&host_name, &claims.id, &claims.sub, &request_context);
     let msg = format!(
         "Thank you for registering with our Service.\n\n\
          Click on this link to validate your email: {}\n\n\
@@ -565,8 +543,8 @@ pub fn send_validation_email(
         url
     );
     let result = send_email(
-        email,
-        &CATAN_ENV.service_email,
+        &claims.sub,
+        &SERVICE_CONFIG.service_email,
         "Please validate your email",
         &msg,
     );
@@ -575,13 +553,13 @@ pub fn send_validation_email(
             "sent",
             StatusCode::OK,
             ResponseType::Url(url),
-            GameError::NoError,
+            GameError::NoError(String::default()),
         )),
         Err(e) => Err(ServiceResponse::new(
             "Error sending email",
             reqwest::StatusCode::INTERNAL_SERVER_ERROR,
             ResponseType::ErrorInfo(e),
-            GameError::HttpError,
+            GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
         )),
     }
 }
@@ -592,33 +570,55 @@ pub fn send_validation_email(
 /// 4. update the profile
 /// 5. send the text message to the phone
 pub async fn send_phone_code(
-    user_id: &str,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    let mut persist_user = internal_find_user("id", user_id, request_context).await?;
-    let code = rand::thread_rng().gen_range(100_000..=999_999);
+    let user_id = request_context
+        .claims
+        .as_ref()
+        .expect("auth_mw should have added this or rejected the call")
+        .id
+        .clone();
+
+    let random_code: i32 = rand::thread_rng().gen_range(100_000..=999_999);
+
+    let code: i32 = request_context
+        .test_context
+        .as_ref()
+        .and_then(|test_ctx| test_ctx.phone_code.as_ref())
+        .copied()
+        .unwrap_or(random_code);
+
+    let sr = internal_send_phone_code(&user_id, code, request_context).await;
+
+    sr
+}
+///
+/// I have the send_phone_code() and the internal_send_phone_code() so that i can test internal_send_phone_code() in an
+/// automated way (by having the test create the code and pass it in and then pass it to validate_phone())
+async fn internal_send_phone_code(
+    user_id: &str,
+    code: i32,
+    request_context: &RequestContext,
+) -> Result<ServiceResponse, ServiceResponse> {
+    let mut persist_user = request_context.database.find_user_by_id(user_id).await?;
+
+    let phone_number = match &persist_user.user_profile.pii {
+        Some(pii) => pii.phone_number.clone(),
+        None => return Err(bad_request_from_string!("no phone number in profile")),
+    };
+
     persist_user.phone_code = Some(code.to_string());
-    internal_update_user(&persist_user, &request_context).await?;
+    request_context
+        .database
+        .update_or_create_user(&persist_user)
+        .await?;
     let msg = format!(
         "This is your 6 digit code for the Catan Service. \
                    If You did not request this code, ignore this message. \
                    code: {}",
         code
     );
-    match send_text_message(&persist_user.user_profile.phone_number, &msg) {
-        Ok(_) => Ok(ServiceResponse::new(
-            "sent",
-            StatusCode::OK,
-            ResponseType::Token(code.to_string()),
-            GameError::NoError,
-        )),
-        Err(e) => Err(ServiceResponse::new(
-            "Error sending email",
-            reqwest::StatusCode::INTERNAL_SERVER_ERROR,
-            ResponseType::ErrorInfo(e),
-            GameError::HttpError,
-        )),
-    }
+    send_text_message(&phone_number, &msg)
 }
 
 /// Validates a phone code for a given user.
@@ -628,7 +628,7 @@ pub async fn send_phone_code(
 ///
 /// # Arguments
 ///
-/// * `user_id` - The unique identifier for the user.
+
 /// * `code` - The phone code to validate.
 /// * `request_context` - Context related to the current request.
 ///
@@ -637,24 +637,32 @@ pub async fn send_phone_code(
 /// * `Ok(ServiceResponse)` if the phone code is validated successfully.
 /// * `Err(ServiceResponse)` if the code does not match or is missing.
 pub async fn validate_phone(
-    user_id: &str,
     code: &str,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    // Attempt to find the user with the provided ID.
-    let mut persist_user = internal_find_user("id", user_id, request_context).await?;
+    let user_id = request_context
+        .claims
+        .as_ref()
+        .expect("auth_mw should have added this or rejected the call")
+        .id
+        .clone();
+
+    let mut persist_user = request_context.database.find_user_by_id(&user_id).await?;
 
     match &persist_user.phone_code {
         // If the stored code matches the provided code, validate the phone.
         Some(c) if c.to_string() == code => {
-            persist_user.validated_phone = true;
+            persist_user.user_profile.validated_phone = true;
             persist_user.phone_code = None;
-            internal_update_user(&persist_user, request_context).await?;
+            request_context
+                .database
+                .update_or_create_user(&persist_user)
+                .await?;
             Ok(ServiceResponse::new(
                 "validated",
                 StatusCode::OK,
                 ResponseType::NoData,
-                GameError::NoError,
+                GameError::NoError(String::default()),
             ))
         }
         // Handle all other cases (mismatch or missing code) as errors.
@@ -662,115 +670,384 @@ pub async fn validate_phone(
             "incorrect code.  request a new one",
             reqwest::StatusCode::BAD_REQUEST,
             ResponseType::NoData,
-            GameError::HttpError,
+            GameError::HttpError(StatusCode::BAD_REQUEST),
         )),
     }
 }
 
+///
+/// rotates the login keys -- admin only
+///
 
+pub async fn rotate_login_keys(
+    request_context: &RequestContext,
+) -> Result<ServiceResponse, ServiceResponse> {
+    panic!("update this to match the new SecurityContext naming convention");
+    // if !request_context.is_caller_in_role(Role::Admin) {
+    //     return new_unauthorized_response!("");
+    // }
+
+    // let kv_name = request_context.config.kv_name.to_owned();
+    // let old_name = "oldLoginSecret-test";
+    // let new_name = "currentLoginSecret-test";
+
+    // // make sure the user/service is logged in
+    // verify_login_or_panic();
+
+    // // verify KV exists
+    // keyvault_exists(&kv_name).expect(&format!("Failed to find Key Vault named {}.", kv_name));
+
+    // let current_primary_login_key = key_vault_get_secret(&kv_name, KeyKind::PRIMARY_KEY)?;
+
+    // let new_key = SecurityContext::generate_jwt_key();
+
+    // key_vault_save_secret(&kv_name, KeyKind::SECONDARY_KEY, &current_primary_login_key)?;
+    // key_vault_save_secret(&kv_name, KeyKind::PRIMARY_KEY, &new_key)?;
+
+    // return new_ok_response!("");
+}
+
+pub async fn find_user_by_id(
+    id: &str,
+    request_context: &RequestContext,
+) -> Result<ServiceResponse, ServiceResponse> {
+    let persist_user = request_context.database.find_user_by_id(&id).await?;
+
+    Ok(ServiceResponse::new(
+        "",
+        StatusCode::OK,
+        ResponseType::Profile(UserProfile::from_persist_user(&persist_user)),
+        GameError::NoError(String::default()),
+    ))
+}
+
+/// a "local user" is a user that can play in the game, but does not participate in the long polling. instead messages
+/// for a local user are sent to the creator's long poller.  Having local users means that you can have a full game
+/// played from only one computer - i do this with my friends where we project the game onto a give 4k tv and use the
+/// physical games assets (cards, dice, etc.) to play the game.  see http://github.com/joelong01/Catan or
+/// http://github.com/joelong01/CatanTs
+///
+/// local users are linked to ConnectedUsers via the PersisProfile via local_user_owner_id
+/// local users have no PII
+///
+pub async fn create_local_user(
+    profile_in: &UserProfile,
+    request_context: &RequestContext,
+) -> Result<ServiceResponse, ServiceResponse> {
+    let user_id = request_context
+        .claims
+        .as_ref()
+        .expect("auth_mw should have added this or rejected the call")
+        .id
+        .clone();
+    let mut profile = profile_in.clone();
+    profile.pii = None;
+    profile.user_type = UserType::Local;
+    profile.games_played = Some(0);
+    profile.games_won = Some(0);
+    profile.display_name = format!("{} [Local]", profile.display_name);
+    //
+    //  create a hash that is extremely unlikely to be guessed so that the user can't login
+
+    let persist_user = PersistUser::from_local_user(&user_id, &profile);
+
+    request_context
+        .database
+        .update_or_create_user(&persist_user)
+        .await
+}
+
+///
+/// only an admin or the ConnectedUser can update the LocalUser
+pub async fn update_local_user(
+    new_profile: &UserProfile,
+    request_context: &RequestContext,
+) -> Result<ServiceResponse, ServiceResponse> {
+    // Check that PII is not filled in for local users
+    if new_profile.pii.is_some() {
+        return Err(bad_request_from_string!("Local Users have no PII!"));
+    }
+
+    // Check that UserType is 'Local'
+    if new_profile.user_type != UserType::Local {
+        return Err(bad_request_from_string!("UserType must be 'Local'"));
+    }
+
+    // Ensure user_id is set in the profile
+    let local_user_id = new_profile
+        .user_id
+        .as_ref()
+        .ok_or_else(|| bad_request_from_string!("user_id must be set in profile"))?;
+
+    // Get the authenticated user's ID from claims
+    let id_in_claims = request_context
+        .claims
+        .as_ref()
+        .expect("auth_mw should have added this or rejected the call")
+        .id
+        .clone();
+
+    // Find the local user by ID
+    let mut local_user = request_context
+        .database
+        .find_user_by_id(local_user_id)
+        .await?;
+
+    // Ensure the local user is connected to a connected user
+    let connection_id = local_user
+        .connected_user_id
+        .as_ref()
+        .ok_or_else(|| bad_request_from_string!("id does not correspond to a local user"))?
+        .clone();
+
+    // Check if the local user isn't "connected" to the connected caller and the caller isn't an admin
+    if connection_id != id_in_claims && !request_context.is_caller_in_role(Role::Admin) {
+        return new_unauthorized_response!("only an admin can delete another user");
+    }
+
+    // Update the profile
+    local_user.update_profile(new_profile);
+
+    // Save the updated user
+    request_context
+        .database
+        .update_or_create_user(&local_user)
+        .await
+}
+
+///
+/// only an admin or the ConnectedUser can delete the LocalUser
+/// we use the passed in PK of the local user to look up its profile. then we look at the connected_user value and
+/// make sure it is the PK of the signed in user.  if so, it can be deleted.
+///
+pub async fn delete_local_user(
+    local_user_primary_key: &str,
+    request_context: &RequestContext,
+) -> Result<ServiceResponse, ServiceResponse> {
+    let local_user_profile = request_context
+        .database
+        .find_user_by_id(&local_user_primary_key)
+        .await?;
+
+    if local_user_profile.connected_user_id.is_none() {
+        return Err(bad_request_from_string!("invalid local user id"));
+    }
+
+    let id_in_claims = request_context
+        .claims
+        .as_ref()
+        .expect("auth_mw should have added this or rejected the call")
+        .id
+        .clone();
+
+    let connected_id = match local_user_profile.connected_user_id {
+        Some(id) => id,
+        None => {
+            return new_not_found_error!("no connected id");
+        }
+    };
+
+    if id_in_claims == connected_id || request_context.is_caller_in_role(Role::Admin) {
+        request_context
+            .database
+            .delete_user(&local_user_primary_key)
+            .await?;
+        return new_ok_response!("");
+    }
+
+    return new_unauthorized_response!("");
+}
+
+pub async fn get_local_users(
+    connected_user_id: &str,
+    request_context: &RequestContext,
+) -> Result<ServiceResponse, ServiceResponse> {
+    let id_in_claims = request_context
+        .claims
+        .as_ref()
+        .expect("auth_mw should have added this or rejected the call")
+        .id
+        .clone();
+
+    let connected_id = if connected_user_id == "Self" {
+        id_in_claims.clone()
+    } else {
+        connected_user_id.to_string()
+    };
+    if id_in_claims == connected_id || request_context.is_caller_in_role(Role::Admin) {
+        let users = request_context
+            .database
+            .get_connected_users(&connected_id)
+            .await?;
+        let user_profiles: Vec<UserProfile> = users
+            .iter()
+            .map(|user| UserProfile::from_persist_user(&user))
+            .collect();
+        return Ok(ServiceResponse::new(
+            "",
+            StatusCode::OK,
+            ResponseType::Profiles(user_profiles),
+            GameError::NoError(String::default()),
+        ));
+    };
+
+    return new_unauthorized_response!("");
+}
 #[cfg(test)]
 mod tests {
-    use actix_web::test;
+
+    use tracing::info;
 
     use crate::{
-        create_test_service, games_service::game_container::game_messages::GameHeader,
-        init_env_logger, middleware::environment_mw::CATAN_ENV, setup_test,
+        create_test_service, init_env_logger,
+        middleware::request_context_mw::TestContext,
+        test::{test_helpers::test::*, test_proxy::TestProxy},
     };
 
     use super::*;
-    #[tokio::test]
-    async fn test_validate_phone() {
-        init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
-        let app = create_test_service!();
-        setup_test!(&app, false);
-
-        let request_context = RequestContext::test_default(false);
-        let mut profile = UserProfile::new_test_user();
-        profile.phone_number = CATAN_ENV.test_phone_number.clone();
-        // setup
-        let response = setup(&request_context).await;
-
-        let sr = register("password", &profile, &request_context)
-            .await
-            .expect("this should work");
-        let client_user = sr.get_client_user().expect("This should be a client user");
-        let sr = send_phone_code(&client_user.id, &request_context)
-            .await
-            .expect("text message should be sent!");
-
-        let code = sr.get_token().expect("this should be a number!");
-        log::trace!("code is: {}", code);
-        let sr = validate_phone(&client_user.id, &code, &request_context).await.expect("validation to work");
-        assert_eq!(sr.status, StatusCode::OK);
-    }
-
-    #[tokio::test]
-    async fn test_validate_email() {
-        init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Error).await;
-        let app = create_test_service!();
-        setup_test!(&app, false);
-
-        let request_context = RequestContext::test_default(false);
-        let mut profile = UserProfile::new_test_user();
-        profile.email = CATAN_ENV.test_email.clone();
-        // setup
-        let response = setup(&request_context).await;
-
-        let sr = register("password", &profile, &request_context)
-            .await
-            .expect("this should work");
-        let client_user = sr.get_client_user().expect("This should be a client user");
-        let host_name = std::env::var("HOST_NAME").expect("HOST_NAME must be set");
-        let result = send_validation_email(
-            &host_name,
-            &client_user.id,
-            &profile.email,
-            &request_context,
-        );
-        match result {
-            Ok(service_response) => {
-                let url = service_response.get_url().expect("this should be a URL!");
-                let req = test::TestRequest::get().uri(&url).to_request();
-                let resp = test::call_service(&app, req).await;
-                assert!(resp.status().is_success());
-            }
-            Err(sr) => {
-                log::error!("{}", sr);
-                panic!("should not have failed to send an email");
-            }
-        }
-    }
 
     // Test the login function
     #[tokio::test]
-    async fn test_login_mocked_and_cosmos() {
-        test_login(true).await;
+    async fn test_login_mocked() {
+        init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Trace).await;
         test_login(false).await;
     }
 
+    #[tokio::test]
+    async fn test_local_users() {
+        init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
+        let app = create_test_service!();
+        let code = 569342;
+        let mut proxy = TestProxy::new(&app, Some(TestContext::new(true, Some(code))));
+
+        let auth_token = delete_all_test_users(&mut proxy).await;
+        let users = register_test_users(&mut proxy, Some(auth_token)).await;
+        //
+        // i'm logged in as the admin
+        let last_id = users
+            .last()
+            .and_then(|user| user.user_id.as_ref())
+            .map(|id| id.clone())
+            .unwrap_or_else(|| panic!("UserProfile should have an id!"));
+
+        info!("deleting user: {}", &last_id);
+        proxy.delete_user(&last_id).await;
+
+        info!("logging in as test user");
+        // login as the test user that is going to create the local user and set the auth token in the proxy
+        let first_user = users.first().unwrap().clone();
+        let service_response = proxy
+            .login(&first_user.get_email_or_panic(), "password")
+            .await;
+        assert!(service_response.status.is_success());
+        let test_token = service_response
+            .get_token()
+            .expect("login needs to return a token");
+        proxy.set_auth_token(&Some(test_token));
+
+        info!("creating local users");
+        // now we are logged in as the first test user...create a test local user connected to the first user
+        let service_response = proxy
+            .create_local_user(&users.last().unwrap().clone())
+            .await;
+        assert!(service_response.status.is_success());
+        for i in 0..3 {
+            let service_response = proxy
+                .create_local_user(&UserProfile::new_test_user(None))
+                .await;
+            assert!(service_response.status.is_success());
+        }
+
+        info!("getting local users");
+        let service_response = proxy.get_local_users("Self").await;
+        assert!(service_response.status.is_success());
+        let local_user_profiles = service_response
+            .to_profile_vec()
+            .expect("there should be 4 users in this vec");
+        assert_eq!(local_user_profiles.len(), 4);
+
+        let first_id = users
+            .first()
+            .and_then(|user| user.user_id.as_ref())
+            .map(|id| id.clone())
+            .unwrap_or_else(|| panic!("UserProfile should have an id!"));
+
+        info!("deleting local users");
+        let service_response = proxy.delete_local_user(&first_id).await;
+        assert!(service_response.status.is_client_error()); // this is the user_id of the connected user, not the local user
+
+        let first_id = local_user_profiles
+            .first()
+            .and_then(|user| user.user_id.as_ref())
+            .map(|id| id.clone())
+            .unwrap_or_else(|| panic!("UserProfile should have an id!"));
+
+        let service_response = proxy.delete_local_user(&first_id).await;
+        assert!(service_response.status.is_success());
+        let service_response = proxy.get_local_users("Self").await;
+        assert!(service_response.status.is_success());
+        let local_user_profiles = service_response
+            .to_profile_vec()
+            .expect("there should be 3 users in this vec");
+        assert_eq!(local_user_profiles.len(), 3);
+        // testing update_local_user
+        info!("updating local users");
+        let mut first_profile = local_user_profiles
+            .first()
+            .expect("we know this has 3 elemements in it")
+            .clone();
+
+        first_profile.games_won = Some(1);
+        let service_response = proxy.update_local_user(&first_profile).await;
+        assert!(service_response.status.is_success());
+
+        //
+        //   get the profiles
+        let service_response = proxy.get_local_users("Self").await;
+        assert!(service_response.status.is_success());
+        let local_user_profiles = service_response
+            .to_profile_vec()
+            .expect("there should be 3 users in this vec");
+        assert_eq!(local_user_profiles.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_login_cosmos() {
+        init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
+        test_login(true).await;
+    }
+
     async fn test_login(use_cosmos: bool) {
+        let token = TestHelpers::admin_login().await;
+
         let request_context = RequestContext::test_default(use_cosmos);
-        let profile = UserProfile::new_test_user();
+        let profile = UserProfile::new_test_user(None);
         // setup
-        let response = setup(&request_context).await;
-
+        // let response = verify_cosmosdb(&request_context).await;
+        // assert!(response.is_ok());
         // Register the user first
-        let sr = register("password", &profile, &request_context)
-            .await
-            .expect("this should work");
-        let client_user = sr.get_client_user().expect("This should be a client user");
-
-        let user = internal_find_user("email", &client_user.user_profile.email, &request_context)
+        let result = register("password", &profile, &request_context).await;
+        assert!(result.is_ok());
+        let sr = result.unwrap();
+        let user_profile = sr.to_profile().expect("This should be a client user");
+        request_context
+            .database
+            .find_user_by_email(&user_profile.pii.unwrap().email)
             .await
             .expect("we just put this here!");
 
         // Test login with correct credentials
-        let response = login(&profile.email, "password", &request_context)
+        let response = login(&profile.get_email_or_panic(), "password", &request_context)
             .await
             .expect("login should succeed");
 
         // Test login with incorrect credentials
-        let response = login(&profile.email, "wrong_password", &request_context).await;
+        let response = login(
+            &profile.get_email_or_panic(),
+            "wrong_password",
+            &request_context,
+        )
+        .await;
         match response {
             Ok(_) => panic!("this should be an error!"),
             Err(e) => {
@@ -788,11 +1065,24 @@ mod tests {
     // Test JWT token creation and validation
     #[tokio::test]
     async fn test_jwt_token_creation_and_validation() {
-        let claims = Claims::new("user_id", "user_email@email.com", 10 * 60, &None);
-        let token = create_jwt_token(&claims, &CATAN_ENV.login_secret_key).unwrap();
-        let token_claims = validate_jwt_token(&token, &CATAN_ENV.login_secret_key);
-        assert!(token_claims.is_some());
-        let token_claims = token_claims.expect("there should be a token in here");
-        assert_eq!(token_claims.claims, claims);
+        let claims = Claims::new(
+            "user_id",
+            "user_email@email.com",
+            10 * 60,
+            &vec![Role::Validation],
+            &None,
+        );
+        let request_context = RequestContext::test_default(false);
+        let token = request_context
+            .security_context
+            .login_keys
+            .sign_claims(&claims)
+            .unwrap();
+        let token_claims = request_context
+            .security_context
+            .login_keys
+            .validate_token(&token)
+            .unwrap();
+        assert_eq!(token_claims, claims);
     }
 }
