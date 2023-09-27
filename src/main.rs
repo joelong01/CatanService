@@ -62,10 +62,11 @@ fn get_host_ip_and_port() -> (String, String) {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     // Access CATAN_SECRETS to force initialization and potentially panic.
-    print!("env_logger set with {:#?}\n", SERVICE_CONFIG.rust_log);
-    print!("ssl key file {:#?}\n", SERVICE_CONFIG.ssl_key_location);
-    print!("ssl cert file {:#?}\n", SERVICE_CONFIG.ssl_cert_location);
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    // print!("env_logger set with {:#?}\n", SERVICE_CONFIG.rust_log);
+    // print!("ssl key file {:#?}\n", SERVICE_CONFIG.ssl_key_location);
+    // print!("ssl cert file {:#?}\n", SERVICE_CONFIG.ssl_cert_location);
+    // env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
     let args: Vec<String> = env::args().collect();
 
     if args.len() > 1 && args[1] == "--setup" {
@@ -137,9 +138,7 @@ fn setup_cosmos() -> Result<(), ServiceResponse> {
  * this is the simplest possible GET handler that can be run from a browser to test connectivity
  */
 async fn get_version() -> HttpResponse {
-    HttpResponse::Ok()
-        .content_type("text/plain")
-        .body("version 1.0")
+   new_ok_response!("version 1.0").to_http_response()
 }
 
 /**
@@ -285,6 +284,9 @@ fn lobby_service() -> Scope {
             "/acceptinvite",
             web::post().to(lobby_handlers::respond_to_invite),
         )
+        .route("/add-local-user/{local_user_id}", web::post().to(lobby_handlers::add_local_user_handler))
+        .route("/connect", web::post().to(lobby_handlers::connect_handler))
+        .route("/disconnet", web::post().to(lobby_handlers::disconnect_handler))
 }
 
 /**
@@ -328,7 +330,7 @@ fn action_service() -> Scope {
 }
 
 fn longpoll_service() -> Scope {
-    web::scope("/longpoll/{index}").route("", web::get().to(long_poll_handler))
+    web::scope("/longpoll").route("", web::get().to(long_poll_handler))
 }
 
 fn profile_service() -> Scope {
@@ -414,7 +416,7 @@ mod tests {
         let app = create_test_service!();
         setup_test!(&app, false);
         let use_cosmos = true;
-        let mut proxy = TestProxy::new(&app, Some(TestContext::new(use_cosmos, None)));
+        let mut proxy = TestProxy::new(&app, Some(TestContext::new(use_cosmos, None, None)));
 
         let test_users = register_test_users(&mut proxy, None).await;
         let service_response = proxy
@@ -463,7 +465,7 @@ mod tests {
         init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
         let app = create_test_service!();
         let code = 569342;
-        let mut proxy = TestProxy::new(&app, Some(TestContext::new(true, Some(code))));
+        let mut proxy = TestProxy::new(&app, Some(TestContext::new(true, Some(code), None)));
         let admin_auth_token = delete_all_test_users(&mut proxy).await;
         let users = register_test_users(&mut proxy, Some(admin_auth_token)).await;
 

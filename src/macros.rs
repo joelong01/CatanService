@@ -69,14 +69,17 @@ macro_rules! unexpected_server_error_from_string {
 
 #[macro_export]
 macro_rules! new_ok_response {
-    ($msg:expr) => {
-        Ok(ServiceResponse::new(
+    ($msg:expr) => {{
+        use crate::shared::shared_models::GameError;
+        use crate::shared::shared_models::ResponseType;
+        use reqwest::StatusCode;
+        ServiceResponse::new(
             $msg,
             StatusCode::OK,
             ResponseType::NoData,
             GameError::NoError(String::default()),
-        ))
-    };
+        )
+    }};
 }
 
 #[macro_export]
@@ -86,7 +89,8 @@ macro_rules! new_unauthorized_response {
             $msg,
             StatusCode::UNAUTHORIZED,
             ResponseType::NoData,
-            GameError::HttpError(StatusCode::UNAUTHORIZED)))
+            GameError::HttpError(StatusCode::UNAUTHORIZED),
+        ))
     };
 }
 
@@ -146,6 +150,9 @@ macro_rules! log_return_bad_request {
 macro_rules! bad_request_from_string {
     ($msg:expr ) => {{
         use reqwest::StatusCode;
+        use crate::ServiceResponse;
+        use crate::shared::shared_models::ResponseType;
+        use crate::shared::shared_models::GameError;
         ServiceResponse::new(
             $msg,
             StatusCode::BAD_REQUEST,
@@ -186,9 +193,9 @@ pub fn convert_status_code(azure_status: azure_core::StatusCode) -> reqwest::Sta
 #[macro_export]
 macro_rules! az_error_to_service_response {
     ( $cmd:expr, $stderr:expr ) => {{
-        use reqwest::StatusCode;
-        use crate::shared::shared_models::ResponseType::AzError;
         use crate::shared::shared_models::GameError;
+        use crate::shared::shared_models::ResponseType::AzError;
+        use reqwest::StatusCode;
 
         let msg = format!("command: {}\n Error: {:#?}", $cmd, $stderr);
         log::error!("{}", &msg);
@@ -205,9 +212,9 @@ macro_rules! az_error_to_service_response {
 #[macro_export]
 macro_rules! log_return_serde_error {
     (  $e:expr, $hint:expr) => {{
-        use reqwest::StatusCode;
-        use crate::shared::models::ResponseType::SerdeError;
         use crate::shared::models::GameError;
+        use crate::shared::models::ResponseType::SerdeError;
+        use reqwest::StatusCode;
 
         let msg = format!("serde_json error: {} Message: {:#?}", $e, $hint);
         log::error!("{}", &msg);
@@ -242,10 +249,10 @@ macro_rules! serialize_as_array {
 #[macro_export]
 macro_rules! setup_test {
     ($app:expr, $use_cosmos_db:expr) => {{
+        use crate::middleware::request_context_mw::TestContext;
         use actix_web::http::header;
         use actix_web::test;
-        use crate::middleware::request_context_mw::TestContext;
-        let test_context = TestContext::new($use_cosmos_db, None);
+        let test_context = TestContext::new($use_cosmos_db, None, None);
         let request = test::TestRequest::post()
             .uri("/api/v1/test/verify-service")
             .append_header((header::CONTENT_TYPE, "application/json"))
@@ -276,7 +283,7 @@ macro_rules! create_service {
         use crate::middleware::request_context_mw::RequestContextMiddleware;
 
         App::new()
-          //  .wrap(Logger::default())
+            //  .wrap(Logger::default())
             .wrap(RequestContextMiddleware)
             .wrap(Cors::permissive())
             .service(create_unauthenticated_service()) // Make sure this function is in scope
@@ -324,7 +331,7 @@ macro_rules! log_thread_info {
 #[macro_export]
 macro_rules! trace_thread_info {
     ($from:expr, $($arg:tt)*) => {{
-        //  log::trace!("{}:{},{},{}", file!(), line!(), $from, format!($($arg)*))
+          log::trace!("{}:{},{},{}", file!(), line!(), $from, format!($($arg)*))
     }};
 }
 #[macro_export]

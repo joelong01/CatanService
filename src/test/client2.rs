@@ -34,7 +34,7 @@ pub(crate) async fn client2_thread(mut rx: Receiver<CatanMessage>) {
     let proxy = ServiceProxy::new(
         "doug@longshotdev.com",
         "password",
-        Some(TestContext::new(false, None)),
+        Some(TestContext::new(false, None, None)),
         HOST_URL,
     )
     .await

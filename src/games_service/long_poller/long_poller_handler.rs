@@ -1,7 +1,8 @@
 use actix_web::HttpResponse;
 
 use crate::{
-    games_service::long_poller::long_poller::LongPoller, middleware::request_context_mw::RequestContext,
+    games_service::long_poller::long_poller::LongPoller,
+    middleware::request_context_mw::RequestContext,
 };
 
 /**
@@ -15,12 +16,13 @@ pub async fn long_poll_handler(request_context: RequestContext) -> HttpResponse 
         .as_ref()
         .expect("auth_mw should set this for all authenticated APIs")
         .id;
-    let message = LongPoller::wait(&user_id).await;
+    let res = LongPoller::wait(&user_id).await;
+    // log_thread_info!(
+    //     "long_poll_handler",
+    //     "LongPoller::wait returned.  response: {:#?}", res
+    // );
 
-    match message {
-        Ok(message) => HttpResponse::Ok()
-            .content_type("application/json")
-            .json(message),
-        Err(service_response) => service_response.to_http_response(),
-    }
+
+    res.map(|sr| sr.to_http_response())
+        .unwrap_or_else(|sr| sr.to_http_response())
 }

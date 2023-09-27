@@ -98,7 +98,7 @@ pub mod test {
         let _admin_token = TestHelpers::admin_login().await;
         let test_users = TestHelpers::load_test_users_from_config();
         log::trace!("{}", serde_json::to_string(&test_users).unwrap());
-        let _test_context = TestContext::new(true, None);
+        let _test_context = TestContext::new(false, None, None);
 
         print!("ok");
     }
@@ -127,7 +127,7 @@ pub mod test {
     async fn register_test_users_test() {
         init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
         let app = create_test_service!();
-        let mut proxy = TestProxy::new(&app, Some(TestContext::new(true, None)));
+        let mut proxy = TestProxy::new(&app, Some(TestContext::new(false, None, None)));
         //  setup_test!(&app, true);
 
         let users = register_test_users(&mut proxy, None).await;
@@ -146,7 +146,7 @@ pub mod test {
     async fn delete_test_users() {
         init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
         let app = create_test_service!();
-        let mut proxy = TestProxy::new(&app, Some(TestContext::new(true, None)));
+        let mut proxy = TestProxy::new(&app, Some(TestContext::new(false, None, None)));
         delete_all_test_users(&mut proxy).await;
         //
         //  make sure that deleting empty works

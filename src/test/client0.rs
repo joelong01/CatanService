@@ -40,7 +40,7 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
     let proxy = ServiceProxy::new(
         "joe@longshotdev.com",
         "password",
-        Some(TestContext::new(false, None)),
+        Some(TestContext::new(false, None, None)),
         HOST_URL,
     ).await.expect("login to succeed");
 
@@ -137,7 +137,7 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
 
         assert!(actions.contains(&GameAction::Next));
     }
-    trace_thread_info!(name, "all players accepted: {:#?}", players);
+    trace_thread_info!(name, "all players accepted: {:#?}", invited_players);
 
     proxy
         .start_game(&game_id)

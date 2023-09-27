@@ -10,8 +10,8 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use strum_macros::Display;
 
-use std::{fmt, fmt::Display, fmt::Formatter, sync::Arc};
-use tokio::sync::{mpsc, RwLock};
+use std::{fmt, fmt::Display, fmt::Formatter};
+
 
 use anyhow::Result;
 
@@ -389,7 +389,6 @@ impl ServiceResponse {
 
     pub fn to_http_response(&self) -> HttpResponse {
         let serialized = serde_json::to_string(self).expect("Failed to serialize ServiceResponse");
-
         let response = HttpResponse::build(self.status).body(serialized);
         response
     }
@@ -506,25 +505,3 @@ where
     Ok(StatusCode::from_u16(code).map_err(serde::de::Error::custom)?)
 }
 
-/**
- * hold the data that both the Lobby and the GameContainer use to keep track of the waiting clients
- */
-#[derive(Debug)]
-pub struct LongPollUser {
-    pub user_id: String,
-    pub name: String,
-    pub tx: mpsc::Sender<CatanMessage>,
-    pub rx: Arc<RwLock<mpsc::Receiver<CatanMessage>>>,
-}
-
-impl LongPollUser {
-    pub fn new(user_id: &str, name: &str) -> Self {
-        let (tx, rx) = mpsc::channel(0x64);
-        Self {
-            user_id: user_id.into(),
-            name: name.into(),
-            rx: Arc::new(RwLock::new(rx)),
-            tx,
-        }
-    }
-}

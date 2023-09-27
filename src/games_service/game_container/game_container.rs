@@ -6,10 +6,8 @@ use crate::{
         catan_games::games::regular::regular_game::RegularGame,
         long_poller::long_poller::LongPoller,
     },
-    shared::shared_models::{UserProfile, GameError, ResponseType, ServiceResponse},
-
+    shared::shared_models::{GameError, ResponseType, ServiceResponse, UserProfile, UserType},
 };
-
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -70,27 +68,39 @@ impl GameContainer {
         game_id: &str,
         client_user: &UserProfile,
     ) -> Result<ServiceResponse, ServiceResponse> {
-
-
         let game_container = Self::get_locked_container(&game_id).await?;
         let mut game_container = game_container.write().await; // drop locked container
 
         let game = game_container.undo_stack.last().clone().unwrap(); // you cannot have an empty undo stack *and a valid game_id
         let clone = game.add_user(client_user)?;
         game_container.undo_stack.push(clone.clone());
+        drop(game_container);
+        let keys_vec: Vec<String> = clone.players.keys().cloned().collect();
+        let _ = Self::broadcast_message(game_id, &CatanMessage::PlayerAdded(keys_vec)).await;
+
         Ok(ServiceResponse::new_generic_ok("added"))
     }
     /**
-     *  send the message to all players in game_id
+     *  send the message to all connected players in game_id
      */
     pub async fn broadcast_message(
         game_id: &str,
         message: &CatanMessage,
     ) -> Result<ServiceResponse, ServiceResponse> {
-        let ids = GameContainer::get_game_players(game_id).await?;
+        let ids = GameContainer::get_connected_players(game_id).await?;
+
         LongPoller::send_message(ids, message).await
     }
+    pub async fn get_connected_players(game_id: &str) -> Result<Vec<String>, ServiceResponse> {
+        let (game, _) = GameContainer::current_game(game_id).await?;
+        let connected_players: Vec<String> = game.players
+        .values()
+        .filter(|&player| matches!(player.profile.user_type, UserType::Connected))
+        .filter_map(|player| player.profile.user_id.clone())
+        .collect();
 
+        Ok(connected_players)
+    }
     pub async fn get_game_players(game_id: &str) -> Result<Vec<String>, ServiceResponse> {
         let mut players = Vec::new();
         let (game, _) = GameContainer::current_game(game_id).await?;
@@ -137,10 +147,10 @@ impl GameContainer {
                     ro_container.redo_stack.len() > 0,
                 ))
             }
-            Err(_) => Err(ServiceResponse::new(
+            Err(e) => Err(ServiceResponse::new(
                 "",
                 reqwest::StatusCode::NOT_FOUND,
-                ResponseType::NoData,
+                ResponseType::ErrorInfo(format!("{:#?}", e)),
                 GameError::BadId(format!("{} not found", game_id)),
             )),
         }

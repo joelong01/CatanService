@@ -2,8 +2,9 @@
 use actix_web::{web, HttpRequest, HttpResponse};
 
 use crate::{
+    bad_request_from_string,
     games_service::game_container::game_messages::{Invitation, InvitationResponseData},
-    middleware::{request_context_mw::RequestContext, header_extractor::HeadersExtractor}
+    middleware::{header_extractor::HeadersExtractor, request_context_mw::RequestContext},
 };
 
 pub async fn get_lobby(_req: HttpRequest) -> HttpResponse {
@@ -48,4 +49,41 @@ pub async fn respond_to_invite(
         .await
         .map(|sr| sr.to_http_response())
         .unwrap_or_else(|sr| sr.to_http_response())
+}
+
+pub async fn add_local_user_handler(
+    local_user_id: web::Path<String>,
+    headers: HeadersExtractor,
+    request_context: RequestContext,
+) -> HttpResponse {
+    let game_id = if let Some(id) = headers.game_id {
+        id
+    } else {
+        return bad_request_from_string!("missing gameid header").to_http_response();
+    };
+    super::lobby::add_local_user(&game_id, &local_user_id, &request_context)
+        .await
+        .map(|sr| sr.to_http_response())
+        .unwrap_or_else(|sr| sr.to_http_response())
+}
+
+pub async fn connect_handler(
+    request_context: RequestContext,
+) -> HttpResponse {
+   
+    super::lobby::connect(&&request_context)
+        .await
+        .map(|sr| sr.to_http_response())
+        .unwrap_or_else(|sr| sr.to_http_response())
+}
+
+pub async fn disconnect_handler(
+    request_context: RequestContext,
+) -> HttpResponse {
+
+    super::lobby::disconnect(&&request_context)
+        .await
+        .map(|sr| sr.to_http_response())
+        .unwrap_or_else(|sr| sr.to_http_response())
+
 }

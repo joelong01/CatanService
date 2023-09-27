@@ -13,7 +13,6 @@ use actix_web::{
 };
 use reqwest::StatusCode;
 
-use super::users::{login, register, register_test_user, verify_cosmosdb};
 
 /**
  * Handlers for the "user" service.
@@ -24,7 +23,7 @@ use super::users::{login, register, register_test_user, verify_cosmosdb};
 
 // Set up the service
 pub async fn verify_handler(request_context: RequestContext) -> HttpResponse {
-    let result = verify_cosmosdb(&request_context).await;
+    let result = super::users::verify_cosmosdb(&request_context).await;
     match result {
         Ok(sr) => sr.to_http_response(),
         Err(e) => e.to_http_response(),
@@ -38,7 +37,7 @@ pub async fn register_handler(
     headers: HeadersExtractor,
 ) -> impl Responder {
     let password = get_header_value!(password, headers);
-    register(&password, &profile_in, &request_context)
+    super::users::register(&password, &profile_in, &request_context)
         .await
         .map(|sr| sr.to_http_response())
         .unwrap_or_else(|sr| sr.to_http_response())
@@ -51,7 +50,7 @@ pub async fn register_test_user_handler(
 ) -> impl Responder {
     let password = get_header_value!(password, headers);
 
-    register_test_user(&password, &profile_in, &request_context)
+    super::users::register_test_user(&password, &profile_in, &request_context)
         .await
         .map(|sr| sr.to_http_response())
         .unwrap_or_else(|sr| sr.to_http_response())
@@ -64,7 +63,7 @@ pub async fn login_handler(
 ) -> HttpResponse {
     let password = get_header_value!(password, headers);
     let username = get_header_value!(email, headers);
-    login(&username, &password, &request_context)
+    super::users::login(&username, &password, &request_context)
         .await
         .map(|sr| sr.to_http_response())
         .unwrap_or_else(|sr| sr.to_http_response())

@@ -20,6 +20,7 @@ use lazy_static::lazy_static;
 
 use crate::az_error_to_service_response;
 use crate::bad_request_from_string;
+use crate::full_info;
 use crate::init_env_logger;
 use crate::log_and_return_azure_core_error;
 use crate::log_return_bad_request;
@@ -722,7 +723,7 @@ pub fn print_cmd(args: &[&str]) -> String {
     }
 
     let cmd = cmd_str.join(" ");
-    info!("Executing: {}", cmd);
+    full_info!("Executing: {}", cmd);
     cmd
 }
 
@@ -1196,7 +1197,7 @@ mod tests {
         // keyvault_exists(&kv_name).expect(&format!("Failed to find Key Vault named {}.", kv_name));
 
         // let current_login_key = key_vault_get_secret(&kv_name, new_name).unwrap_or_else(|_| generate_jwt_key());
-        // let test_context = TestContext::new(false, None);
+        // let test_context = TestContext::new(false, None, None);
         // let claims = Claims::new(
         //     "test_id",
         //     "test@email.com",

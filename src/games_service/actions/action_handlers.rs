@@ -23,7 +23,7 @@ pub async fn next(game_id: web::Path<String>) -> impl Responder {
     .unwrap_or_else(|sr| sr.to_http_response())
 }
 /**
- * look at the state of the game and asnwer the question "what are the valid actions"
+ * look at the state of the game and answer the question "what are the valid actions"
  */
 pub async fn valid_actions(game_id: web::Path<String>, _req: HttpRequest) -> impl Responder {
     super::actions::valid_actions(&game_id).await

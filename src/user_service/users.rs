@@ -2,6 +2,7 @@
 #![allow(unused_variables)]
 #![allow(unused_imports)]
 
+use azure_core::request_options::User;
 use bcrypt::{hash, verify};
 use rand::Rng;
 use url::form_urlencoded;
@@ -291,15 +292,12 @@ pub async fn login(
             .login_keys
             .sign_claims(&claims);
         match token_result {
-            Ok(token) => {
-                let _ = LongPoller::add_user(&user.id, &user.user_profile).await;
-                Ok(ServiceResponse::new(
-                    "",
-                    StatusCode::OK,
-                    ResponseType::Token(token),
-                    GameError::NoError("ok".to_owned()),
-                ))
-            }
+            Ok(token) => Ok(ServiceResponse::new(
+                "",
+                StatusCode::OK,
+                ResponseType::Token(token),
+                GameError::NoError("ok".to_owned()),
+            )),
             Err(e) => {
                 return Err(ServiceResponse::new(
                     "Error Hashing token",
@@ -741,6 +739,7 @@ pub async fn create_local_user(
         .id
         .clone();
     let mut profile = profile_in.clone();
+    profile.user_id = Some(PersistUser::new_id());
     profile.pii = None;
     profile.user_type = UserType::Local;
     profile.games_played = Some(0);
@@ -852,7 +851,7 @@ pub async fn delete_local_user(
             .database
             .delete_user(&local_user_primary_key)
             .await?;
-        return new_ok_response!("");
+        return Ok(new_ok_response!(""));
     }
 
     return new_unauthorized_response!("");
@@ -918,7 +917,7 @@ mod tests {
         init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
         let app = create_test_service!();
         let code = 569342;
-        let mut proxy = TestProxy::new(&app, Some(TestContext::new(true, Some(code))));
+        let mut proxy = TestProxy::new(&app, Some(TestContext::new(false, Some(code), None)));
 
         let auth_token = delete_all_test_users(&mut proxy).await;
         let users = register_test_users(&mut proxy, Some(auth_token)).await;

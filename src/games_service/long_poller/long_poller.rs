@@ -1,14 +1,14 @@
 #![allow(dead_code)]
+
 use reqwest::StatusCode;
-use scopeguard::defer;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex, RwLock};
 
 use crate::{
+    full_info,
     games_service::game_container::game_messages::{CatanMessage, GameStatus},
-    log_thread_info,
-    shared::shared_models::{UserProfile, GameError, ResponseType, ServiceResponse},
+    shared::shared_models::{GameError, ResponseType, ServiceResponse, UserProfile},
 };
 //
 //  this is a map of "waiters" - holding all the state necessary for a Long Poller to wait on a thread
@@ -47,16 +47,28 @@ impl LongPoller {
     /// # Returns
     ///
     /// * `Result<(), GameError>` - Ok if the user was successfully added; Err with a GameError if the user already exists.
-    pub async fn add_user(user_id: &str, profile: &UserProfile) -> Result<(), GameError> {
+    pub async fn add_user(
+        user_id: &str,
+        profile: &UserProfile,
+    ) -> Result<ServiceResponse, ServiceResponse> {
+        full_info!("add_user.  adding: {}", profile.display_name.clone());
         let mut users_map = ALL_USERS_MAP.write().await; // Acquire write lock
         if users_map.contains_key(user_id) {
-            return Err(GameError::BadId(format!("{} already exists", user_id)));
+            full_info!("found user {} already in lobby.", profile.display_name);
+            // let _ = Self::send_message(
+            //     vec![user_id.to_string()],
+            //     &CatanMessage::Ended("player relogged in".to_string()),
+            // )
+            // .await;
+            users_map.remove(user_id);
         }
+       
         users_map.insert(
             user_id.to_owned(),
             Arc::new(RwLock::new(LongPoller::new(user_id, profile))),
         );
-        Ok(())
+        full_info!("added {} to the lobby. lobby size = {}", profile.display_name, users_map.keys().len());
+        Ok(ServiceResponse::new_generic_ok(""))
     }
 
     /// Removes the user from the map, returning an error if they aren't there.
@@ -68,12 +80,12 @@ impl LongPoller {
     /// # Returns
     ///
     /// * `Result<(), GameError>` - Ok if the user was successfully removed; Err with a GameError if the user does not exist.
-    pub async fn remove_user(user_id: &str) -> Result<(), GameError> {
+    pub async fn remove_user(user_id: &str) -> Result<ServiceResponse, ServiceResponse> {
         let mut users_map = ALL_USERS_MAP.write().await; // Acquire write lock
 
         match users_map.remove(user_id) {
-            Some(_) => Ok(()),
-            None => Err(GameError::BadId(format!("{} does not exist", user_id))),
+            Some(_) => Ok(ServiceResponse::new_generic_ok("")),
+            None => Err(ServiceResponse::new_bad_id("id does not exist", user_id)),
         }
     }
     /// Sends a message to a list of users.
@@ -94,13 +106,13 @@ impl LongPoller {
         to_users: Vec<String>,
         message: &CatanMessage,
     ) -> Result<ServiceResponse, ServiceResponse> {
-        log_thread_info!(
-            "send_message",
-            "enter [to:{:#?}] [message={:?}]",
-            to_users,
-            message
-        );
-        defer! {log_thread_info!("send_message","leave [to:{:#?}] [message={:?}]", to_users, message )};
+        // log_thread_info!(
+        //     "send_message",
+        //     "enter [to:{:#?}] [message={:?}]",
+        //     to_users,
+        //     message
+        // );
+        // defer! {log_thread_info!("send_message","leave [to:{:#?}] [message={:?}]", to_users, message )};
 
         let users_map = ALL_USERS_MAP.read().await; // Acquire read lock
 
@@ -129,7 +141,7 @@ impl LongPoller {
             }
         }
         drop(users_map); // Explicitly drop the read lock
-
+        full_info!("sending message {} to {} users", service_response.clone(),  senders.len());
         // Send the messages
         for (tx, to) in senders.into_iter().zip(to_users.iter()) {
             if tx.send(service_response.clone()).await.is_err() {
@@ -174,6 +186,8 @@ impl LongPoller {
     /// specified user ID.
 
     pub async fn wait(user_id: &str) -> Result<ServiceResponse, ServiceResponse> {
+        log::info!("long_poller::wait.  [user_id={}]", user_id);
+
         let user_rx = {
             let users_map = ALL_USERS_MAP.read().await;
             match users_map.get(user_id) {
@@ -187,7 +201,14 @@ impl LongPoller {
         //
         let mut rx = user_rx.lock().await;
         match rx.recv().await {
-            Some(msg) => Ok(msg),
+            Some(msg) => {
+                println!(
+                    "ResponseType: {}  data={:#?}",
+                    msg.response_type,
+                    msg.get_service_message().unwrap()
+                );
+                Ok(msg)
+            }
             None => Err(ServiceResponse::new(
                 &format!("error writing channel. [user_id={}]", user_id),
                 reqwest::StatusCode::INTERNAL_SERVER_ERROR,
@@ -232,35 +253,27 @@ mod tests {
 
     #[tokio::test]
     async fn test_add_user() {
-        assert_eq!(
-            LongPoller::add_user("user1", &UserProfile::default()).await,
-            Ok(())
-        );
-        assert_eq!(
-            LongPoller::add_user("user1", &UserProfile::default()).await,
-            Err(GameError::BadId(String::from("user1 already exists")))
-        );
+        let res = LongPoller::add_user("user1", &UserProfile::default()).await;
+        assert!(res.is_ok());
+        let res = LongPoller::add_user("user1", &UserProfile::default()).await;
+        assert!(res.is_ok());
     }
 
     #[tokio::test]
     async fn test_remove_user() {
-        assert_eq!(
-            LongPoller::add_user("user2", &UserProfile::default()).await,
-            Ok(())
-        );
-        assert_eq!(LongPoller::remove_user("user2").await, Ok(()));
-        assert_eq!(
-            LongPoller::remove_user("user2").await,
-            Err(GameError::BadId(String::from("user2 does not exist")))
-        );
+        let res = LongPoller::add_user("user1", &UserProfile::default()).await;
+        assert!(res.is_ok());
+        let res = LongPoller::remove_user("user2").await;
+        assert!(res.is_ok());
+        let res = LongPoller::remove_user("user2").await;
+        assert!(res.is_err());
+       
     }
 
     #[tokio::test]
     async fn test_wait() {
-        assert_eq!(
-            LongPoller::add_user("user5", &UserProfile::default()).await,
-            Ok(())
-        );
+        let res = LongPoller::add_user("user1", &UserProfile::default()).await;
+        assert!(res.is_ok());
         let message = CatanMessage::Started("".to_string());
         let message_clone = message.clone(); // Clone the message
 
@@ -273,25 +286,25 @@ mod tests {
                 .unwrap(); // Use the cloned message
         });
 
-        assert_eq!(LongPoller::wait("user5").await.unwrap().get_service_message().unwrap(), message);
+        assert_eq!(
+            LongPoller::wait("user5")
+                .await
+                .unwrap()
+                .get_service_message()
+                .unwrap(),
+            message
+        );
         assert!(LongPoller::wait("user6").await.is_err());
     }
     #[tokio::test]
     async fn test_get_available_and_set_status() {
         // Add users
-        assert_eq!(
-            LongPoller::add_user("user1", &UserProfile::default()).await,
-            Ok(())
-        );
-        assert_eq!(
-            LongPoller::add_user("user2", &UserProfile::default()).await,
-            Ok(())
-        );
-        assert_eq!(
-            LongPoller::add_user("user3", &UserProfile::default()).await,
-            Ok(())
-        );
-
+        let res = LongPoller::add_user("user1", &UserProfile::default()).await;
+        assert!(res.is_ok());
+        let res = LongPoller::add_user("user2", &UserProfile::default()).await;
+        assert!(res.is_ok());
+        let res = LongPoller::add_user("user3", &UserProfile::default()).await;
+        assert!(res.is_ok());
         // Set status
         assert_eq!(
             LongPoller::set_status("user1", GameStatus::Available).await,

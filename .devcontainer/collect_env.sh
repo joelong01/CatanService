@@ -390,7 +390,7 @@ help)
     ;;
 update)
     echo_info "running update"
-    devcontainer_dir="$(dirname "$0")"
+    devcontainer_dir="$(dirname "${BASH_SOURCE[0]}")"
     pushd "$devcontainer_dir" >/dev/null ||
         {
             echo_error "Unable to change directory to $(dirname "$REQUIRED_REPO_ENV_VARS")"

@@ -4,7 +4,7 @@ use crate::{
         long_poller::long_poller::LongPoller,
     },
     middleware::request_context_mw::RequestContext,
-    shared::shared_models::{UserProfile, GameError, ResponseType, ServiceResponse},
+    shared::shared_models::{UserProfile, GameError, ResponseType, ServiceResponse}, full_info,
 };
 
 use reqwest::StatusCode;
@@ -20,7 +20,12 @@ use super::{
 /// check the state to make sure the request is valid
 /// randomize the board and the harbors
 /// post the response to websocket
-pub async fn shuffle_game(game_id: &str) -> Result<ServiceResponse, ServiceResponse> {
+pub async fn shuffle_game(game_id: &str, request_context: &RequestContext) -> Result<ServiceResponse, ServiceResponse> {
+    
+    if request_context.is_test() {
+        full_info!("test shuffle");
+    }
+    
     let (game, _) = GameContainer::current_game(&game_id.to_owned()).await?;
 
     let mut new_game = game.clone();

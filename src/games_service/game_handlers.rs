@@ -13,8 +13,8 @@ use super::catan_games::games::regular::regular_game::RegularGame;
 /// check the state to make sure the request is valid
 /// randomize the board and the harbors
 /// post the response to websocket
-pub async fn shuffle_game(game_id: web::Path<String>) -> HttpResponse {
-    super::game::shuffle_game(&game_id)
+pub async fn shuffle_game(game_id: web::Path<String>, request_context: RequestContext) -> HttpResponse {
+    super::game::shuffle_game(&game_id, &request_context)
         .await
         .map(|sr| sr.to_http_response())
         .unwrap_or_else(|sr| sr.to_http_response())

@@ -1,10 +1,11 @@
 #![allow(dead_code)]
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::{time::{Duration, SystemTime, UNIX_EPOCH}, sync::Arc};
 
 use azure_data_cosmos::CosmosEntity;
 use serde::{Deserialize, Serialize};
+use tokio::sync::{mpsc, RwLock};
 
-use crate::{middleware::request_context_mw::TestContext, shared::shared_models::UserType};
+use crate::{middleware::request_context_mw::TestContext, shared::shared_models::UserType, games_service::game_container::game_messages::CatanMessage};
 
 use super::shared_models::UserProfile;
 use uuid::Uuid;
@@ -148,6 +149,29 @@ impl Claims {
             exp,
             roles: roles.clone(),
             test_context: test_context.clone(),
+        }
+    }
+}
+
+/**
+ * hold the data that both the Lobby and the GameContainer use to keep track of the waiting clients
+ */
+#[derive(Debug)]
+pub struct LongPollUser {
+    pub user_id: String,
+    pub name: String,
+    pub tx: mpsc::Sender<CatanMessage>,
+    pub rx: Arc<RwLock<mpsc::Receiver<CatanMessage>>>,
+}
+
+impl LongPollUser {
+    pub fn new(user_id: &str, name: &str) -> Self {
+        let (tx, rx) = mpsc::channel(0x64);
+        Self {
+            user_id: user_id.into(),
+            name: name.into(),
+            rx: Arc::new(RwLock::new(rx)),
+            tx,
         }
     }
 }

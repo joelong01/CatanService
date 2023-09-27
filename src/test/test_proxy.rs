@@ -190,9 +190,6 @@ where
             }
         }
 
-        // For DELETE requests, typically there's no body,
-        // so I'm excluding the body handling from this method.
-
         // auth header
         if let Some(auth_token) = &self.auth_token {
             let header_value = format!("Bearer {}", auth_token);

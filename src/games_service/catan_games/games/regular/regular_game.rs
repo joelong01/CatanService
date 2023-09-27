@@ -148,7 +148,7 @@ impl RegularGame {
                 state: CalculatedState::default(),
             }
         };
-        clone.players.insert(user_id.clone(), player);
+        clone.players.insert(user_id, player);
         Ok(clone)
     }
 

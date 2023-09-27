@@ -2,6 +2,7 @@
 use reqwest::StatusCode;
 
 use crate::{
+    bad_request_from_string,
     games_service::{
         game_container::{
             game_container::GameContainer,
@@ -10,7 +11,7 @@ use crate::{
         long_poller::long_poller::LongPoller,
     },
     middleware::request_context_mw::RequestContext,
-    shared::shared_models::{UserProfile, GameError, ResponseType, ServiceResponse},
+    shared::shared_models::{GameError, ResponseType, ServiceResponse, UserProfile}, full_info,
 };
 
 pub async fn get_lobby() -> Result<ServiceResponse, ServiceResponse> {
@@ -66,4 +67,61 @@ pub async fn respond_to_invite(
         &CatanMessage::InvitationResponse(invite_response.clone()),
     )
     .await
+}
+/*
+    add a local user to a game.  it needs to be the local user of the creator (e.g. the id in the )
+*/
+pub async fn add_local_user(
+    game_id: &str,
+    local_user_id: &str,
+    request_context: &RequestContext,
+) -> Result<ServiceResponse, ServiceResponse> {
+    let user_id = request_context
+        .claims
+        .as_ref()
+        .expect("auth_mw should have added this or rejected the call")
+        .id
+        .clone();
+
+    let local_user = request_context
+        .database
+        .find_user_by_id(&local_user_id)
+        .await?;
+
+    match local_user.connected_user_id {
+        Some(id) => {
+            if id == user_id {
+                let response =
+                    GameContainer::add_player(&game_id, &local_user.user_profile).await?;
+                return Ok(response);
+            } else {
+                return Err(bad_request_from_string!("not your connected user!"));
+            }
+        }
+        None => {
+            return Err(bad_request_from_string!("not a connected user"));
+        }
+    };
+}
+
+pub async fn connect(
+    request_context: &RequestContext,
+) -> Result<ServiceResponse, ServiceResponse> {
+    let user_id = request_context
+        .claims
+        .as_ref()
+        .expect("auth_mw should have added this or rejected the call")
+        .id
+        .clone();
+
+    let user = request_context
+        .database
+        .find_user_by_id(&user_id)
+        .await?;
+    full_info!("connecting {}", user.user_profile.display_name);
+    LongPoller::add_user(&user_id, &user.user_profile).await
+}
+
+pub async fn disconnect(request_context: &RequestContext) -> Result<ServiceResponse, ServiceResponse> {
+    todo!()
 }

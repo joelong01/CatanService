@@ -10,7 +10,7 @@ pub async fn game_poller(username: &str, tx: tokio::sync::mpsc::Sender<CatanMess
     let proxy = ServiceProxy::new(
         username,
         "password",
-        Some(TestContext::new(false, None)),
+        Some(TestContext::new(false, None, None)),
         HOST_URL,
     ).await.expect("login needs to work for test to run!");
    
@@ -49,7 +49,7 @@ pub async fn game_poller(username: &str, tx: tokio::sync::mpsc::Sender<CatanMess
         }
 
         trace_thread_info!(name, "sending message: {:#?}", message);
-        if let Err(_e) = tx.send(message.clone()).await {
+        if let Err(e) = tx.send(message.clone()).await {
             trace_thread_info!(name, "Failed to send message: {}", e);
         }
     }

@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 use crate::cosmos_db::cosmosdb::{UserDb, UserDbTrait};
 use crate::cosmos_db::mocked_db::TestDb;
+use crate::games_service::catan_games::games::regular::regular_game::RegularGame;
 use crate::games_service::game_container::game_messages::GameHeader;
 use crate::middleware::service_config::{ServiceConfig, SERVICE_CONFIG};
 use crate::shared::service_models::{Claims, Role};
@@ -24,19 +25,23 @@ use super::security_context::SecurityContext;
 #[serde(rename_all = "PascalCase")]
 pub struct TestContext {
     pub use_cosmos_db: bool,
-    pub phone_code: Option<i32>
+    pub phone_code: Option<i32>, // send the code to verify phone number so we can test from the client
+    pub game: Option<RegularGame> // send a game from the client so we can test the apis, but know what we get back
 }
 
 impl TestContext {
-    pub fn new(use_cosmos_db: bool, phone_code: Option<i32>) -> Self {
-        Self { use_cosmos_db, phone_code: phone_code }
+    pub fn new(use_cosmos_db: bool, phone_code: Option<i32>, game: Option<RegularGame>) -> Self {
+        Self { use_cosmos_db, phone_code: phone_code, game: game }
     }
     pub fn as_json(use_cosmos: bool) -> String {
-        let tc = TestContext::new(use_cosmos, None);
+        let tc = TestContext::new(use_cosmos, None, None);
         serde_json::to_string(&tc).unwrap()
     }
     pub fn set_phone_code(&mut self, code: Option<i32>) {
         self.phone_code = code.clone();
+    }
+    pub fn set_galme(&mut self, game: Option<RegularGame>){
+        self.game = game;
     }
 }
 
@@ -91,7 +96,7 @@ impl RequestContext {
     pub fn test_default(use_cosmos: bool) -> Self {
         RequestContext::new(
             &None,
-            &Some(TestContext::new(use_cosmos, None)),
+            &Some(TestContext::new(use_cosmos, None, None)),
             &SERVICE_CONFIG,
             &SecurityContext::cached_secrets(),
         )
@@ -188,6 +193,7 @@ where
     }
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
+        // println!("{:#?}", req.headers());
         // Fetch test context from header
         let test_context = req.headers().get(GameHeader::TEST).and_then(|test_header| {
             test_header

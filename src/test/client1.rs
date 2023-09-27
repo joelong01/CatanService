@@ -29,7 +29,7 @@ impl ClientThreadHandler for Handler1 {
 pub(crate) async fn client1_thread(mut rx: Receiver<CatanMessage>) {
     let proxy = ServiceProxy::new(
         "james@longshotdev.com",
-        "password", Some(TestContext::new(false, None)),
+        "password", Some(TestContext::new(false, None, None)),
         HOST_URL,
     )
     .await
