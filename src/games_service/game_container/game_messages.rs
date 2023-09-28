@@ -103,7 +103,7 @@ impl fmt::Debug for CatanMessage {
             CatanMessage::GameUpdate(game) => write!(
                 f,
                 "GameUpdate: [id={}] [player_count={}] [index={}]",
-                game.id,
+                game.game_id,
                 game.players.len(),
                 game.game_index
             ),

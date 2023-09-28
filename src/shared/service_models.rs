@@ -1,11 +1,21 @@
 #![allow(dead_code)]
-use std::{time::{Duration, SystemTime, UNIX_EPOCH}, sync::Arc};
+use std::{
+    sync::Arc,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 use azure_data_cosmos::CosmosEntity;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, RwLock};
 
-use crate::{middleware::request_context_mw::TestContext, shared::shared_models::UserType, games_service::game_container::game_messages::CatanMessage};
+use crate::{
+    games_service::{
+        catan_games::games::regular::regular_game::RegularGame,
+        game_container::game_messages::CatanMessage,
+    },
+    middleware::request_context_mw::TestContext,
+    shared::shared_models::UserType,
+};
 
 use super::shared_models::UserProfile;
 use uuid::Uuid;
@@ -71,7 +81,7 @@ impl PersistUser {
             roles: vec![Role::User],
         }
     }
- 
+
     pub fn from_user_profile(profile: &UserProfile, hash: String) -> Self {
         assert!(profile.user_type == UserType::Connected);
         Self {
@@ -172,6 +182,44 @@ impl LongPollUser {
             name: name.into(),
             rx: Arc::new(RwLock::new(rx)),
             tx,
+        }
+    }
+}
+
+/**
+ *  Every CosmosDb document needs to define the partition_key.  In Rust we do this via this trait.
+ */
+impl CosmosEntity for PersistGame {
+    type Entity = u64;
+
+    fn partition_key(&self) -> Self::Entity {
+        self.partition_key
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+pub enum GameLocation {
+    GameStack,
+    UndoStack,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+
+pub struct PersistGame {
+    pub id: String, // not set by client
+    #[serde(rename = "partitionKey")]
+    pub partition_key: u64, // the cosmos client seems to care about the spelling of both id and partitionKey
+    game: RegularGame,
+    location: GameLocation,
+}
+
+impl PersistGame {
+    pub fn new(game: &RegularGame, location: GameLocation) -> Self {
+        Self {
+            id: PersistUser::new_id(),
+            partition_key: 1,
+            game: game.clone(),
+            location: location
         }
     }
 }

@@ -1,10 +1,12 @@
 #![allow(dead_code)]
+#![allow(unused_variables)]
 use crate::{
+    games_service::catan_games::games::regular::regular_game::RegularGame,
     log_and_return_azure_core_error,
     middleware::service_config::ServiceConfig,
     new_not_found_error,
     shared::service_models::PersistUser,
-    shared::shared_models::{UserProfile, GameError, ResponseType},
+    shared::shared_models::{GameError, ResponseType, UserProfile},
 };
 use std::collections::HashMap;
 
@@ -61,7 +63,13 @@ pub trait UserDbTrait {
     async fn delete_user(&self, unique_id: &str) -> Result<(), ServiceResponse>;
     async fn find_user_by_id(&self, val: &str) -> Result<PersistUser, ServiceResponse>;
     async fn find_user_by_email(&self, val: &str) -> Result<PersistUser, ServiceResponse>;
-    async fn get_connected_users(&self, connected_user_id: &str) -> Result<Vec<PersistUser>, ServiceResponse>;
+    async fn get_connected_users(
+        &self,
+        connected_user_id: &str,
+    ) -> Result<Vec<PersistUser>, ServiceResponse>;
+    async fn push_game(&self, game: &RegularGame) -> Result<ServiceResponse, ServiceResponse>;
+    async fn load_games(&self) -> Result<Vec<RegularGame>, ServiceResponse>;
+    async fn delete_games(&self, game_id: &str) -> Result<ServiceResponse, ServiceResponse>;
     fn get_collection_names(&self, is_test: bool) -> Vec<String> {
         COLLECTION_NAME_VALUES
             .iter()
@@ -167,9 +175,6 @@ impl UserDb {
 
         collection_client.collection_name().to_string()
     }
-
-    
-
 }
 
 /**
@@ -201,6 +206,17 @@ fn public_client(account: &str, token: &str) -> CosmosClient {
 
 #[async_trait]
 impl UserDbTrait for UserDb {
+
+    async fn push_game(&self, game: &RegularGame) -> Result<ServiceResponse, ServiceResponse> {
+        todo!();
+    }
+    async fn load_games(&self) -> Result<Vec<RegularGame>, ServiceResponse> {
+        todo!();
+    }
+    async fn delete_games(&self, game_id: &str) -> Result<ServiceResponse, ServiceResponse> {
+        todo!();
+    }
+
     /**
      *  setup the database to make the sample work.  NOTE:  this will DELETE the database first.  to call this:
      *
@@ -347,15 +363,16 @@ impl UserDbTrait for UserDb {
             }
         }
     }
-    async fn get_connected_users(&self, connected_user_id: &str) -> Result<Vec<PersistUser>, ServiceResponse>{
+    async fn get_connected_users(
+        &self,
+        connected_user_id: &str,
+    ) -> Result<Vec<PersistUser>, ServiceResponse> {
         let query = format!(
             r#"SELECT * FROM c WHERE c.connected_user_id = '{}'"#,
             connected_user_id
         );
         match self.execute_query(CosmosDocType::User, &query).await {
-            Ok(users) => {
-                Ok(users)
-            }
+            Ok(users) => Ok(users),
             Err(e) => {
                 log_and_return_azure_core_error!(e, "find_user_by_id");
             }
@@ -380,7 +397,7 @@ impl UserDbTrait for UserDb {
         }
     }
 
-   
+    
 }
 
 #[cfg(test)]
@@ -540,7 +557,7 @@ mod tests {
                     validated_email: false,
                     validated_phone: false,
                 },
-           
+
                 phone_code: None,
                 roles: vec![Role::User, Role::TestUser],
                 connected_user_id: None,

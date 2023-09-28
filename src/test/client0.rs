@@ -76,7 +76,7 @@ pub(crate) async fn client0_thread(mut rx: Receiver<CatanMessage>) {
     let message = wait_for_message!(name, rx);
     let game_created = crack_game_created!(message).expect("should be a game!");
     game_id = game_created.game_id;
-    assert_eq!(game_id, test_game.id);
+    assert_eq!(game_id, test_game.game_id);
 
     //
     // get the lobby

@@ -67,7 +67,7 @@ pub fn log_for_message(message: &CatanMessage) -> String {
         CatanMessage::GameUpdate(game) => {
             format!(
                 "GameUpdate [id={}] [index={}] [players={}]",
-                game.id,
+                game.game_id,
                 game.game_index,
                 game.players.len()
             )

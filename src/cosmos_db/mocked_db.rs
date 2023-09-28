@@ -1,12 +1,13 @@
 #![allow(dead_code)]
+#![allow(unused_variables)]
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     log_return_bad_id, new_not_found_error,
     shared::{
-        service_models::PersistUser,
+        service_models::{PersistUser, PersistGame},
         shared_models::{GameError, ResponseType, ServiceResponse, UserProfile},
-    },
+    }, games_service::catan_games::games::regular::regular_game::RegularGame,
 };
 use async_trait::async_trait;
 use log::trace;
@@ -21,16 +22,28 @@ lazy_static::lazy_static! {
 
 pub struct TestDb {
     pub users: Arc<RwLock<HashMap<String, PersistUser>>>,
+    pub games: Arc<RwLock<HashMap<String, PersistGame>>>,
 }
 impl TestDb {
     pub fn new() -> Self {
         Self {
             users: Arc::new(RwLock::new(HashMap::new())),
+            games: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 }
 #[async_trait]
 impl UserDbTrait for TestDb {
+    async fn push_game(&self, game: &RegularGame) -> Result<ServiceResponse, ServiceResponse> {
+        todo!();
+    }
+    async fn load_games(&self) -> Result<Vec<RegularGame>, ServiceResponse> {
+        todo!();
+    }
+    async fn delete_games(&self, game_id: &str) -> Result<ServiceResponse, ServiceResponse> {
+        todo!();
+    }
+
     async fn setupdb(&self) -> Result<(), ServiceResponse> {
         MOCKED_DB.users.write().await.clear();
         Ok(())

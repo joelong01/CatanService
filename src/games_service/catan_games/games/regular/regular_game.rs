@@ -39,7 +39,7 @@ use super::game_info::{RegularGameInfo, REGULAR_GAME_INFO};
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 #[serde(rename_all = "PascalCase")]
 pub struct RegularGame {
-    pub id: String,
+    pub game_id: String,
     #[serde_as(as = "Vec<(_, _)>")]
     pub players: HashMap<String, Player>,
     #[serde_as(as = "Vec<(_, _)>")]
@@ -105,7 +105,7 @@ impl RegularGame {
             .collect();
 
         Self {
-            id: PersistUser::new_id(),
+            game_id: PersistUser::new_id(),
             players,
             tiles,
             harbors,
@@ -128,13 +128,13 @@ impl RegularGame {
      *  so that the operation can be undone by simply going to the previous game struct
      */
 
-    pub fn add_user(&self, profile: &UserProfile) -> Result<Self, ServiceResponse> {
+    pub fn add_user(&mut self, profile: &UserProfile) -> Result<(), ServiceResponse> {
         let user_id = profile.user_id.clone().unwrap();
         if self.players.contains_key(&user_id) {
             return Err(ServiceResponse::new_bad_id("user_id already exists", &user_id));
         }
 
-        let mut clone = self.clone();
+
         let player = {
             Player {
                 profile: profile.clone(),
@@ -148,8 +148,8 @@ impl RegularGame {
                 state: CalculatedState::default(),
             }
         };
-        clone.players.insert(user_id, player);
-        Ok(clone)
+        self.players.insert(user_id, player);
+        Ok(())
     }
 
     /// Sets up the game tiles according to the provided game information.

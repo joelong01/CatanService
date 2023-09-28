@@ -44,7 +44,7 @@ pub async fn game_poller(username: &str, tx: tokio::sync::mpsc::Sender<CatanMess
         }
 
         if let CatanMessage::GameUpdate(data) = message.clone() {
-            game_id = data.id.clone();
+            game_id = data.game_id.clone();
             index = data.game_index;
         }
 

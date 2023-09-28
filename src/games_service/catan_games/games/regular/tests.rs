@@ -205,8 +205,8 @@ mod tests {
         let user1 = UserProfile::new_test_user(Some("2".to_string()));
 
         let user2 = UserProfile::new_test_user(Some("3".to_string()));
-        game.add_user(&user1);
-        game.add_user(&user2);
+        game.add_user(&user1).expect("should work!");
+        game.add_user(&user2).expect("should work!");
     }
 
     fn test_shuffle(game: &mut RegularGame) {

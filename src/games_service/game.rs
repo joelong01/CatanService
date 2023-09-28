@@ -99,7 +99,7 @@ pub async fn new_game(
     //  2. push_game
     //  3. add_player
     //  4. send notification
-    if GameContainer::create_and_add_container(&game.id, &game)
+    if GameContainer::create_and_add_container(&game.game_id, &game)
         .await
         .is_err()
     {
@@ -107,7 +107,7 @@ pub async fn new_game(
             "",
             reqwest::StatusCode::NOT_FOUND,
             ResponseType::NoData,
-            GameError::BadId(game.id.to_owned()),
+            GameError::BadId(game.game_id.to_owned()),
         ));
     }
 
@@ -118,7 +118,7 @@ pub async fn new_game(
         vec![user_id.to_string()],
         &CatanMessage::GameCreated(GameCreatedData {
             user_id: user_id.to_string(),
-            game_id: game.id.to_string(),
+            game_id: game.game_id.to_string(),
         }),
     )
     .await;

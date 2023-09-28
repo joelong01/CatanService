@@ -12,7 +12,6 @@ use strum_macros::Display;
 
 use std::{fmt, fmt::Display, fmt::Formatter};
 
-
 use anyhow::Result;
 
 use crate::games_service::{
@@ -41,8 +40,9 @@ pub enum GameError {
     #[serde(deserialize_with = "deserialize_status_code")]
     HttpError(reqwest::StatusCode),
     AzError(String),
-    SerdeError(String),
+    JsonError(String),
     AzureCoreError(String),
+    ContainerError(String),
 }
 
 // we need a From<> for each error type we add to use the error propagation ?
@@ -54,7 +54,7 @@ impl From<reqwest::Error> for GameError {
 
 impl From<serde_json::Error> for GameError {
     fn from(err: serde_json::Error) -> Self {
-        GameError::SerdeError(err.to_string())
+        GameError::JsonError(err.to_string())
     }
 }
 
@@ -89,9 +89,10 @@ impl fmt::Display for GameError {
             GameError::NoError(s) => write!(f, "Success!: {}", s),
             GameError::HttpError(code) => write!(f, "HttpError. {:#?}", code),
             GameError::AzError(e) => write!(f, "AzError: {:#?}", e),
-            GameError::SerdeError(e) => write!(f, "Serde Error: {:#?}", e),
+            GameError::JsonError(e) => write!(f, "Serde Error: {:#?}", e),
             GameError::AzureCoreError(e) => write!(f, "Azure Core error: {:#?}", e),
-        }
+            GameError::ContainerError(e) => write!(f, "GameContainer Error: {:#?}", e),
+        } 
     }
 }
 
@@ -145,8 +146,8 @@ pub struct UserProfile {
     pub text_color: String,
     pub games_played: Option<u16>,
     pub games_won: Option<u16>,
-    pub validated_email: bool,         // has the mail been validated?
-    pub validated_phone: bool,         // has the phone number been validated?
+    pub validated_email: bool, // has the mail been validated?
+    pub validated_phone: bool, // has the phone number been validated?
 }
 impl Default for UserProfile {
     fn default() -> Self {
@@ -162,7 +163,7 @@ impl Default for UserProfile {
             games_played: None,
             games_won: None,
             validated_email: false,
-            validated_phone: false
+            validated_phone: false,
         }
     }
 }
@@ -291,7 +292,7 @@ impl UserProfile {
             games_played: None,
             games_won: None,
             validated_email: false,
-            validated_phone: false
+            validated_phone: false,
         }
     }
 }
@@ -341,7 +342,7 @@ impl From<serde_json::Error> for ServiceResponse {
             "Unable to deserialize response",
             StatusCode::INTERNAL_SERVER_ERROR,
             ResponseType::NoData,
-            GameError::SerdeError(err.to_string()),
+            GameError::JsonError(err.to_string()),
         )
     }
 }
@@ -384,6 +385,24 @@ impl ServiceResponse {
             status: StatusCode::BAD_REQUEST,
             response_type: ResponseType::NoData,
             game_error: GameError::BadId(id.to_owned()),
+        }
+    }
+
+    pub fn new_container_error(msg: &str) -> Self {
+        ServiceResponse {
+            message: msg.to_string(),
+            status: StatusCode::BAD_REQUEST,
+            response_type: ResponseType::NoData,
+            game_error: GameError::ContainerError(String::default()),
+        }
+    }
+
+    pub fn new_game_response(msg: &str, game: &RegularGame) -> Self {
+        ServiceResponse {
+            message: msg.to_owned(),
+            status: StatusCode::OK,
+            response_type: ResponseType::Game(game.clone()),
+            game_error: GameError::NoError(String::default()),
         }
     }
 
@@ -504,4 +523,3 @@ where
     let code = u16::deserialize(deserializer)?;
     Ok(StatusCode::from_u16(code).map_err(serde::de::Error::custom)?)
 }
-
