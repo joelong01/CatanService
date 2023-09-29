@@ -25,7 +25,7 @@ pub async fn shuffle_game(game_id: web::Path<String>, request_context: RequestCo
 /// the user header is filled in by the auth middleware.  a JWT token from login must be
 /// passed in.  this creates a game and stores it in a global HashMap so that multiple
 /// cames can be run at the same time.
-pub async fn new_game(
+pub async fn new_game_handler(
     game_type: Path<CatanGames>,
     headers: HeadersExtractor,
     test_game: Option<web::Json<RegularGame>>,
@@ -41,8 +41,18 @@ pub async fn new_game(
         .unwrap_or_else(|sr| sr.to_http_response())
 }
 
-pub async fn supported_games() -> HttpResponse {
+pub async fn supported_games_handler() -> HttpResponse {
     super::game::supported_games()
+        .await
+        .map(|sr| sr.to_http_response())
+        .unwrap_or_else(|sr| sr.to_http_response())
+}
+
+pub async fn reload_game_handler(
+    game_id: web::Path<String>,
+    request_context: RequestContext
+) -> HttpResponse {
+     super::game::reload_game(&game_id, &request_context)
         .await
         .map(|sr| sr.to_http_response())
         .unwrap_or_else(|sr| sr.to_http_response())

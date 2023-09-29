@@ -311,22 +311,23 @@ fn lobby_service() -> Scope {
  */
 fn game_service() -> Scope {
     web::scope("/games")
-        .route("/", web::get().to(game_handlers::supported_games))
-        .route("/{game_type}", web::post().to(game_handlers::new_game))
+        .route("/", web::get().to(game_handlers::supported_games_handler))
+        .route("/{game_type}", web::post().to(game_handlers::new_game_handler))
         .route(
             "/shuffle/{game_id}",
             web::post().to(game_handlers::shuffle_game),
         )
+        .route("/reload/{game_id}", web::post().to(game_handlers::reload_game_handler))
 }
 
 fn action_service() -> Scope {
     web::scope("/action")
-        .route("/start/{game_id}", web::post().to(action_handlers::next))
+        .route("/start/{game_id}", web::post().to(action_handlers::next_handler))
         .route(
             "/actions/{game_id}",
             web::get().to(action_handlers::valid_actions),
         )
-        .route("/next/{game_id}", web::post().to(action_handlers::next))
+        .route("/next/{game_id}", web::post().to(action_handlers::next_handler))
 }
 
 fn longpoll_service() -> Scope {
@@ -363,6 +364,7 @@ pub async fn init_env_logger(min_level: LevelFilter, cosmos_log_level: LevelFilt
 
     // Then, set the module-specific filter level
     builder.filter(Some("catan_service::cosmos_db::cosmosdb"), cosmos_log_level);
+    builder.filter(Some("actix_server::worker"), LevelFilter::Error );
 
     match builder.try_init() {
         Ok(()) => {

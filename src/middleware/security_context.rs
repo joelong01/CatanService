@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use crate::{
     azure_setup::azure_wrapper::{key_vault_get_secret, key_vault_save_secret},
-    shared::service_models::Claims,
+    shared::service_models::Claims, full_info,
 };
 
 use rand::RngCore;
@@ -135,7 +135,7 @@ impl SecurityContext {
                     let _ = std::fs::remove_file(&cred_cache);
                 } else if let Ok(sc) = serde_json::from_str::<SecurityContext>(&json) {
                     // Successfully deserialized SecurityContext
-                    log::info!("loading keys from cache. this should *not* be production!");
+                    full_info!("loading keys from cache. this should *not* be production!");
                     return sc;
                 }
             }

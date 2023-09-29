@@ -406,6 +406,24 @@ impl ServiceResponse {
         }
     }
 
+    pub fn new_not_found_error(id: &str) -> Self {
+        ServiceResponse {
+            message: format!("id {} not found", id),
+            status: StatusCode::NOT_FOUND,
+            response_type: ResponseType::NoData,
+            game_error: GameError::HttpError(StatusCode::NOT_FOUND)
+        }
+    }
+
+    pub fn new_database_error(msg: &str, error: &str) -> Self {
+        ServiceResponse {
+            message: msg.to_string(),
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            response_type: ResponseType::ErrorInfo(error.to_string()),
+            game_error: GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
+        }
+    }
+
     pub fn to_http_response(&self) -> HttpResponse {
         let serialized = serde_json::to_string(self).expect("Failed to serialize ServiceResponse");
         let response = HttpResponse::build(self.status).body(serialized);

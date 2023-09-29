@@ -62,12 +62,16 @@ impl LongPoller {
             // .await;
             users_map.remove(user_id);
         }
-       
+
         users_map.insert(
             user_id.to_owned(),
             Arc::new(RwLock::new(LongPoller::new(user_id, profile))),
         );
-        full_info!("added {} to the lobby. lobby size = {}", profile.display_name, users_map.keys().len());
+        full_info!(
+            "added {} to the lobby. lobby size = {}",
+            profile.display_name,
+            users_map.keys().len()
+        );
         Ok(ServiceResponse::new_generic_ok(""))
     }
 
@@ -141,7 +145,11 @@ impl LongPoller {
             }
         }
         drop(users_map); // Explicitly drop the read lock
-        full_info!("sending message {} to {} users", service_response.clone(),  senders.len());
+        // full_info!(
+        //     "sending message {} to {} users",
+        //     service_response.clone(),
+        //     senders.len()
+        // );
         // Send the messages
         for (tx, to) in senders.into_iter().zip(to_users.iter()) {
             if tx.send(service_response.clone()).await.is_err() {
@@ -186,7 +194,7 @@ impl LongPoller {
     /// specified user ID.
 
     pub async fn wait(user_id: &str) -> Result<ServiceResponse, ServiceResponse> {
-        log::info!("long_poller::wait.  [user_id={}]", user_id);
+        full_info!("long_poller::wait.  [user_id={}]", user_id);
 
         let user_rx = {
             let users_map = ALL_USERS_MAP.read().await;
@@ -202,10 +210,10 @@ impl LongPoller {
         let mut rx = user_rx.lock().await;
         match rx.recv().await {
             Some(msg) => {
-                println!(
-                    "ResponseType: {}  data={:#?}",
-                    msg.response_type,
-                    msg.get_service_message().unwrap()
+
+                log::info!(
+                    "ResponseType: {}",
+                    msg.response_type
                 );
                 Ok(msg)
             }
@@ -267,7 +275,6 @@ mod tests {
         assert!(res.is_ok());
         let res = LongPoller::remove_user("user2").await;
         assert!(res.is_err());
-       
     }
 
     #[tokio::test]

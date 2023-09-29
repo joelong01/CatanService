@@ -7,14 +7,14 @@ use crate::{
     shared::{
         service_models::{PersistUser, PersistGame},
         shared_models::{GameError, ResponseType, ServiceResponse, UserProfile},
-    }, games_service::catan_games::games::regular::regular_game::RegularGame,
+    }
 };
 use async_trait::async_trait;
 use log::trace;
 use reqwest::StatusCode;
 use tokio::sync::RwLock;
 
-use super::cosmosdb::UserDbTrait;
+use super::cosmosdb::{UserDbTrait, GameDbTrait};
 lazy_static::lazy_static! {
     // Initialize singleton lobby instance
     static ref MOCKED_DB: Arc<TestDb> = Arc::new(TestDb::new());
@@ -33,17 +33,21 @@ impl TestDb {
     }
 }
 #[async_trait]
-impl UserDbTrait for TestDb {
-    async fn push_game(&self, game: &RegularGame) -> Result<ServiceResponse, ServiceResponse> {
-        todo!();
-    }
-    async fn load_games(&self) -> Result<Vec<RegularGame>, ServiceResponse> {
+impl GameDbTrait for TestDb {
+
+    async fn load_game(&self, game_id: &str) -> Result<Vec<u8>, ServiceResponse> {
         todo!();
     }
     async fn delete_games(&self, game_id: &str) -> Result<ServiceResponse, ServiceResponse> {
         todo!();
     }
-
+    async fn update_game_data(&self, game_id: &str, to_write: &PersistGame)-> Result<ServiceResponse, ServiceResponse> {
+        todo!();
+    }
+}
+#[async_trait]
+impl UserDbTrait for TestDb {
+    
     async fn setupdb(&self) -> Result<(), ServiceResponse> {
         MOCKED_DB.users.write().await.clear();
         Ok(())

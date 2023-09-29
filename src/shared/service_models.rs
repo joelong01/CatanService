@@ -9,12 +9,8 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, RwLock};
 
 use crate::{
-    games_service::{
-        catan_games::games::regular::regular_game::RegularGame,
-        game_container::game_messages::CatanMessage,
-    },
-    middleware::request_context_mw::TestContext,
-    shared::shared_models::UserType,
+    games_service::game_container::game_messages::CatanMessage,
+    middleware::request_context_mw::TestContext, shared::shared_models::UserType,
 };
 
 use super::shared_models::UserProfile;
@@ -209,17 +205,15 @@ pub struct PersistGame {
     pub id: String, // not set by client
     #[serde(rename = "partitionKey")]
     pub partition_key: u64, // the cosmos client seems to care about the spelling of both id and partitionKey
-    game: RegularGame,
-    location: GameLocation,
+    pub game: Vec<u8>,
 }
 
 impl PersistGame {
-    pub fn new(game: &RegularGame, location: GameLocation) -> Self {
+    pub fn new(game_id: &str, game: &Vec<u8>) -> Self {
         Self {
-            id: PersistUser::new_id(),
+            id: game_id.to_string(),
             partition_key: 1,
             game: game.clone(),
-            location: location
         }
     }
 }

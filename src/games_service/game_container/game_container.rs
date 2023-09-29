@@ -1,17 +1,33 @@
 #![allow(dead_code)]
-
+#![allow(unused_imports)]
 use super::game_messages::CatanMessage;
 use crate::{
+    cosmos_db::{
+        cosmosdb::{CosmosDb, GameDbTrait, UserDbTrait},
+        mocked_db::TestDb,
+    },
+    full_info,
     games_service::{
         catan_games::games::regular::regular_game::RegularGame,
         long_poller::long_poller::LongPoller,
     },
-    shared::shared_models::{ServiceResponse, UserProfile, UserType},
+    middleware::{
+        request_context_mw::{RequestContext, TestContext},
+        service_config::SERVICE_CONFIG,
+    },
+    shared::{
+        service_models::PersistGame,
+        shared_models::{ServiceResponse, UserProfile, UserType},
+    },
 };
 
-use std::collections::HashMap;
 use std::sync::Arc;
+use std::{collections::HashMap, io::Write};
 use tokio::sync::RwLock;
+
+use flate2::{write::ZlibEncoder, Compression};
+use serde::{Deserialize, Serialize}; // Assume you're using Serde for data serialization
+use tokio::sync::mpsc;
 
 //
 //  this lets you find a GameContainer given a game_id
@@ -20,18 +36,115 @@ lazy_static::lazy_static! {
 }
 
 /// A data structure managing undo and redo operations for game states.
-pub struct Stacks {
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GameStacks {
     undo_stack: Vec<RegularGame>,
     redo_stack: Vec<RegularGame>,
+    #[serde(skip_serializing, with = "stack_sender")]
+    db_update_sender: mpsc::Sender<Vec<u8>>, // This will send compressed data
 }
 
-impl Stacks {
+mod stack_sender {
+    use tokio::sync::mpsc;
+
+    pub fn serialize<S>(_sender: &mpsc::Sender<Vec<u8>>, _serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        panic!("Should not serialize this field");
+    }
+
+    pub fn deserialize<'de, D>(_deserializer: D) -> Result<mpsc::Sender<Vec<u8>>, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let (sender, _receiver) = mpsc::channel(32);
+        Ok(sender)
+    }
+}
+
+impl Default for GameStacks {
+    fn default() -> Self {
+        let (sender, _receiver) = mpsc::channel(32); // Some arbitrary buffer size
+
+        GameStacks {
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
+            db_update_sender: sender,
+        }
+    }
+}
+
+impl GameStacks {
     /// Creates a new `Stacks` instance.
-    pub fn new() -> Self {
+    pub fn new(game_id: &str, request_context: &RequestContext) -> Self {
+        let (tx, rx) = mpsc::channel(32);
+        let test_context = request_context.test_context.clone();
+        let game_id = game_id.to_string();
+        // Spawn the database update task
+        tokio::spawn(async move {
+            GameStacks::db_update_task(game_id, rx, test_context).await;
+        });
         Self {
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
+            db_update_sender: tx,
         }
+    }
+    async fn db_update_task(
+        game_id: String,
+        mut rx: mpsc::Receiver<Vec<u8>>,
+        test_context: Option<TestContext>,
+    ) {
+        let game_id = game_id.to_string();
+        let database: Box<dyn GameDbTrait + Send + Sync> = match test_context {
+            Some(context) => {
+                if context.use_cosmos_db {
+                    Box::new(CosmosDb::new(true, &SERVICE_CONFIG))
+                } else {
+                    Box::new(TestDb::new())
+                }
+            }
+            None => Box::new(CosmosDb::new(false, &SERVICE_CONFIG)),
+        };
+        while let Some(compressed_data) = rx.recv().await {
+            let persisted_game = PersistGame::new(&game_id, &compressed_data);
+            let result = database.update_game_data(&game_id, &persisted_game).await;
+            if result.is_err() {
+                log::error!("failed to save to database: {:#?}", result);
+            }
+        }
+    }
+
+    async fn update_db(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let serialized_data = serde_json::to_vec(self)?;
+
+        let serialized_size = serialized_data.len(); // Get the size of serialized data
+
+        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(&serialized_data)?;
+        let compressed_data = encoder.finish()?;
+
+        let compressed_size = compressed_data.len(); // Get the size of compressed data
+
+        // Log the sizes
+        full_info!(
+            "Serialized size: {} bytes Compressed size: {} bytes",
+            serialized_size,
+            compressed_size
+        );
+
+        self.db_update_sender.send(compressed_data).await?;
+        Ok(())
+    }
+
+    fn deserialize_sender<'de, D>(deserializer: D) -> Result<mpsc::Sender<Vec<u8>>, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let _ = deserializer;
+        let (sender, _receiver) = mpsc::channel(32);
+        Ok(sender)
     }
 
     /// Pushes a game onto the `undo_stack`, making it the current game.
@@ -46,6 +159,7 @@ impl Stacks {
         clone.game_index = clone.game_index + 1;
         self.undo_stack.push(clone);
         self.redo_stack.clear();
+        let _ = self.update_db().await;
     }
 
     /// Moves the current game from the `undo_stack` to the `redo_stack` and returns the updated current game.
@@ -60,6 +174,7 @@ impl Stacks {
         }
         let game = self.undo_stack.pop().unwrap();
         self.redo_stack.push(game.clone());
+        let _ = self.update_db().await;
         self.current().await
     }
 
@@ -78,6 +193,7 @@ impl Stacks {
         self.undo_stack.push(game.clone());
         let current = self.current().await?;
         assert_eq!(game.game_index, current.game_index);
+        let _ = self.update_db().await;
         Ok(current)
     }
 
@@ -110,20 +226,21 @@ impl Stacks {
 
 pub struct GameContainer {
     game_id: String,
-    stacks: Stacks,
+    stacks: GameStacks,
 }
 
 impl GameContainer {
     pub async fn create_and_add_container(
         game_id: &str,
         game: &RegularGame,
+        request_context: &RequestContext,
     ) -> Result<ServiceResponse, ServiceResponse> {
         let mut game_map = GAME_MAP.write().await; // Acquire write lock
         if game_map.contains_key(game_id) {
             return Err(ServiceResponse::new_bad_id("GameId", game_id));
         }
 
-        let mut game_container = GameContainer::new(game_id);
+        let mut game_container = GameContainer::new(game_id, request_context);
 
         game_container.stacks.push_game(&game).await;
         game_map.insert(game_id.to_owned(), Arc::new(RwLock::new(game_container)));
@@ -131,10 +248,10 @@ impl GameContainer {
         Ok(ServiceResponse::new_generic_ok("added"))
     }
 
-    fn new(game_id: &str) -> Self {
+    fn new(game_id: &str, request_context: &RequestContext) -> Self {
         Self {
             game_id: game_id.to_string(),
-            stacks: Stacks::new(),
+            stacks: GameStacks::new(game_id, request_context),
         }
     }
 
@@ -225,5 +342,26 @@ impl GameContainer {
         drop(game_container);
         let _ = Self::broadcast_message(game_id, &CatanMessage::GameUpdate(game.clone())).await;
         Ok(())
+    }
+
+    pub async fn load_game(
+        game_id: &str,
+        _request_context: &RequestContext,
+    ) -> Result<ServiceResponse, ServiceResponse> {
+        let response = GameContainer::current_game(&game_id.to_owned()).await;
+
+        match response {
+            Ok((game, _)) => {
+                return Ok(ServiceResponse::new_game_response(
+                    "game already in memory",
+                    &game,
+                ));
+            }
+            Err(_) => {
+               // let game_stacks = request_context.user_database.
+            }
+        }
+
+        todo!();
     }
 }

@@ -12,6 +12,8 @@ use std::{collections::HashMap, env};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
+use crate::full_info;
+
 
 // load the environment variables once and only once the first time they are accessed (which is in main() in this case)
 lazy_static! {
@@ -101,19 +103,19 @@ impl ServiceConfig {
     }
 
     pub fn dump_values(&self) {
-        log::info!("cosmos_token: {}", self.cosmos_token);
-        log::info!("cosmos_account: {}", self.cosmos_account);
-        log::info!("ssl_key_location: {}", self.ssl_key_location);
-        log::info!("ssl_cert_location: {}", self.ssl_cert_location);
-        log::info!("login_secret_key: {}", self.login_secret_key);
-        log::info!("validation_secret_key: {}", self.validation_secret_key);
-        log::info!("database_name: {}", self.cosmos_database_name);
-        log::info!("rust_log: {}", self.rust_log);
-        log::info!("kv_name: {}", self.kv_name);
-        log::info!("test_phone_number: {}", self.test_phone_number);
-        log::info!("test_email: {}", self.test_email);
-        log::info!("service_mail: {}", self.service_email);
-        log::info!("admin_email: {}", self.admin_email)
+        full_info!("cosmos_token: {}", self.cosmos_token);
+        full_info!("cosmos_account: {}", self.cosmos_account);
+        full_info!("ssl_key_location: {}", self.ssl_key_location);
+        full_info!("ssl_cert_location: {}", self.ssl_cert_location);
+        full_info!("login_secret_key: {}", self.login_secret_key);
+        full_info!("validation_secret_key: {}", self.validation_secret_key);
+        full_info!("database_name: {}", self.cosmos_database_name);
+        full_info!("rust_log: {}", self.rust_log);
+        full_info!("kv_name: {}", self.kv_name);
+        full_info!("test_phone_number: {}", self.test_phone_number);
+        full_info!("test_email: {}", self.test_email);
+        full_info!("service_mail: {}", self.service_email);
+        full_info!("admin_email: {}", self.admin_email)
     }
 }
 impl Default for ServiceConfig {

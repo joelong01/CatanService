@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use crate::cosmos_db::cosmosdb::{UserDb, UserDbTrait};
+use crate::cosmos_db::cosmosdb::{CosmosDb, UserDbTrait};
 use crate::cosmos_db::mocked_db::TestDb;
 use crate::games_service::catan_games::games::regular::regular_game::RegularGame;
 use crate::games_service::game_container::game_messages::GameHeader;
@@ -48,7 +48,7 @@ impl TestContext {
 pub struct RequestContext {
     pub config: ServiceConfig,
     pub test_context: Option<TestContext>,
-    pub database: Box<dyn UserDbTrait>,
+    pub user_database: Box<dyn UserDbTrait + Send + Sync>,
     pub claims: Option<Claims>,
     pub security_context: SecurityContext,
 }
@@ -72,20 +72,20 @@ impl RequestContext {
         service_config: &'static ServiceConfig,
         security_context: &SecurityContext,
     ) -> Self {
-        let database: Box<dyn UserDbTrait> = match test_context {
+        let database: Box<dyn UserDbTrait  + Send + Sync> = match test_context {
             Some(context) => {
                 if context.use_cosmos_db {
-                    Box::new(UserDb::new(true, service_config))
+                    Box::new(CosmosDb::new(true, service_config))
                 } else {
                     Box::new(TestDb::new())
                 }
             }
-            None => Box::new(UserDb::new(false, service_config)),
+            None => Box::new(CosmosDb::new(false, service_config)),
         };
         RequestContext {
             config: service_config.clone(), // Clone the read-only environment data
             test_context: test_context.clone(),
-            database,
+            user_database: database,
             claims: claims.clone(),
             security_context: security_context.clone(),
         }
@@ -147,7 +147,7 @@ impl FromRequest for RequestContext {
             ok(RequestContext {
                 config: SERVICE_CONFIG.clone(), // Clone the environment variables
                 test_context: None,
-                database: Box::new(UserDb::new(false, &SERVICE_CONFIG)),
+                user_database: Box::new(CosmosDb::new(false, &SERVICE_CONFIG)),
                 claims: None,
                 security_context: SecurityContext::cached_secrets(),
             })

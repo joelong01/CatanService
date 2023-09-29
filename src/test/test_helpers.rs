@@ -11,7 +11,7 @@ pub mod test {
     use crate::shared::shared_models::{GameError, ResponseType, ServiceResponse, UserProfile};
     use crate::test::test_proxy::TestProxy;
     use crate::user_service::users::{login, register};
-    use crate::{create_service, create_test_service, init_env_logger};
+    use crate::{create_service, create_test_service, init_env_logger, full_info};
     use actix_http::Request;
     use actix_service::Service;
     use actix_web::dev::ServiceResponse as ActixServiceResponse;
@@ -113,7 +113,7 @@ pub mod test {
         );
 
         let json = serde_json::to_string(&sr).unwrap();
-        log::info!("to_http_response: {}", json);
+        full_info!("to_http_response: {}", json);
         match serde_json::from_str::<ServiceResponse>(&json) {
             Ok(_) => {
                 log::trace!("round trip succeeded");
@@ -193,7 +193,7 @@ pub mod test {
         S: Service<Request, Response = ActixServiceResponse<EitherBody<BoxBody>>, Error = Error>
             + 'static,
     {
-        info!("registering test users");
+        full_info!("registering test users");
     
         // Use the provided admin_token if it's Some, otherwise generate a new one
         let admin_token = if let Some(token) = admin_token {
@@ -241,7 +241,7 @@ pub mod test {
     pub struct TestHelpers {}
     impl TestHelpers {
         pub async fn admin_login() -> String {
-            info!("logging in as admin");
+            full_info!("logging in as admin");
             let profile = TestHelpers::load_admin_profile_from_config();
 
             let admin_pwd = env::var("ADMIN_PASSWORD")

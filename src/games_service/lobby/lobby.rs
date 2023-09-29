@@ -49,7 +49,7 @@ pub async fn respond_to_invite(
         // add the user to the Container -- now they are in both the lobby and the game
         // this will release any threads waiting for updates on the game
         let persist_user = request_context
-            .database
+            .user_database
             .find_user_by_id(&invite_response.from_id)
             .await?;
         GameContainer::add_player(
@@ -84,7 +84,7 @@ pub async fn add_local_user(
         .clone();
 
     let local_user = request_context
-        .database
+        .user_database
         .find_user_by_id(&local_user_id)
         .await?;
 
@@ -115,7 +115,7 @@ pub async fn connect(
         .clone();
 
     let user = request_context
-        .database
+        .user_database
         .find_user_by_id(&user_id)
         .await?;
     full_info!("connecting {}", user.user_profile.display_name);

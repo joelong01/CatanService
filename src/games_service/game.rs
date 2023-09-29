@@ -1,11 +1,13 @@
 use crate::{
+    full_info,
     games_service::{
         game_container::game_messages::{CatanMessage, GameCreatedData},
         long_poller::long_poller::LongPoller,
     },
     middleware::request_context_mw::RequestContext,
-    shared::shared_models::{UserProfile, GameError, ResponseType, ServiceResponse}, full_info,
+    shared::shared_models::{GameError, ResponseType, ServiceResponse, UserProfile},
 };
+
 
 use reqwest::StatusCode;
 
@@ -20,12 +22,14 @@ use super::{
 /// check the state to make sure the request is valid
 /// randomize the board and the harbors
 /// post the response to websocket
-pub async fn shuffle_game(game_id: &str, request_context: &RequestContext) -> Result<ServiceResponse, ServiceResponse> {
-    
+pub async fn shuffle_game(
+    game_id: &str,
+    request_context: &RequestContext,
+) -> Result<ServiceResponse, ServiceResponse> {
     if request_context.is_test() {
         full_info!("test shuffle");
     }
-    
+
     let (game, _) = GameContainer::current_game(&game_id.to_owned()).await?;
 
     let mut new_game = game.clone();
@@ -71,10 +75,7 @@ pub async fn new_game(
             GameError::MissingData(String::default()),
         ));
     }
-    let user = request_context
-        .database
-        .find_user_by_id(user_id)
-        .await?;
+    let user = request_context.user_database.find_user_by_id(user_id).await?;
 
     //
     //  "if it is a test game and the game has been passed in, use it.  otherwise create a new game and shuffle"
@@ -99,7 +100,7 @@ pub async fn new_game(
     //  2. push_game
     //  3. add_player
     //  4. send notification
-    if GameContainer::create_and_add_container(&game.game_id, &game)
+    if GameContainer::create_and_add_container(&game.game_id, &game, &request_context)
         .await
         .is_err()
     {
@@ -143,4 +144,27 @@ pub async fn supported_games() -> Result<ServiceResponse, ServiceResponse> {
         ResponseType::SupportedGames(vec![CatanGames::Regular]),
         GameError::NoError(String::default()),
     ))
+}
+
+///
+/// check the state to make sure the request is valid
+/// randomize the board and the harbors
+/// post the response to websocket
+pub async fn reload_game(
+    game_id: &str,
+    _request_context: &RequestContext,
+) -> Result<ServiceResponse, ServiceResponse> {
+    let response = GameContainer::current_game(&game_id.to_owned()).await;
+
+    match response {
+        Ok((game, _)) => {
+            return Ok(ServiceResponse::new_game_response(
+                "game already in memory",
+                &game,
+            ));
+        }
+        Err(_) => {}
+    }
+
+    todo!();
 }

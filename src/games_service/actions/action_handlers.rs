@@ -17,7 +17,7 @@ use crate::{
  * HTTP response
  */
 
-pub async fn next(game_id: web::Path<String>) -> impl Responder {
+pub async fn next_handler(game_id: web::Path<String>) -> impl Responder {
     super::actions::next(&game_id).await
     .map(|sr| sr.to_http_response())
     .unwrap_or_else(|sr| sr.to_http_response())
