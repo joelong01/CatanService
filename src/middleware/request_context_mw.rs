@@ -5,6 +5,7 @@ use crate::games_service::catan_games::games::regular::regular_game::RegularGame
 use crate::games_service::game_container::game_messages::GameHeader;
 use crate::middleware::service_config::{ServiceConfig, SERVICE_CONFIG};
 use crate::shared::service_models::{Claims, Role};
+use crate::shared::shared_models::UserProfile;
 /**
  *  this file contains the middleware that injects ServiceContext into the Request.  The data in RequestContext is the
  *  configuration data necessary for the Service to run -- the secrets loaded from the environment, hard coded strings,
@@ -87,6 +88,29 @@ impl RequestContext {
             security_context: security_context.clone(),
         }
     }
+
+    pub fn admin_default(use_cosmos: bool, profile: &UserProfile) -> Self {
+        let test_context = TestContext::new(use_cosmos, None, None);
+        let claims = Claims::new(
+            &profile.user_id.as_ref().unwrap(),
+            &profile.pii.as_ref().unwrap().email,
+            30,
+            &vec![Role::TestUser, Role::Admin],
+            &Some(test_context.clone()),
+        );
+        let database_wrapper = DatabaseWrapper::new(&Some(test_context.clone()), &SERVICE_CONFIG);
+
+        let security_context = SecurityContext::cached_secrets().clone();
+        Self {
+            config: SERVICE_CONFIG.clone(), // Clone the read-only environment data
+            test_context: Some(test_context.clone()),
+
+            database: Box::new(database_wrapper),
+            claims: Some(claims.clone()),
+            security_context: security_context,
+        }
+    }
+
     pub fn set_claims(&mut self, claims: &Claims) {
         self.claims = Some(claims.clone());
     }

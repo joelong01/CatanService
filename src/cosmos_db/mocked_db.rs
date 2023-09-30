@@ -5,16 +5,16 @@ use std::{collections::HashMap, sync::Arc};
 use crate::{
     log_return_bad_id, new_not_found_error,
     shared::{
-        service_models::{PersistUser, PersistGame},
+        service_models::{PersistGame, PersistUser},
         shared_models::{GameError, ResponseType, ServiceError},
-    }
+    },
 };
 use async_trait::async_trait;
 use log::trace;
 use reqwest::StatusCode;
 use tokio::sync::RwLock;
 
-use crate::cosmos_db::database_abstractions::{UserDbTrait, GameDbTrait};
+use crate::cosmos_db::database_abstractions::{GameDbTrait, UserDbTrait};
 lazy_static::lazy_static! {
     // Initialize singleton lobby instance
     static ref MOCKED_DB: Arc<TestDb> = Arc::new(TestDb::new());
@@ -34,20 +34,22 @@ impl TestDb {
 }
 #[async_trait]
 impl GameDbTrait for TestDb {
-
     async fn load_game(&self, game_id: &str) -> Result<Vec<u8>, ServiceError> {
         todo!();
     }
     async fn delete_games(&self, game_id: &str) -> Result<(), ServiceError> {
         todo!();
     }
-    async fn update_game_data(&self, game_id: &str, to_write: &PersistGame)-> Result<(), ServiceError> {
+    async fn update_game_data(
+        &self,
+        game_id: &str,
+        to_write: &PersistGame,
+    ) -> Result<(), ServiceError> {
         todo!();
     }
 }
 #[async_trait]
 impl UserDbTrait for TestDb {
-    
     async fn setupdb(&self) -> Result<(), ServiceError> {
         MOCKED_DB.users.write().await.clear();
         Ok(())
@@ -57,10 +59,7 @@ impl UserDbTrait for TestDb {
         Ok(MOCKED_DB.users.read().await.values().cloned().collect())
     }
 
-    async fn update_or_create_user(
-        &self,
-        user: &PersistUser,
-    ) -> Result<(), ServiceError> {
+    async fn update_or_create_user(&self, user: &PersistUser) -> Result<(), ServiceError> {
         let mut map = MOCKED_DB.users.write().await;
         let result = map.insert(user.id.clone(), user.clone());
         match result {
@@ -96,10 +95,10 @@ impl UserDbTrait for TestDb {
         connected_user_id: &str,
     ) -> Result<Vec<PersistUser>, ServiceError> {
         let mut local_profiles = Vec::new();
-    
+
         // Collect the values into a Vec
         let profiles: Vec<PersistUser> = MOCKED_DB.users.read().await.values().cloned().collect();
-    
+
         for profile in profiles {
             if let Some(id) = &profile.connected_user_id {
                 if *id == *connected_user_id {
@@ -107,11 +106,9 @@ impl UserDbTrait for TestDb {
                 }
             }
         }
-    
+
         Ok(local_profiles)
     }
-    
-    
 
     async fn find_user_by_email(&self, val: &str) -> Result<PersistUser, ServiceError> {
         match MOCKED_DB.users.read().await.iter().find(|(_key, user)| {
@@ -128,18 +125,15 @@ impl UserDbTrait for TestDb {
 }
 
 #[cfg(test)]
-mod tests {
-    use crate::{cosmos_db::cosmosdb::test_db_e2e, middleware::request_context_mw::RequestContext};
+pub mod tests {
+    use crate::middleware::request_context_mw::RequestContext;
 
     #[tokio::test]
 
     async fn test_e2e() {
-        // test_db_e2e(Some(TestContext {
-        //     use_cosmos_db: false,
-        // }))
-        // .await;
-
         let context = RequestContext::test_default(false);
-        test_db_e2e(&context).await;
+        crate::cosmos_db::cosmosdb::tests::test_db_e2e(&context).await;
     }
+
+  
 }

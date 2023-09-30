@@ -388,7 +388,7 @@ impl UserDbTrait for CosmosDb {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
 
     use crate::{
         init_env_logger,
@@ -405,7 +405,7 @@ mod tests {
     use log::trace;
     #[tokio::test]
 
-    async fn test_e2e() {
+    pub async fn test_e2e() {
         let context = RequestContext::test_default(true);
         test_db_e2e(&context).await;
     }
@@ -556,5 +556,3 @@ mod tests {
         users
     }
 }
-#[cfg(test)]
-pub use tests::test_db_e2e;

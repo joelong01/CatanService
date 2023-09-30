@@ -306,8 +306,19 @@ macro_rules! create_test_service {
 #[macro_export]
 macro_rules! full_info {
     ($($arg:tt)*) => {
-        log::info!(target: &format!("{}:{}:", file!(), line!()), $($arg)*)
+        {
+            let formatted_msg = format!($($arg)*);
+            let cleaned_msg = crate::macros::format_log_message(&formatted_msg);
+            log::info!(target: &format!("{}:{}:", file!(), line!()), "{}", cleaned_msg);
+        }
     };
+}
+
+pub fn format_log_message(s: &str) -> String {
+    s.replace('\n', " ") // Replace newline with space
+     .split_whitespace() // Split the string by whitespace
+     .collect::<Vec<&str>>() // Collect into a Vec<&str>
+     .join(" ") // Join with a space
 }
 
 #[macro_export]
@@ -338,22 +349,4 @@ macro_rules! trace_function {
             println!("Leaving {} after duration: {} nanoseconds", $function, duration_in_nanos);
         }
     }};
-}
-#[macro_export]
-macro_rules! crack_game_update {
-    ($message:expr) => {
-        match $message {
-            CatanMessage::GameUpdate(regular_game) => Ok(regular_game),
-            _ => Err("Expected GameUpdate variant"),
-        }
-    };
-}
-#[macro_export]
-macro_rules! crack_game_created {
-    ($message:expr) => {
-        match $message {
-            CatanMessage::GameCreated(data) => Ok(data),
-            _ => Err("Expected GameCreated variant"),
-        }
-    };
 }

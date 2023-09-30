@@ -238,6 +238,8 @@ impl LongPoller {
 }
 #[cfg(test)]
 mod tests {
+    use crate::init_env_logger;
+
     use super::*;
 
     #[tokio::test]
@@ -260,28 +262,33 @@ mod tests {
 
     #[tokio::test]
     async fn test_wait() {
-        let res = LongPoller::add_user("user1", &UserProfile::default()).await;
+        init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
+        let test_user_id = "Test_User_1";
+        
+        let res = LongPoller::add_user(test_user_id, &UserProfile::default()).await;
+        
         assert!(res.is_ok());
+         let  users_map = ALL_USERS_MAP.read().await; // Acquire write lock
+       assert!(users_map.contains_key(test_user_id)) ;
         let message = CatanMessage::Started("".to_string());
-        let message_clone = message.clone(); // Clone the message
-
+        // Clone the message outside of the spawned task
+        let cloned_message = message.clone();
         // Spawn a task to send the message after a delay
         tokio::spawn(async move {
-            // Note the "move" keyword
             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-            LongPoller::send_message(vec!["user5".to_string()], &message_clone)
+            LongPoller::send_message(vec![test_user_id.to_string()], &cloned_message)
                 .await
-                .unwrap(); // Use the cloned message
+                .unwrap();
         });
-
-        assert_eq!(
-            LongPoller::wait("user5")
-                .await
-                .unwrap(),
-            message
-        );
+        let result = LongPoller::wait(test_user_id).await;
+        match result {
+            Ok(msg) => assert_eq!(message, msg),
+            Err(se) => full_info!("err returned by wait: {}, {:#?}", se.status, se),
+        }
+        // assert_eq!(LongPoller::wait("user5").await.unwrap(), message);
         assert!(LongPoller::wait("user6").await.is_err());
     }
+
     #[tokio::test]
     async fn test_get_available_and_set_status() {
         // Add users

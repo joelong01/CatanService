@@ -908,7 +908,7 @@ mod tests {
     // Test the login function
     #[tokio::test]
     async fn test_login_mocked() {
-        init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Trace).await;
+        init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
         test_login(false).await;
     }
 
@@ -1005,13 +1005,8 @@ mod tests {
 
     async fn test_login(use_cosmos: bool) {
         let token = TestHelpers::admin_login().await;
-
-        let request_context = RequestContext::test_default(use_cosmos);
         let profile = UserProfile::new_test_user(None);
-        // setup
-        // let response = verify_cosmosdb(&request_context).await;
-        // assert!(response.is_ok());
-        // Register the user first
+        let request_context = RequestContext::admin_default(use_cosmos, &profile);
         let user_profile = register_test_user("password", &profile, &request_context)
             .await
             .expect("success");
