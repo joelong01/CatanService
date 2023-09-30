@@ -83,7 +83,7 @@ pub async fn verify_cosmosdb(context: &RequestContext) -> Result<ServiceResponse
             ));
         }
 
-        for collection in &context.user_database.get_collection_names(context.is_test()) {
+        for collection in &context.database.as_user_db().get_collection_names(context.is_test()) {
             let collection_exists = cosmos_collection_exists(
                 &context.config.cosmos_account,
                 &context.config.cosmos_database_name,
@@ -126,7 +126,7 @@ async fn internal_register_user(
     };
 
     if request_context
-        .user_database
+        .database.as_user_db()
         .find_user_by_email(&email)
         .await
         .is_ok()
@@ -168,7 +168,7 @@ async fn internal_register_user(
     persist_user.user_profile.games_won = Some(0);
     persist_user.roles = roles.clone();
     request_context
-        .user_database
+        .database.as_user_db()
         .update_or_create_user(&persist_user)
         .await
 }
@@ -204,11 +204,11 @@ pub async fn update_profile(
 ) -> Result<ServiceResponse, ServiceResponse> {
     let claims = request_context.claims.as_ref().unwrap();
 
-    let mut persist_user = request_context.user_database.find_user_by_id(&claims.id).await?;
+    let mut persist_user = request_context.database.as_user_db().find_user_by_id(&claims.id).await?;
     persist_user.update_profile(&profile_in);
 
     request_context
-        .user_database
+        .database.as_user_db()
         .update_or_create_user(&persist_user)
         .await
 }
@@ -251,7 +251,7 @@ pub async fn login(
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
     let user = request_context
-        .user_database
+        .database.as_user_db()
         .find_user_by_email(username)
         .await?;
 
@@ -320,7 +320,7 @@ pub async fn list_users(
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
     // Get list of users
-    match request_context.user_database.list().await {
+    match request_context.database.as_user_db().list().await {
         Ok(users) => {
             let user_profiles: Vec<UserProfile> = users
                 .iter()
@@ -400,13 +400,13 @@ pub async fn get_profile(
     let user = match lookup_value.contains("@") {
         true => {
             request_context
-                .user_database
+                .database.as_user_db()
                 .find_user_by_email(&lookup_value)
                 .await?
         }
         false => {
             request_context
-                .user_database
+                .database.as_user_db()
                 .find_user_by_id(&lookup_value)
                 .await?
         }
@@ -435,7 +435,7 @@ pub async fn delete(
         return new_unauthorized_response!("only an admin can delete another user");
     }
 
-    let result = request_context.user_database.delete_user(id).await;
+    let result = request_context.database.as_user_db().delete_user(id).await;
 
     match result {
         Ok(..) => Ok(ServiceResponse::new(
@@ -486,10 +486,10 @@ pub async fn validate_email(token: &str) -> Result<ServiceResponse, ServiceRespo
     );
 
     let id = &claims.id; // Borrowing here.
-    let mut user = request_context.user_database.find_user_by_id(id).await?;
+    let mut user = request_context.database.as_user_db().find_user_by_id(id).await?;
 
     user.user_profile.validated_email = true;
-    request_context.user_database.update_or_create_user(&user).await
+    request_context.database.as_user_db().update_or_create_user(&user).await
 }
 
 //
@@ -598,7 +598,7 @@ async fn internal_send_phone_code(
     code: i32,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    let mut persist_user = request_context.user_database.find_user_by_id(user_id).await?;
+    let mut persist_user = request_context.database.as_user_db().find_user_by_id(user_id).await?;
 
     let phone_number = match &persist_user.user_profile.pii {
         Some(pii) => pii.phone_number.clone(),
@@ -607,7 +607,7 @@ async fn internal_send_phone_code(
 
     persist_user.phone_code = Some(code.to_string());
     request_context
-        .user_database
+        .database.as_user_db()
         .update_or_create_user(&persist_user)
         .await?;
     let msg = format!(
@@ -645,7 +645,7 @@ pub async fn validate_phone(
         .id
         .clone();
 
-    let mut persist_user = request_context.user_database.find_user_by_id(&user_id).await?;
+    let mut persist_user = request_context.database.as_user_db().find_user_by_id(&user_id).await?;
 
     match &persist_user.phone_code {
         // If the stored code matches the provided code, validate the phone.
@@ -653,7 +653,7 @@ pub async fn validate_phone(
             persist_user.user_profile.validated_phone = true;
             persist_user.phone_code = None;
             request_context
-                .user_database
+                .database.as_user_db()
                 .update_or_create_user(&persist_user)
                 .await?;
             Ok(ServiceResponse::new(
@@ -709,7 +709,7 @@ pub async fn find_user_by_id(
     id: &str,
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
-    let persist_user = request_context.user_database.find_user_by_id(&id).await?;
+    let persist_user = request_context.database.as_user_db().find_user_by_id(&id).await?;
 
     Ok(ServiceResponse::new(
         "",
@@ -751,7 +751,7 @@ pub async fn create_local_user(
     let persist_user = PersistUser::from_local_user(&user_id, &profile);
 
     request_context
-        .user_database
+        .database.as_user_db()
         .update_or_create_user(&persist_user)
         .await
 }
@@ -788,7 +788,7 @@ pub async fn update_local_user(
 
     // Find the local user by ID
     let mut local_user = request_context
-        .user_database
+        .database.as_user_db()
         .find_user_by_id(local_user_id)
         .await?;
 
@@ -809,7 +809,7 @@ pub async fn update_local_user(
 
     // Save the updated user
     request_context
-        .user_database
+        .database.as_user_db()
         .update_or_create_user(&local_user)
         .await
 }
@@ -824,7 +824,7 @@ pub async fn delete_local_user(
     request_context: &RequestContext,
 ) -> Result<ServiceResponse, ServiceResponse> {
     let local_user_profile = request_context
-        .user_database
+        .database.as_user_db()
         .find_user_by_id(&local_user_primary_key)
         .await?;
 
@@ -848,7 +848,7 @@ pub async fn delete_local_user(
 
     if id_in_claims == connected_id || request_context.is_caller_in_role(Role::Admin) {
         request_context
-            .user_database
+            .database.as_user_db()
             .delete_user(&local_user_primary_key)
             .await?;
         return Ok(new_ok_response!(""));
@@ -875,7 +875,7 @@ pub async fn get_local_users(
     };
     if id_in_claims == connected_id || request_context.is_caller_in_role(Role::Admin) {
         let users = request_context
-            .user_database
+            .database.as_user_db()
             .get_connected_users(&connected_id)
             .await?;
         let user_profiles: Vec<UserProfile> = users
@@ -1030,7 +1030,7 @@ mod tests {
         let sr = result.unwrap();
         let user_profile = sr.to_profile().expect("This should be a client user");
         request_context
-            .user_database
+            .database.as_user_db()
             .find_user_by_email(&user_profile.pii.unwrap().email)
             .await
             .expect("we just put this here!");

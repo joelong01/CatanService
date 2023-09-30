@@ -75,7 +75,7 @@ pub async fn new_game(
             GameError::MissingData(String::default()),
         ));
     }
-    let user = request_context.user_database.find_user_by_id(user_id).await?;
+    let user = request_context.database.as_user_db().find_user_by_id(user_id).await?;
 
     //
     //  "if it is a test game and the game has been passed in, use it.  otherwise create a new game and shuffle"

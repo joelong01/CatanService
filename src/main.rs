@@ -12,7 +12,7 @@ mod user_service;
 
 use actix_web::{web, HttpResponse, HttpServer, Scope};
 
-use cosmos_db::cosmosdb::COLLECTION_NAME_VALUES;
+use cosmos_db::database_abstractions::COLLECTION_NAME_VALUES;
 use games_service::actions::action_handlers;
 use games_service::long_poller::long_poller_handler::long_poll_handler;
 use shared::shared_models::ServiceResponse;

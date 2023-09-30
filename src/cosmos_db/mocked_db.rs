@@ -14,7 +14,7 @@ use log::trace;
 use reqwest::StatusCode;
 use tokio::sync::RwLock;
 
-use super::cosmosdb::{UserDbTrait, GameDbTrait};
+use crate::cosmos_db::database_abstractions::{UserDbTrait, GameDbTrait};
 lazy_static::lazy_static! {
     // Initialize singleton lobby instance
     static ref MOCKED_DB: Arc<TestDb> = Arc::new(TestDb::new());
@@ -38,10 +38,10 @@ impl GameDbTrait for TestDb {
     async fn load_game(&self, game_id: &str) -> Result<Vec<u8>, ServiceResponse> {
         todo!();
     }
-    async fn delete_games(&self, game_id: &str) -> Result<ServiceResponse, ServiceResponse> {
+    async fn delete_games(&self, game_id: &str) -> Result<(), ServiceResponse> {
         todo!();
     }
-    async fn update_game_data(&self, game_id: &str, to_write: &PersistGame)-> Result<ServiceResponse, ServiceResponse> {
+    async fn update_game_data(&self, game_id: &str, to_write: &PersistGame)-> Result<(), ServiceResponse> {
         todo!();
     }
 }

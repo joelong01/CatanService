@@ -163,34 +163,6 @@ macro_rules! bad_request_from_string {
 }
 
 #[macro_export]
-macro_rules! log_and_return_azure_core_error {
-    ( $e:expr, $msg:expr ) => {{
-        use crate::macros::convert_status_code;
-        log::error!("\t{}\n {:#?}", $msg, $e);
-
-        let status_code = match $e.as_http_error() {
-            Some(http_err) => convert_status_code(http_err.status()),
-            None => reqwest::StatusCode::INTERNAL_SERVER_ERROR, // Default status code
-        };
-
-        return Err(ServiceResponse {
-            message: format!("{}: {:#?}", $msg, $e),
-            status: status_code,
-            response_type: ResponseType::ErrorInfo(format!("Error: {:#?}", $e)),
-            game_error: GameError::HttpError(status_code),
-        });
-    }};
-}
-
-pub fn convert_status_code(azure_status: azure_core::StatusCode) -> reqwest::StatusCode {
-    // Convert the azure_core::StatusCode into its underlying u16 representation.
-    let as_u16 = azure_status.into();
-
-    // Convert the u16 representation back into a reqwest::StatusCode.
-    reqwest::StatusCode::from_u16(as_u16).unwrap()
-}
-
-#[macro_export]
 macro_rules! az_error_to_service_response {
     ( $cmd:expr, $stderr:expr ) => {{
         use crate::shared::shared_models::GameError;

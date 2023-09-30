@@ -3,7 +3,8 @@
 use super::game_messages::CatanMessage;
 use crate::{
     cosmos_db::{
-        cosmosdb::{CosmosDb, GameDbTrait, UserDbTrait},
+        cosmosdb::CosmosDb,
+        database_abstractions::{DatabaseWrapper, GameDbTrait},
         mocked_db::TestDb,
     },
     full_info,
@@ -97,19 +98,14 @@ impl GameStacks {
         test_context: Option<TestContext>,
     ) {
         let game_id = game_id.to_string();
-        let database: Box<dyn GameDbTrait + Send + Sync> = match test_context {
-            Some(context) => {
-                if context.use_cosmos_db {
-                    Box::new(CosmosDb::new(true, &SERVICE_CONFIG))
-                } else {
-                    Box::new(TestDb::new())
-                }
-            }
-            None => Box::new(CosmosDb::new(false, &SERVICE_CONFIG)),
-        };
+        let database = DatabaseWrapper::new(&test_context, &SERVICE_CONFIG);
+
         while let Some(compressed_data) = rx.recv().await {
             let persisted_game = PersistGame::new(&game_id, &compressed_data);
-            let result = database.update_game_data(&game_id, &persisted_game).await;
+            let result = database
+                .as_game_db()
+                .update_game_data(&game_id, &persisted_game)
+                .await;
             if result.is_err() {
                 log::error!("failed to save to database: {:#?}", result);
             }
@@ -358,7 +354,7 @@ impl GameContainer {
                 ));
             }
             Err(_) => {
-               // let game_stacks = request_context.user_database.
+                // let game_stacks = request_context.user_database.
             }
         }
 

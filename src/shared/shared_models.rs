@@ -424,6 +424,25 @@ impl ServiceResponse {
         }
     }
 
+    pub fn new_json_error(msg: &str, error: &serde_json::Error) -> Self {
+        ServiceResponse {
+            message: msg.to_string(),
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            response_type: ResponseType::ErrorInfo(error.to_string()),
+            game_error: GameError::JsonError(format!("{:#?}", error)),
+
+        }
+    }
+    pub fn new_azure_core_error(msg: &str, error: &azure_core::Error) -> Self {
+        ServiceResponse {
+            message: msg.to_string(),
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            response_type: ResponseType::AzError(error.to_string()),
+            game_error: GameError::AzureCoreError(format!("{:#?}", error)),
+
+        }
+    }
+
     pub fn to_http_response(&self) -> HttpResponse {
         let serialized = serde_json::to_string(self).expect("Failed to serialize ServiceResponse");
         let response = HttpResponse::build(self.status).body(serialized);

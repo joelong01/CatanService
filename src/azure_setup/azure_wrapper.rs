@@ -22,7 +22,7 @@ use crate::az_error_to_service_response;
 use crate::bad_request_from_string;
 use crate::full_info;
 use crate::init_env_logger;
-use crate::log_and_return_azure_core_error;
+
 use crate::log_return_bad_request;
 use crate::log_return_serde_error;
 use crate::middleware::request_context_mw::RequestContext;
@@ -1023,15 +1023,11 @@ mod tests {
     use std::str;
     use std::sync::Mutex;
     use tracing::info;
-    
     use lazy_static::lazy_static;
-    
     use crate::az_error_to_service_response;
     use crate::azure_setup::azure_wrapper::*;
-
     use crate::bad_request_from_string;
     use crate::init_env_logger;
-    use crate::log_and_return_azure_core_error;
     use crate::log_return_bad_request;
     use crate::log_return_serde_error;
     use crate::middleware::request_context_mw::RequestContext;

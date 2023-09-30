@@ -1,6 +1,6 @@
 #![allow(dead_code)]
-use crate::cosmos_db::cosmosdb::{CosmosDb, UserDbTrait};
-use crate::cosmos_db::mocked_db::TestDb;
+
+use crate::cosmos_db::database_abstractions::DatabaseWrapper;
 use crate::games_service::catan_games::games::regular::regular_game::RegularGame;
 use crate::games_service::game_container::game_messages::GameHeader;
 use crate::middleware::service_config::{ServiceConfig, SERVICE_CONFIG};
@@ -26,12 +26,16 @@ use super::security_context::SecurityContext;
 pub struct TestContext {
     pub use_cosmos_db: bool,
     pub phone_code: Option<i32>, // send the code to verify phone number so we can test from the client
-    pub game: Option<RegularGame> // send a game from the client so we can test the apis, but know what we get back
+    pub game: Option<RegularGame>, // send a game from the client so we can test the apis, but know what we get back
 }
 
 impl TestContext {
     pub fn new(use_cosmos_db: bool, phone_code: Option<i32>, game: Option<RegularGame>) -> Self {
-        Self { use_cosmos_db, phone_code: phone_code, game: game }
+        Self {
+            use_cosmos_db,
+            phone_code: phone_code,
+            game: game,
+        }
     }
     pub fn as_json(use_cosmos: bool) -> String {
         let tc = TestContext::new(use_cosmos, None, None);
@@ -40,7 +44,7 @@ impl TestContext {
     pub fn set_phone_code(&mut self, code: Option<i32>) {
         self.phone_code = code.clone();
     }
-    pub fn set_galme(&mut self, game: Option<RegularGame>){
+    pub fn set_galme(&mut self, game: Option<RegularGame>) {
         self.game = game;
     }
 }
@@ -48,7 +52,7 @@ impl TestContext {
 pub struct RequestContext {
     pub config: ServiceConfig,
     pub test_context: Option<TestContext>,
-    pub user_database: Box<dyn UserDbTrait + Send + Sync>,
+    pub database: Box<DatabaseWrapper>,
     pub claims: Option<Claims>,
     pub security_context: SecurityContext,
 }
@@ -72,20 +76,13 @@ impl RequestContext {
         service_config: &'static ServiceConfig,
         security_context: &SecurityContext,
     ) -> Self {
-        let database: Box<dyn UserDbTrait  + Send + Sync> = match test_context {
-            Some(context) => {
-                if context.use_cosmos_db {
-                    Box::new(CosmosDb::new(true, service_config))
-                } else {
-                    Box::new(TestDb::new())
-                }
-            }
-            None => Box::new(CosmosDb::new(false, service_config)),
-        };
+        let database_wrapper = DatabaseWrapper::new(test_context, service_config);
+
         RequestContext {
             config: service_config.clone(), // Clone the read-only environment data
             test_context: test_context.clone(),
-            user_database: database,
+
+            database: Box::new(database_wrapper),
             claims: claims.clone(),
             security_context: security_context.clone(),
         }
@@ -147,7 +144,7 @@ impl FromRequest for RequestContext {
             ok(RequestContext {
                 config: SERVICE_CONFIG.clone(), // Clone the environment variables
                 test_context: None,
-                user_database: Box::new(CosmosDb::new(false, &SERVICE_CONFIG)),
+                database: Box::new(DatabaseWrapper::new(&None, &SERVICE_CONFIG)),
                 claims: None,
                 security_context: SecurityContext::cached_secrets(),
             })
