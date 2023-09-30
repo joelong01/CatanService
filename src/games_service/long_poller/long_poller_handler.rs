@@ -1,7 +1,7 @@
 use actix_web::HttpResponse;
 
 use crate::{
-    games_service::long_poller::long_poller::LongPoller,
+    api_call, games_service::long_poller::long_poller::LongPoller,
     middleware::request_context_mw::RequestContext,
 };
 
@@ -16,13 +16,6 @@ pub async fn long_poll_handler(request_context: RequestContext) -> HttpResponse 
         .as_ref()
         .expect("auth_mw should set this for all authenticated APIs")
         .id;
-    let res = LongPoller::wait(&user_id).await;
-    // log_thread_info!(
-    //     "long_poll_handler",
-    //     "LongPoller::wait returned.  response: {:#?}", res
-    // );
 
-
-    res.map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
+    api_call!(LongPoller::wait(&user_id).await)
 }

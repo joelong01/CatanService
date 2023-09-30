@@ -15,7 +15,7 @@ use actix_web::{web, HttpResponse, HttpServer, Scope};
 use cosmos_db::database_abstractions::COLLECTION_NAME_VALUES;
 use games_service::actions::action_handlers;
 use games_service::long_poller::long_poller_handler::long_poll_handler;
-use shared::shared_models::ServiceResponse;
+use shared::shared_models::ServiceError;
 
 use std::env;
 use std::net::ToSocketAddrs;
@@ -96,7 +96,7 @@ async fn main() -> std::io::Result<()> {
         .await
 }
 
-fn setup_cosmos() -> Result<(), ServiceResponse> {
+fn setup_cosmos() -> Result<(), ServiceError> {
     verify_or_create_account(
         &SERVICE_CONFIG.resource_group,
         &SERVICE_CONFIG.cosmos_account,
@@ -138,7 +138,7 @@ fn setup_cosmos() -> Result<(), ServiceResponse> {
  * this is the simplest possible GET handler that can be run from a browser to test connectivity
  */
 async fn get_version() -> HttpResponse {
-   new_ok_response!("version 1.0").to_http_response()
+    new_ok_response!("version 1.0").to_http_response()
 }
 
 /**
@@ -180,7 +180,7 @@ fn create_unauthenticated_service() -> Scope {
             ) /* TEST ONLY */
             .route(
                 "/users/validate-email/{token}",
-                web::get().to(user_handlers::validate_email),
+                web::get().to(user_handlers::validate_email_handler),
             ),
     )
 }
@@ -242,7 +242,7 @@ fn user_service() -> Scope {
         )
         .route(
             "/email/send-validation-email",
-            web::post().to(user_handlers::send_validation_email),
+            web::post().to(user_handlers::send_validation_email_handler),
         )
         .route(
             "/register-test-user",
@@ -284,9 +284,15 @@ fn lobby_service() -> Scope {
             "/acceptinvite",
             web::post().to(lobby_handlers::respond_to_invite),
         )
-        .route("/add-local-user/{local_user_id}", web::post().to(lobby_handlers::add_local_user_handler))
+        .route(
+            "/add-local-user/{local_user_id}",
+            web::post().to(lobby_handlers::add_local_user_handler),
+        )
         .route("/connect", web::post().to(lobby_handlers::connect_handler))
-        .route("/disconnet", web::post().to(lobby_handlers::disconnect_handler))
+        .route(
+            "/disconnet",
+            web::post().to(lobby_handlers::disconnect_handler),
+        )
 }
 
 /**
@@ -312,22 +318,34 @@ fn lobby_service() -> Scope {
 fn game_service() -> Scope {
     web::scope("/games")
         .route("/", web::get().to(game_handlers::supported_games_handler))
-        .route("/{game_type}", web::post().to(game_handlers::new_game_handler))
+        .route(
+            "/{game_type}",
+            web::post().to(game_handlers::new_game_handler),
+        )
         .route(
             "/shuffle/{game_id}",
             web::post().to(game_handlers::shuffle_game),
         )
-        .route("/reload/{game_id}", web::post().to(game_handlers::reload_game_handler))
+        .route(
+            "/reload/{game_id}",
+            web::post().to(game_handlers::reload_game_handler),
+        )
 }
 
 fn action_service() -> Scope {
     web::scope("/action")
-        .route("/start/{game_id}", web::post().to(action_handlers::next_handler))
+        .route(
+            "/start/{game_id}",
+            web::post().to(action_handlers::next_handler),
+        )
         .route(
             "/actions/{game_id}",
             web::get().to(action_handlers::valid_actions),
         )
-        .route("/next/{game_id}", web::post().to(action_handlers::next_handler))
+        .route(
+            "/next/{game_id}",
+            web::post().to(action_handlers::next_handler),
+        )
 }
 
 fn longpoll_service() -> Scope {
@@ -364,7 +382,7 @@ pub async fn init_env_logger(min_level: LevelFilter, cosmos_log_level: LevelFilt
 
     // Then, set the module-specific filter level
     builder.filter(Some("catan_service::cosmos_db::cosmosdb"), cosmos_log_level);
-    builder.filter(Some("actix_server::worker"), LevelFilter::Error );
+    builder.filter(Some("actix_server::worker"), LevelFilter::Error);
 
     match builder.try_init() {
         Ok(()) => {
@@ -387,10 +405,7 @@ mod tests {
         init_env_logger,
         middleware::{request_context_mw::TestContext, service_config::SERVICE_CONFIG},
         setup_cosmos, setup_test,
-        test::{
-            test_helpers::test::{delete_all_test_users, register_test_users},
-            test_proxy::TestProxy,
-        },
+        test::{test_proxy::TestProxy, test_helpers::test::TestHelpers},
     };
 
     use actix_web::test;
@@ -420,21 +435,17 @@ mod tests {
         let use_cosmos = true;
         let mut proxy = TestProxy::new(&app, Some(TestContext::new(use_cosmos, None, None)));
 
-        let test_users = register_test_users(&mut proxy, None).await;
-        let service_response = proxy
+        let test_users = TestHelpers::register_test_users(&mut proxy, None).await;
+        let auth_token = proxy
             .login(
                 &test_users[0].clone().pii.expect("pii should exist").email,
                 "password",
             )
-            .await;
-        assert!(service_response.status.is_success());
+            .await
+            .expect("success");
 
-        let auth_token = service_response
-            .get_token()
-            .expect("auth token should exist");
-        proxy.set_auth_token(&Some(auth_token));
-        let service_response = proxy.get_profile("Self").await;
-        let profile = service_response.to_profile().expect("profile should exist");
+        proxy.set_auth_token(Some(auth_token));
+        let profile = proxy.get_profile("Self").await.expect("success");
         let first = test_users
             .first()
             .and_then(|user| user.pii.as_ref())
@@ -468,8 +479,8 @@ mod tests {
         let app = create_test_service!();
         let code = 569342;
         let mut proxy = TestProxy::new(&app, Some(TestContext::new(true, Some(code), None)));
-        let admin_auth_token = delete_all_test_users(&mut proxy).await;
-        let users = register_test_users(&mut proxy, Some(admin_auth_token)).await;
+        let admin_auth_token = TestHelpers::delete_all_test_users(&mut proxy).await;
+        let users = TestHelpers::register_test_users(&mut proxy, Some(admin_auth_token)).await;
 
         let mut profile = users[0].clone();
         assert!(profile.pii.is_some());
@@ -480,18 +491,16 @@ mod tests {
         let auth_token = proxy
             .login(&profile.pii.as_ref().unwrap().email, "password")
             .await
-            .get_token()
             .expect("login should work and it should return the token");
 
         assert!(auth_token.len() > 0);
-        proxy.set_auth_token(&Some(auth_token));
+        proxy.set_auth_token(Some(auth_token));
         //
         //  set the phone number and email
         profile.pii.as_mut().unwrap().phone_number = SERVICE_CONFIG.test_phone_number.clone();
         profile.pii.as_mut().unwrap().email = SERVICE_CONFIG.test_email.clone();
         // update the profile
-        let service_response = proxy.update_profile(&profile).await;
-        assert!(service_response.status.is_success());
+        proxy.update_profile(&profile).await.expect("success");
 
         //
         // we've change the email, which is encoded in the token and used as truth by the service -
@@ -499,17 +508,15 @@ mod tests {
         let auth_token = proxy
             .login(&profile.pii.as_ref().unwrap().email, "password")
             .await
-            .get_token()
             .expect("login should work and it should return the token");
         assert!(auth_token.len() > 0);
-        proxy.set_auth_token(&Some(auth_token));
+        proxy.set_auth_token(Some(auth_token));
 
         // lookup profile
 
         let new_profile = proxy
             .get_profile("Self")
             .await
-            .to_profile()
             .expect("should get a profile back from get_profile for an account that can login");
 
         // they better be the same!
@@ -517,46 +524,35 @@ mod tests {
 
         // send the phone code.  somebody is going to get a text...
         // the actual code is defined above and set in the test context, so that we can verify it
-        let service_response = proxy.send_phone_code().await;
-        assert!(service_response.status.is_success());
+        proxy.send_phone_code().await.expect("success");
 
         //
         //  validate with the phone
-        let service_response = proxy.validate_phone_code(code).await;
-        assert!(service_response.status.is_success());
+        proxy.validate_phone_code(code).await.expect("success");
 
         //
         // send validation email
-        let service_response = proxy.send_validation_email().await;
-        assert!(service_response.status.is_success());
-        let url_str = service_response
-            .get_url()
-            .expect("should be the validation url");
-        //
+        let url_str = proxy.send_validation_email().await.expect("success");
+
         //  now we have to get the claim from the URL so we can pass it to the proxy
         let parts: Vec<&str> = url_str.rsplitn(2, '/').collect();
         assert_eq!(parts.len(), 2);
         let encoded_token = parts[0].clone();
 
         // validate with the token
-        proxy.set_auth_token(&None);
-        let service_response = proxy.validate_email(encoded_token).await;
-        assert!(service_response.status.is_success());
+        proxy.set_auth_token(None);
+        proxy.validate_email(encoded_token).await.expect("success");
 
         // get the profile
 
-        let service_response = proxy.get_profile("Self").await;
-        assert!(service_response.status.is_success());
-        let profile = service_response
-            .to_profile()
-            .expect("you should be able to get your own profile.");
+        let profile = proxy.get_profile("Self").await.expect("success");
         assert!(profile.validated_email);
         assert!(profile.validated_phone);
         //
         // delete the users to put us back to a known state.  this is particularly important because we modified one
         // of the users and the tests can check the input vs. output of the user profile and the profile in the db will
         // be different than the profile in the .json that is used to add test users and tests will assert.
-        delete_all_test_users(&mut proxy).await;
+        TestHelpers::delete_all_test_users(&mut proxy).await;
     }
     #[tokio::test]
     async fn test_setup() {

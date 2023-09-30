@@ -1,4 +1,20 @@
 #[macro_export]
+macro_rules! api_call {
+    ($api_call:expr) => {
+        {
+            let result = $api_call;
+            match result {
+                Ok(val) => HttpResponse::Ok().json(val),
+                Err(service_error) => service_error.to_http_response(),
+            }
+        }
+    };
+}
+
+
+
+
+#[macro_export]
 macro_rules! serialize_as_array2 {
     ($key:ty, $value:ty) => {
         fn serialize_as_array<S>(
@@ -46,7 +62,7 @@ macro_rules! log_return_err {
 macro_rules! new_unexpected_server_error {
     ( $e:expr, $msg:expr ) => {{
         log::error!("\t{}\n {:#?}", $msg, $e);
-        Err(ServiceResponse::new(
+        Err(ServiceError::new(
             $msg,
             StatusCode::INTERNAL_SERVER_ERROR,
             ResponseType::ErrorInfo(format!("Error: {}", $e)),
@@ -58,7 +74,7 @@ macro_rules! new_unexpected_server_error {
 #[macro_export]
 macro_rules! unexpected_server_error_from_string {
     ($msg:expr ) => {{
-        ServiceResponse::new(
+        ServiceError::new(
             $msg,
             StatusCode::INTERNAL_SERVER_ERROR,
             ResponseType::NoData,
@@ -73,7 +89,7 @@ macro_rules! new_ok_response {
         use crate::shared::shared_models::GameError;
         use crate::shared::shared_models::ResponseType;
         use reqwest::StatusCode;
-        ServiceResponse::new(
+        ServiceError::new(
             $msg,
             StatusCode::OK,
             ResponseType::NoData,
@@ -85,7 +101,7 @@ macro_rules! new_ok_response {
 #[macro_export]
 macro_rules! new_unauthorized_response {
     ($msg:expr) => {
-        Err(ServiceResponse::new(
+        Err(ServiceError::new(
             $msg,
             StatusCode::UNAUTHORIZED,
             ResponseType::NoData,
@@ -98,7 +114,7 @@ macro_rules! new_unauthorized_response {
 macro_rules! log_return_not_found {
     ( $e:expr, $msg:expr ) => {{
         log::error!("\t{}\n {:#?}", $e, $e);
-        return Err(ServiceResponse::new(
+        return Err(ServiceError::new(
             $msg,
             StatusCode::NOT_FOUND,
             ResponseType::ErrorInfo(format!("Error: {}", $e)),
@@ -110,7 +126,7 @@ macro_rules! log_return_not_found {
 #[macro_export]
 macro_rules! new_not_found_error {
     ($msg:expr ) => {{
-        Err(ServiceResponse::new(
+        Err(ServiceError::new(
             $msg,
             StatusCode::NOT_FOUND,
             ResponseType::NoData,
@@ -124,7 +140,7 @@ macro_rules! log_return_bad_id {
     ( $id:expr,$msg:expr ) => {{
         use reqwest::StatusCode;
         log::error!("badid in {}", $msg);
-        return Err(ServiceResponse::new(
+        return Err(ServiceError::new(
             $msg,
             StatusCode::NOT_FOUND,
             ResponseType::NoData,
@@ -137,7 +153,7 @@ macro_rules! log_return_bad_id {
 macro_rules! log_return_bad_request {
     ( $e:expr, $msg:expr ) => {{
         log::error!("\t{}\n {:#?}", $e, $e);
-        return Err(ServiceResponse::new(
+        return Err(ServiceError::new(
             $msg,
             StatusCode::BAD_REQUEST,
             ResponseType::ErrorInfo(format!("Error: {}", $e)),
@@ -150,10 +166,10 @@ macro_rules! log_return_bad_request {
 macro_rules! bad_request_from_string {
     ($msg:expr ) => {{
         use reqwest::StatusCode;
-        use crate::ServiceResponse;
+        use crate::ServiceError;
         use crate::shared::shared_models::ResponseType;
         use crate::shared::shared_models::GameError;
-        ServiceResponse::new(
+        ServiceError::new(
             $msg,
             StatusCode::BAD_REQUEST,
             ResponseType::NoData,
@@ -165,14 +181,15 @@ macro_rules! bad_request_from_string {
 #[macro_export]
 macro_rules! az_error_to_service_response {
     ( $cmd:expr, $stderr:expr ) => {{
-        use crate::shared::shared_models::GameError;
+        use crate::shared::shared_models::{GameError, ServiceError};
         use crate::shared::shared_models::ResponseType::AzError;
         use reqwest::StatusCode;
+        
 
         let msg = format!("command: {}\n Error: {:#?}", $cmd, $stderr);
         log::error!("{}", &msg);
 
-        Err(ServiceResponse {
+        Err(ServiceError {
             message: String::default(),
             status: StatusCode::BAD_REQUEST,
             response_type: AzError(msg.clone()),
@@ -191,7 +208,7 @@ macro_rules! log_return_serde_error {
         let msg = format!("serde_json error: {} Message: {:#?}", $e, $hint);
         log::error!("{}", &msg);
 
-        return Err(ServiceResponse {
+        return Err(ServiceError {
             message: String::default(),
             status: StatusCode::BAD_REQUEST,
             response_type: SerdeError(msg.clone()),

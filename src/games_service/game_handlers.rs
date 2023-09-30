@@ -1,5 +1,5 @@
-use crate::
-   middleware::{request_context_mw::RequestContext, header_extractor::HeadersExtractor};
+use crate::{
+   middleware::{request_context_mw::RequestContext, header_extractor::HeadersExtractor}, api_call};
 use actix_web::{
     web::{self, Path},
     HttpResponse,
@@ -14,10 +14,7 @@ use super::catan_games::games::regular::regular_game::RegularGame;
 /// randomize the board and the harbors
 /// post the response to websocket
 pub async fn shuffle_game(game_id: web::Path<String>, request_context: RequestContext) -> HttpResponse {
-    super::game::shuffle_game(&game_id, &request_context)
-        .await
-        .map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
+    api_call!(super::game::shuffle_game(&game_id, &request_context).await)
 }
 
 ///
@@ -35,25 +32,16 @@ pub async fn new_game_handler(
     let claims = request_context.claims.as_ref().expect("if claims can't unwrap, the call should fail in the auth middleware");
    
     let test_game: Option<RegularGame> = test_game.map(|json_game| json_game.into_inner());
-    super::game::new_game(game_type, &claims.id, headers.is_test, test_game, &request_context)
-        .await
-        .map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
+    api_call!(super::game::new_game(game_type, &claims.id, headers.is_test, test_game, &request_context).await)
 }
 
 pub async fn supported_games_handler() -> HttpResponse {
-    super::game::supported_games()
-        .await
-        .map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
+    api_call!(super::game::supported_games().await)
 }
 
 pub async fn reload_game_handler(
     game_id: web::Path<String>,
     request_context: RequestContext
 ) -> HttpResponse {
-     super::game::reload_game(&game_id, &request_context)
-        .await
-        .map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
+     api_call!(super::game::reload_game(&game_id, &request_context).await)
 }

@@ -8,10 +8,10 @@ pub mod test {
     use crate::middleware::request_context_mw::{RequestContext, TestContext};
     use crate::middleware::security_context::SecurityContext;
     use crate::middleware::service_config::SERVICE_CONFIG;
-    use crate::shared::shared_models::{GameError, ResponseType, ServiceResponse, UserProfile};
+    use crate::shared::shared_models::{GameError, ResponseType, ServiceError, UserProfile};
     use crate::test::test_proxy::TestProxy;
     use crate::user_service::users::{login, register};
-    use crate::{create_service, create_test_service, init_env_logger, full_info};
+    use crate::{create_service, create_test_service, full_info, init_env_logger};
     use actix_http::Request;
     use actix_service::Service;
     use actix_web::dev::ServiceResponse as ActixServiceResponse;
@@ -32,20 +32,18 @@ pub mod test {
         let admin_pwd = env::var("ADMIN_PASSWORD")
             .expect("ADMIN_PASSWORD not found in environment - unable to continue");
 
-        let service_response = test_proxy
+        let admin_auth_token = test_proxy
             .login(&admin_profile.get_email_or_panic(), &admin_pwd)
-            .await;
+            .await
+            .expect("login should work");
 
-        let admin_auth_token = service_response
-            .get_token()
-            .expect("should contain auth token");
         assert!(admin_auth_token.len() > 0);
 
-        test_proxy.set_auth_token(&Some(admin_auth_token.clone()));
+        test_proxy.set_auth_token(Some(admin_auth_token.clone()));
 
-        let service_response = test_proxy.get_profile("Self").await;
-        let client_user_profile = service_response
-            .to_profile()
+        let client_user_profile = test_proxy
+            .get_profile("Self")
+            .await
             .expect("this should be a client_user");
 
         assert!(client_user_profile.user_id.unwrap().len() > 0);
@@ -53,43 +51,40 @@ pub mod test {
             client_user_profile.pii.unwrap().email,
             admin_profile.get_email_or_panic()
         );
-
+        let test_context = TestContext::new(true, None, None);
         //
-        // clean up test user in production system
-        let test_users = TestHelpers::load_test_users_from_config();
-        assert!(test_users.len() > 0);
-        for user in test_users {
-            assert_ne!(
-                user.get_email_or_panic(),
-                admin_profile.get_email_or_panic()
-            );
-            // note that test context is not set -- so if we made a mistake (ahem) and put the test users in the
-            // production database, this will delete all of them.
-            test_proxy.set_auth_token(&None);
-            let result = test_proxy
-                .login(&user.get_email_or_panic(), "password")
-                .await;
-
-            if let Some(test_auth_token) = result.get_token() {
-                test_proxy.set_auth_token(&Some(test_auth_token));
-                let profile = test_proxy
-                    .get_profile("Self")
-                    .await
-                    .to_profile()
-                    .expect("this shoudl be there since login worked");
-                let user_id = profile.user_id.expect("a logged in user must have an id!");
-                let sr = test_proxy.delete_user(&user_id).await;
-                assert!(sr.status.is_success());
-            }
-        }
-        test_proxy.set_auth_token(&Some(admin_auth_token.clone()));
+        // clean up test user in production system by trying to login as the test users.  normal behavior is that
+        // the login fails.
+        test_proxy.set_test_context(Some(test_context.clone()));
+        let count = TestHelpers::delete_all_test_users_from_config(&mut test_proxy).await;
+        full_info!("deleted {} test users", count);
+        test_proxy.set_auth_token(Some(admin_auth_token.clone()));
+        test_proxy.set_test_context(None);
         let users = test_proxy
             .get_all_users()
             .await
-            .get_profile_vec()
             .expect("there should be at least one user always (the admin)");
 
         assert!(users.len() > 0);
+        test_proxy.set_test_context(Some(test_context.clone()));
+        let test_users =
+            TestHelpers::register_test_users(&mut test_proxy, Some(admin_auth_token)).await;
+        for user in &test_users {
+            test_proxy.set_auth_token(None);
+            let auth_token = test_proxy
+                .login(&user.get_email_or_panic(), "password")
+                .await
+                .expect("just registered accounts should be able to login");
+            test_proxy.set_auth_token(Some(auth_token));
+            let profile = test_proxy
+                .get_profile("Self")
+                .await
+                .expect("to be able to get my own profile");
+            assert!(profile.user_id.is_some());
+        }
+        assert!(test_users.len() > 0);
+        let count = TestHelpers::delete_all_test_users_from_config(&mut test_proxy).await;
+        full_info!("deleted {} test users", count);
     }
 
     #[tokio::test]
@@ -105,7 +100,7 @@ pub mod test {
     #[tokio::test]
     async fn test_service_response_serialization() {
         init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Error).await;
-        let sr = ServiceResponse::new(
+        let sr = ServiceError::new(
             "already exists",
             StatusCode::ACCEPTED,
             ResponseType::NoData,
@@ -114,7 +109,7 @@ pub mod test {
 
         let json = serde_json::to_string(&sr).unwrap();
         full_info!("to_http_response: {}", json);
-        match serde_json::from_str::<ServiceResponse>(&json) {
+        match serde_json::from_str::<ServiceError>(&json) {
             Ok(_) => {
                 log::trace!("round trip succeeded");
             }
@@ -130,7 +125,7 @@ pub mod test {
         let mut proxy = TestProxy::new(&app, Some(TestContext::new(false, None, None)));
         //  setup_test!(&app, true);
 
-        let users = register_test_users(&mut proxy, None).await;
+        let users = TestHelpers::register_test_users(&mut proxy, None).await;
         for user in users {
             assert!(user.pii.is_some());
             assert!(user.user_id.is_some());
@@ -139,7 +134,7 @@ pub mod test {
     /**
      *  this test deletes all users in the Users-Collection-test Collection
      *  You cannot run this in parallel with any test that expects test users to be present.
-     *  in general, i've found parallel tests with state requirements (e.g. the users in the db) are not 
+     *  in general, i've found parallel tests with state requirements (e.g. the users in the db) are not
      *  compatible.
      */
     #[tokio::test]
@@ -147,96 +142,11 @@ pub mod test {
         init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
         let app = create_test_service!();
         let mut proxy = TestProxy::new(&app, Some(TestContext::new(false, None, None)));
-        delete_all_test_users(&mut proxy).await;
+        TestHelpers::delete_all_test_users(&mut proxy).await;
         //
         //  make sure that deleting empty works
-        delete_all_test_users(&mut proxy).await;
+        TestHelpers::delete_all_test_users(&mut proxy).await;
     }
-    pub async fn delete_all_test_users<S>(proxy: &mut TestProxy<'_, S>) -> String
-    // Add the expected lifetime and generic type for the function signature
-    where
-        S: Service<Request, Response = ActixServiceResponse<EitherBody<BoxBody>>, Error = Error>
-            + 'static,
-    {
-        info!("deleting all test users");
-        let admin_token = TestHelpers::admin_login().await;
-        proxy.set_auth_token(&Some(admin_token.clone()));
-        let profiles = proxy
-            .get_all_users()
-            .await
-            .to_profile_vec()
-            .expect("should at least be an empty vec!");
-
-        for profile in profiles {
-            let service_response = proxy
-                .delete_user(&profile.user_id.unwrap())
-                .await;
-
-            assert!(service_response.status.is_success());
-                
-        }
-
-        let profiles = proxy
-        .get_all_users()
-        .await
-        .to_profile_vec()
-        .expect("should at least be an empty vec!");
-        assert!(profiles.len() == 0);
-        admin_token
-    }
-
-    pub async fn register_test_users<S>(
-        proxy: &mut TestProxy<'_, S>,
-        admin_token: Option<String>,
-    ) -> Vec<UserProfile>
-    where
-        S: Service<Request, Response = ActixServiceResponse<EitherBody<BoxBody>>, Error = Error>
-            + 'static,
-    {
-        full_info!("registering test users");
-    
-        // Use the provided admin_token if it's Some, otherwise generate a new one
-        let admin_token = if let Some(token) = admin_token {
-            token
-        } else {
-            TestHelpers::admin_login().await
-        };
-        proxy.set_auth_token(&Some(admin_token));
-    
-        let test_users = TestHelpers::load_test_users_from_config();
-        let mut profiles = Vec::new();
-    
-        for user in test_users.iter() {
-            let service_response = proxy.register_test_user(user, "password").await;
-            if service_response.status.is_success() {
-                let profile = service_response.to_profile().expect("should be a profile");
-    
-                profiles.push(profile.clone());
-    
-                let pretty_json =
-                    serde_json::to_string_pretty(&profile).expect("Failed to pretty-print JSON");
-    
-                // Check if the pretty-printed JSON contains any underscores
-                assert!(
-                    !pretty_json.contains('_'),
-                    "JSON contains an underscore character"
-                );
-    
-                log::trace!("registered client_user: {:#?}", pretty_json);
-            } else {
-                log::trace!("{} already registered", user.display_name.clone());
-                assert_eq!(service_response.status, StatusCode::CONFLICT);
-                let email = user.pii.clone().unwrap().email;
-                let service_response = proxy.get_profile(&email).await;
-                assert!(service_response.status.is_success());
-                let profile = service_response.to_profile().expect("should be a profile");
-                profiles.push(profile.clone());
-            }
-        }
-    
-        profiles
-    }
-    
 
     pub struct TestHelpers {}
     impl TestHelpers {
@@ -256,7 +166,7 @@ pub mod test {
 
             let auth_token =
                 match login(&profile.get_email_or_panic(), &admin_pwd, &request_context).await {
-                    Ok(sr) => sr.get_token(),
+                    Ok(token) => token,
                     Err(_) => {
                         register(&admin_pwd, &profile, &request_context)
                             .await
@@ -264,11 +174,11 @@ pub mod test {
                         login(&profile.get_email_or_panic(), &admin_pwd, &request_context)
                             .await
                             .expect("login after register should work")
-                            .get_token()
                     }
                 };
 
-            auth_token.expect("should contain the admin auth token")
+            assert!(auth_token.len() > 0);
+            auth_token
         }
 
         fn load_admin_profile_from_config() -> UserProfile {
@@ -311,6 +221,136 @@ pub mod test {
             };
 
             profiles
+        }
+        pub async fn register_test_users<S>(
+            proxy: &mut TestProxy<'_, S>,
+            admin_token: Option<String>,
+        ) -> Vec<UserProfile>
+        where
+            S: Service<
+                    Request,
+                    Response = ActixServiceResponse<EitherBody<BoxBody>>,
+                    Error = Error,
+                > + 'static,
+        {
+            full_info!("registering test users");
+            assert!(proxy.test_context().is_some());
+            // Use the provided admin_token if it's Some, otherwise generate a new one
+            let admin_token = if let Some(token) = admin_token {
+                token
+            } else {
+                TestHelpers::admin_login().await
+            };
+            proxy.set_auth_token(Some(admin_token));
+
+            let test_users = TestHelpers::load_test_users_from_config();
+            let mut profiles = Vec::new();
+
+            for user in test_users.iter() {
+                let result = proxy.register_test_user(user, "password").await;
+                match result {
+                    Ok(profile) => {
+                        profiles.push(profile.clone());
+
+                        let pretty_json = serde_json::to_string_pretty(&profile)
+                            .expect("Failed to pretty-print JSON");
+
+                        // Check if the pretty-printed JSON contains any underscores
+                        assert!(
+                            !pretty_json.contains('_'),
+                            "JSON contains an underscore character"
+                        );
+
+                        log::trace!("registered client_user: {:#?}", pretty_json);
+                    }
+                    Err(service_error) => {
+                        log::trace!("{} already registered", user.display_name.clone());
+                        assert_eq!(service_error.status, StatusCode::CONFLICT);
+                        let email = user.pii.clone().unwrap().email;
+                        let profile = proxy.get_profile(&email).await.expect("should be there");
+                        profiles.push(profile.clone());
+                    }
+                }
+            }
+
+            profiles
+        }
+        pub async fn delete_all_test_users<S>(proxy: &mut TestProxy<'_, S>) -> String
+        // Add the expected lifetime and generic type for the function signature
+        where
+            S: Service<
+                    Request,
+                    Response = ActixServiceResponse<EitherBody<BoxBody>>,
+                    Error = Error,
+                > + 'static,
+        {
+            info!("deleting all test users");
+            assert!(proxy.test_context().is_some());
+            let admin_token = TestHelpers::admin_login().await;
+            proxy.set_auth_token(Some(admin_token.clone()));
+            let profiles = proxy
+                .get_all_users()
+                .await
+                .expect("should at least be an empty vec!");
+
+            for profile in profiles {
+                proxy
+                    .delete_user(&profile.user_id.unwrap())
+                    .await
+                    .expect("success");
+            }
+
+            let profiles = proxy
+                .get_all_users()
+                .await
+                .expect("should at least be an empty vec!");
+            assert!(profiles.len() == 0);
+            admin_token
+        }
+        pub async fn delete_all_test_users_from_config<S>(
+            test_proxy: &mut TestProxy<'_, S>,
+        ) -> usize
+        // Add the expected lifetime and generic type for the function signature
+        where
+            S: Service<
+                    Request,
+                    Response = ActixServiceResponse<EitherBody<BoxBody>>,
+                    Error = Error,
+                > + 'static,
+        {
+            let mut count = 0;
+            assert!(test_proxy.test_context().is_some());
+            let test_users = TestHelpers::load_test_users_from_config();
+            assert!(test_users.len() > 0);
+            for user in test_users {
+                // note that test context is not set -- so if we made a mistake (ahem) and put the test users in the
+                // production database, this will delete all of them.
+                test_proxy.set_auth_token(None);
+                let response = test_proxy
+                    .login(&user.get_email_or_panic(), "password")
+                    .await;
+
+                match response {
+                    Ok(test_auth_token) => {
+                        test_proxy.set_auth_token(Some(test_auth_token));
+                        let profile = test_proxy
+                            .get_profile("Self")
+                            .await
+                            .expect("this shoudl be there since login worked");
+                        let user_id = profile.user_id.expect("a logged in user must have an id!");
+                        test_proxy.delete_user(&user_id).await.expect("success");
+                        count = count + 1;
+                    }
+                    Err(e) => {
+                        full_info!(
+                            "could not delete {}.  code: {}",
+                            user.get_email_or_panic(),
+                            e.status
+                        );
+                    }
+                }
+            }
+            count
         }
     }
 }

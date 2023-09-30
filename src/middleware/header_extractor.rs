@@ -46,13 +46,13 @@ impl FromRequest for HeadersExtractor {
 #[macro_export]
 macro_rules! get_header_value {
     ($header:ident, $headers:expr) => {{
-        use crate::shared::shared_models::{GameError, ResponseType, ServiceResponse};
+        use crate::shared::shared_models::{GameError, ResponseType, ServiceError};
         use reqwest::StatusCode;
         match $headers.$header {
             Some(v) => v,
             None => {
                 let msg = format!("{} header not found", stringify!($header));
-                let response = ServiceResponse::new(
+                let response = ServiceError::new(
                     &msg,
                     reqwest::StatusCode::BAD_REQUEST,
                     ResponseType::NoData,

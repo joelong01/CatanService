@@ -1,6 +1,4 @@
 #![allow(unused_variables)]
-use reqwest::StatusCode;
-
 use crate::{
     bad_request_from_string,
     games_service::{
@@ -11,21 +9,16 @@ use crate::{
         long_poller::long_poller::LongPoller,
     },
     middleware::request_context_mw::RequestContext,
-    shared::shared_models::{GameError, ResponseType, ServiceResponse, UserProfile}, full_info,
+    shared::shared_models::{ServiceError, UserProfile}, full_info,
 };
 
-pub async fn get_lobby() -> Result<ServiceResponse, ServiceResponse> {
-    return Ok(ServiceResponse::new(
-        "",
-        StatusCode::OK,
-        ResponseType::Profiles(LongPoller::get_available().await),
-        GameError::NoError(String::default()),
-    ));
+pub async fn get_lobby() -> Result<Vec<UserProfile>, ServiceError> {
+   Ok(LongPoller::get_available().await)
 }
 pub async fn post_invite(
     from_id: &str,
     invite: &Invitation,
-) -> Result<ServiceResponse, ServiceResponse> {
+) -> Result<(), ServiceError> {
     LongPoller::send_message(
         vec![invite.to_id.clone()],
         &CatanMessage::Invite(invite.clone()),
@@ -44,7 +37,7 @@ pub async fn respond_to_invite(
     is_test: bool,
     invite_response: &InvitationResponseData,
     request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
+) -> Result<(), ServiceError> {
     if invite_response.accepted {
         // add the user to the Container -- now they are in both the lobby and the game
         // this will release any threads waiting for updates on the game
@@ -75,7 +68,7 @@ pub async fn add_local_user(
     game_id: &str,
     local_user_id: &str,
     request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
+) -> Result<(), ServiceError> {
     let user_id = request_context
         .claims
         .as_ref()
@@ -106,7 +99,7 @@ pub async fn add_local_user(
 
 pub async fn connect(
     request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
+) -> Result<(), ServiceError> {
     let user_id = request_context
         .claims
         .as_ref()
@@ -122,6 +115,6 @@ pub async fn connect(
     LongPoller::add_user(&user_id, &user.user_profile).await
 }
 
-pub async fn disconnect(request_context: &RequestContext) -> Result<ServiceResponse, ServiceResponse> {
+pub async fn disconnect(request_context: &RequestContext) -> Result<(), ServiceError> {
     todo!()
 }

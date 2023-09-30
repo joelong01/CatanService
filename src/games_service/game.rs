@@ -5,9 +5,8 @@ use crate::{
         long_poller::long_poller::LongPoller,
     },
     middleware::request_context_mw::RequestContext,
-    shared::shared_models::{GameError, ResponseType, ServiceResponse, UserProfile},
+    shared::shared_models::{GameError, ResponseType, ServiceError, UserProfile},
 };
-
 
 use reqwest::StatusCode;
 
@@ -25,7 +24,7 @@ use super::{
 pub async fn shuffle_game(
     game_id: &str,
     request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
+) -> Result<RegularGame, ServiceError> {
     if request_context.is_test() {
         full_info!("test shuffle");
     }
@@ -37,15 +36,10 @@ pub async fn shuffle_game(
     new_game.shuffle();
     let result = GameContainer::push_game(&game_id.to_owned(), &new_game).await;
     match result {
-        Ok(_) => Ok(ServiceResponse::new(
-            "shuffled",
-            StatusCode::OK,
-            ResponseType::Game(new_game),
-            GameError::NoError(String::default()),
-        )),
+        Ok(_) => Ok(new_game),
         Err(e) => {
             let err_message = format!("GameContainer::push_game error: {:#?}", e);
-            return Err(ServiceResponse::new(
+            return Err(ServiceError::new(
                 "Error Hashing Password",
                 StatusCode::INTERNAL_SERVER_ERROR,
                 ResponseType::ErrorInfo(err_message.to_owned()),
@@ -66,16 +60,20 @@ pub async fn new_game(
     is_test: bool,
     test_game: Option<RegularGame>,
     request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
+) -> Result<RegularGame, ServiceError> {
     if game_type != CatanGames::Regular {
-        return Err(ServiceResponse::new(
+        return Err(ServiceError::new(
             &format!("Game not supported: {:#?}", game_type),
             StatusCode::BAD_REQUEST,
             ResponseType::NoData,
             GameError::MissingData(String::default()),
         ));
     }
-    let user = request_context.database.as_user_db().find_user_by_id(user_id).await?;
+    let user = request_context
+        .database
+        .as_user_db()
+        .find_user_by_id(user_id)
+        .await?;
 
     //
     //  "if it is a test game and the game has been passed in, use it.  otherwise create a new game and shuffle"
@@ -104,7 +102,7 @@ pub async fn new_game(
         .await
         .is_err()
     {
-        return Err(ServiceResponse::new(
+        return Err(ServiceError::new(
             "",
             reqwest::StatusCode::NOT_FOUND,
             ResponseType::NoData,
@@ -129,21 +127,11 @@ pub async fn new_game(
     //  - make them all get the game from the long poller.  as it is the client will set the context - forcing an update
     //  and then get the update from the long_polller, which will do the same thing.  we might just ignore the return
     //  value on the client, in which case we are wasting bytes on the wire.
-    Ok(ServiceResponse::new(
-        "shuffled",
-        StatusCode::OK,
-        ResponseType::Game(game),
-        GameError::NoError(String::default()),
-    ))
+    Ok(game)
 }
 
-pub async fn supported_games() -> Result<ServiceResponse, ServiceResponse> {
-    Ok(ServiceResponse::new(
-        "shuffled",
-        StatusCode::OK,
-        ResponseType::SupportedGames(vec![CatanGames::Regular]),
-        GameError::NoError(String::default()),
-    ))
+pub async fn supported_games() -> Result<Vec<CatanGames>, ServiceError> {
+    Ok(vec![CatanGames::Regular])
 }
 
 ///
@@ -153,18 +141,9 @@ pub async fn supported_games() -> Result<ServiceResponse, ServiceResponse> {
 pub async fn reload_game(
     game_id: &str,
     _request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
-    let response = GameContainer::current_game(&game_id.to_owned()).await;
+) -> Result<RegularGame, ServiceError> {
+  //  let response = GameContainer::current_game(&game_id.to_owned()).await;
 
-    match response {
-        Ok((game, _)) => {
-            return Ok(ServiceResponse::new_game_response(
-                "game already in memory",
-                &game,
-            ));
-        }
-        Err(_) => {}
-    }
-
-    todo!();
+    let game: (RegularGame, _) = GameContainer::current_game(game_id).await?;
+    Ok(game.0)
 }

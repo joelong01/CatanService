@@ -5,14 +5,14 @@ use crate::{
     middleware::service_config::ServiceConfig,
     new_not_found_error,
     shared::service_models::{PersistGame, PersistUser},
-    shared::shared_models::{GameError, ResponseType, UserProfile},
+    shared::shared_models::{GameError, ResponseType},
 };
 use std::collections::HashMap;
 
 /**
  *  this is the class that calls directly to CosmosDb --
  */
-use crate::shared::shared_models::ServiceResponse;
+use crate::shared::shared_models::ServiceError;
 use actix_http::StatusCode;
 
 use azure_data_cosmos::prelude::{
@@ -82,7 +82,7 @@ impl CosmosDb {
         &self,
         collection_name: CosmosDocType,
         query_string: &str,
-    ) -> Result<Vec<T>, ServiceResponse> {
+    ) -> Result<Vec<T>, ServiceError> {
         let mut documents: Vec<T> = Vec::new();
         let query = Query::new(query_string.to_string());
         let collection = self.collection_clients.get(&collection_name).unwrap();
@@ -99,7 +99,7 @@ impl CosmosDb {
                             Ok(doc) => documents.push(doc),
                             Err(e) => {
                                 log::error!("Failed to deserialize document: {}", e);
-                                return Err(ServiceResponse::new_json_error(
+                                return Err(ServiceError::new_json_error(
                                     &format!(
                                         "Failed to deserialize object for query: {}",
                                         query_string,
@@ -111,7 +111,7 @@ impl CosmosDb {
                     }
                 }
                 Err(e) => {
-                    return Err(ServiceResponse::new_database_error(
+                    return Err(ServiceError::new_database_error(
                         "stream::next failed",
                         &format!("{:#?}", e),
                     ));
@@ -151,7 +151,7 @@ fn public_client(account: &str, token: &str) -> CosmosClient {
 
 #[async_trait]
 impl GameDbTrait for CosmosDb {
-    async fn load_game(&self, game_id: &str) -> Result<Vec<u8>, ServiceResponse> {
+    async fn load_game(&self, game_id: &str) -> Result<Vec<u8>, ServiceError> {
         let query = format!(r#"SELECT * FROM c WHERE c.id = '{}'"#, game_id);
         let persist_games: Vec<PersistGame> =
             self.execute_query(CosmosDocType::Game, &query).await?;
@@ -159,18 +159,18 @@ impl GameDbTrait for CosmosDb {
             assert!(persist_games.len() == 1);
             Ok(persist_games.first().unwrap().game.clone()) // clone is necessary because `first()` returns a reference
         } else {
-            Err(ServiceResponse::new_not_found_error(game_id))
+            Err(ServiceError::new_not_found_error(game_id))
         }
     }
 
-    async fn delete_games(&self, game_id: &str) -> Result<(), ServiceResponse> {
+    async fn delete_games(&self, game_id: &str) -> Result<(), ServiceError> {
         todo!()
     }
     async fn update_game_data(
         &self,
         game_id: &str,
         to_write: &PersistGame,
-    ) -> Result<(), ServiceResponse> {
+    ) -> Result<(), ServiceError> {
         let collection = self.collection_clients.get(&CosmosDocType::Game).unwrap();
 
         match collection
@@ -180,7 +180,7 @@ impl GameDbTrait for CosmosDb {
         {
             Ok(..) => Ok(()),
             Err(e) => {
-                return Err(ServiceResponse::new(
+                return Err(ServiceError::new(
                     "unexpected serde serlialization error",
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ResponseType::ErrorInfo(format!("Error: {}", e)),
@@ -208,13 +208,13 @@ impl UserDbTrait for CosmosDb {
      *  let userdb = UserDb::new();
      *  userdb.setupdb()
      */
-    async fn setupdb(&self) -> Result<(), ServiceResponse> {
+    async fn setupdb(&self) -> Result<(), ServiceError> {
         full_info!("Deleting existing database");
 
         match self.database.as_ref().unwrap().delete_database().await {
             Ok(..) => full_info!("\tDeleted {} database", self.database_name),
             Err(e) => {
-                return Err(ServiceResponse::new_database_error(
+                return Err(ServiceError::new_database_error(
                     &format!("Error deleting database: {}", self.database_name),
                     &format!("{:#?}", e),
                 ));
@@ -231,7 +231,7 @@ impl UserDbTrait for CosmosDb {
         {
             Ok(..) => full_info!("\tCreated database"),
             Err(e) => {
-                return Err(ServiceResponse::new_database_error(
+                return Err(ServiceError::new_database_error(
                     &format!("Error creating database: {}", self.database_name),
                     &format!("{:#?}", e),
                 ));
@@ -256,7 +256,7 @@ impl UserDbTrait for CosmosDb {
                     );
                 }
                 Err(e) => {
-                    return Err(ServiceResponse::new_database_error(
+                    return Err(ServiceError::new_database_error(
                         &format!(
                             "Error deleting collection: {}",
                             collection_client.collection_name()
@@ -271,7 +271,7 @@ impl UserDbTrait for CosmosDb {
     /**
      *  this will return *all* (non paginated) Users in the collection
      */
-    async fn list(&self) -> Result<Vec<PersistUser>, ServiceResponse> {
+    async fn list(&self) -> Result<Vec<PersistUser>, ServiceError> {
         let query = r#"SELECT * FROM c WHERE c.partitionKey=1"#;
         let users = self.execute_query(CosmosDocType::User, query).await?;
         Ok(users)
@@ -284,7 +284,7 @@ impl UserDbTrait for CosmosDb {
     async fn update_or_create_user(
         &self,
         user: &PersistUser,
-    ) -> Result<ServiceResponse, ServiceResponse> {
+    ) -> Result<(), ServiceError> {
         let collection = self.collection_clients.get(&CosmosDocType::User).unwrap();
 
         log::trace!("{}", serde_json::to_string(&user).unwrap());
@@ -294,14 +294,9 @@ impl UserDbTrait for CosmosDb {
             .await
         {
             Ok(..) => match serde_json::to_string(&user) {
-                Ok(..) => Ok(ServiceResponse::new(
-                    "created",
-                    StatusCode::CREATED,
-                    ResponseType::Profile(UserProfile::from_persist_user(user)),
-                    GameError::NoError(String::default()),
-                )),
+                Ok(..) => Ok(()),
                 Err(e) => {
-                    return Err(ServiceResponse::new(
+                    return Err(ServiceError::new(
                         "unexpected serde serlialization error",
                         StatusCode::INTERNAL_SERVER_ERROR,
                         ResponseType::ErrorInfo(format!("Error: {}", e)),
@@ -310,7 +305,7 @@ impl UserDbTrait for CosmosDb {
                 }
             },
             Err(e) => {
-                return Err(ServiceResponse::new_database_error(
+                return Err(ServiceError::new_database_error(
                     "update_or_create_user",
                     &format!("{:#?}", e),
                 ));
@@ -320,13 +315,13 @@ impl UserDbTrait for CosmosDb {
     /**
      *  delete the user with the unique id
      */
-    async fn delete_user(&self, unique_id: &str) -> Result<(), ServiceResponse> {
+    async fn delete_user(&self, unique_id: &str) -> Result<(), ServiceError> {
         let collection = self.collection_clients.get(&CosmosDocType::User).unwrap();
 
         let doc_client = match collection.document_client(unique_id, &1) {
             Ok(client) => client,
             Err(e) => {
-                return Err(ServiceResponse::new_database_error(
+                return Err(ServiceError::new_database_error(
                     "Failed to get document client",
                     &format!("{:#?}", e),
                 ));
@@ -335,7 +330,7 @@ impl UserDbTrait for CosmosDb {
 
         match doc_client.delete_document().await {
             Ok(..) => Ok(()),
-            Err(e) => Err(ServiceResponse::new_database_error(
+            Err(e) => Err(ServiceError::new_database_error(
                 "delete_user",
                 &format!("{:#?}", e),
             )),
@@ -344,7 +339,7 @@ impl UserDbTrait for CosmosDb {
     /**
      *  an api that finds a user by the id in the cosmosdb users collection.
      */
-    async fn find_user_by_id(&self, val: &str) -> Result<PersistUser, ServiceResponse> {
+    async fn find_user_by_id(&self, val: &str) -> Result<PersistUser, ServiceError> {
         let query = format!(r#"SELECT * FROM c WHERE c.id = '{}'"#, val);
         match self
             .execute_query::<PersistUser>(CosmosDocType::User, &query)
@@ -352,13 +347,13 @@ impl UserDbTrait for CosmosDb {
         {
             Ok(users) => {
                 if let Some(user) = users.first() {
-                    full_info!("user: {:#?}", user);
+                    full_info!("user: {:#?}", user.id);
                     Ok(user.clone()) // clone is necessary because `first()` returns a reference
                 } else {
                     new_not_found_error!("not found")
                 }
             }
-            Err(e) => Err(ServiceResponse::new_database_error(
+            Err(e) => Err(ServiceError::new_database_error(
                 "find_user_by_id",
                 &format!("{:#?}", e),
             )),
@@ -368,14 +363,14 @@ impl UserDbTrait for CosmosDb {
     async fn get_connected_users(
         &self,
         connected_user_id: &str,
-    ) -> Result<Vec<PersistUser>, ServiceResponse> {
+    ) -> Result<Vec<PersistUser>, ServiceError> {
         let query = format!(
             r#"SELECT * FROM c WHERE c.connected_user_id = '{}'"#,
             connected_user_id
         );
         Ok(self.execute_query(CosmosDocType::User, &query).await?)
     }
-    async fn find_user_by_email(&self, val: &str) -> Result<PersistUser, ServiceResponse> {
+    async fn find_user_by_email(&self, val: &str) -> Result<PersistUser, ServiceError> {
         let query = format!(
             r#"SELECT * FROM c WHERE c.user_profile.Pii.Email = '{}'"#,
             val
@@ -459,10 +454,10 @@ mod tests {
             .await
         {
             Ok(user) => user,
-            Err(service_response) => {
+            Err(service_error) => {
                 panic!(
                     "Error looking up by email: {}",
-                    serde_json::to_string(&service_response).unwrap()
+                    serde_json::to_string(&service_error).unwrap()
                 );
             }
         };

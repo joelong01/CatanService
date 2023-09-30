@@ -32,7 +32,7 @@ use crate::shared::service_models::Claims;
 use crate::shared::service_models::Role;
 use crate::shared::shared_models::GameError;
 use crate::shared::shared_models::ResponseType;
-use crate::shared::shared_models::ServiceResponse;
+use crate::shared::shared_models::ServiceError;
 use crate::trace_function;
 
 use super::azure_types::CosmosDatabaseInfo;
@@ -85,14 +85,14 @@ impl CosmosSecret {
 pub fn verify_login_or_panic() -> String {
     match verify_login() {
         Ok(id) => id,
-        Err(service_response) => panic!(
+        Err(service_error) => panic!(
             "Need to login to Azure for this service to work: {}",
-            service_response
+            service_error
         ),
     }
 }
 
-fn verify_login() -> Result<String, ServiceResponse> {
+fn verify_login() -> Result<String, ServiceError> {
     // Check if the user is already logged into Azure
     if let Some(subscription_id) = SUBSCRIPTION_ID.get() {
         trace!("user already logged into azure");
@@ -126,7 +126,7 @@ fn verify_login() -> Result<String, ServiceResponse> {
         if let Some(subscription_id) = post_response["id"].as_str() {
             Ok(subscription_id.to_string())
         } else {
-            Err(ServiceResponse {
+            Err(ServiceError {
                 message: "No subscription ID found in Azure CLI response after login.".to_string(),
                 status: StatusCode::INTERNAL_SERVER_ERROR,
                 response_type: ResponseType::NoData,
@@ -145,7 +145,7 @@ fn verify_login() -> Result<String, ServiceResponse> {
 /// Returns:
 ///   - `Ok(String)`: The Azure access token.
 ///   - `Err(ServiceResponse)`: An error indicating the reason for the failure.
-pub fn get_azure_token() -> Result<String, ServiceResponse> {
+pub fn get_azure_token() -> Result<String, ServiceError> {
     let _ = verify_login_or_panic();
     let args = ["account", "get-access-token"];
     let cmd = print_cmd(&args);
@@ -155,7 +155,7 @@ pub fn get_azure_token() -> Result<String, ServiceResponse> {
     // this should work, but the compiler is having trouble resolving the "From chain" serder_error -> GameError
     // but for whatever reason can go from GameError to ServiceError
     // let json: Value = serde_json::from_str(&output)?;
-    let json: Value = serde_json::from_str(&output).map_err(ServiceResponse::from)?;
+    let json: Value = serde_json::from_str(&output).map_err(ServiceError::from)?;
 
     match json["accessToken"].as_str() {
         Some(v) => Ok(v.to_string()),
@@ -183,7 +183,7 @@ pub fn get_azure_token() -> Result<String, ServiceResponse> {
 pub fn create_resource_group(
     resource_group_name: &str,
     location: &str,
-) -> Result<(), ServiceResponse> {
+) -> Result<(), ServiceError> {
     is_location_valid(location)?;
 
     if resource_group_exists(resource_group_name)? {
@@ -212,7 +212,7 @@ pub fn create_resource_group(
 /// Returns:
 ///   - `Ok(bool)`: `true` if the resource group exists, `false` otherwise.
 ///   - `ServiceResponse`: An error message describing the reason for the failure.
-pub fn resource_group_exists(resource_group_name: &str) -> Result<bool, ServiceResponse> {
+pub fn resource_group_exists(resource_group_name: &str) -> Result<bool, ServiceError> {
     let cmd_args = ["group", "exists", "--name", resource_group_name];
     let cmd = print_cmd(&cmd_args);
     let output = exec_os(&cmd_args)?;
@@ -238,7 +238,7 @@ pub fn resource_group_exists(resource_group_name: &str) -> Result<bool, ServiceR
 /// Returns:
 ///   - `Ok(())`: If the resource group deletion is successful.
 ///   - `ServiceResponse`: An error message describing the reason for the failure.
-pub fn delete_resource_group(resource_group_name: &str) -> Result<(), ServiceResponse> {
+pub fn delete_resource_group(resource_group_name: &str) -> Result<(), ServiceError> {
     let cmd_args = [
         "group",
         "delete",
@@ -267,7 +267,7 @@ lazy_static! {
 /// Returns:
 ///   - `Ok(bool)`: `true` if the location is valid, `false` otherwise.
 ///   - `Err(ServiceResponse)`: An error describing the reason for the failure.
-pub fn is_location_valid(location: &str) -> Result<bool, ServiceResponse> {
+pub fn is_location_valid(location: &str) -> Result<bool, ServiceError> {
     let mut cached_locations = LOCATIONS_CACHE.lock().unwrap();
 
     // Step 1: Check the cache for the location
@@ -291,7 +291,7 @@ pub fn is_location_valid(location: &str) -> Result<bool, ServiceResponse> {
     let output = exec_os(&cmd_args)?;
 
     let available_locations =
-        serde_json::from_str::<Vec<Value>>(&output).map_err(ServiceResponse::from)?;
+        serde_json::from_str::<Vec<Value>>(&output).map_err(ServiceError::from)?;
 
     // Step 3: Update the cache with fetched locations
     let mut new_locations = HashSet::new();
@@ -329,11 +329,11 @@ pub fn is_location_valid(location: &str) -> Result<bool, ServiceResponse> {
 /// ```
 /// let result = exec_os(&["account", "list"]);
 /// ```
-fn exec_os(args: &[&str]) -> Result<String, ServiceResponse> {
+fn exec_os(args: &[&str]) -> Result<String, ServiceError> {
     let mut command = Command::new("az");
     command.args(args);
 
-    let output = command.output().map_err(|err| ServiceResponse {
+    let output = command.output().map_err(|err| ServiceError {
         message: format!("Failed to execute command: {:?}", err),
         status: StatusCode::BAD_REQUEST,
         response_type: ResponseType::AzError(err.to_string()),
@@ -364,7 +364,7 @@ pub fn create_cosmos_account(
     resource_group_name: &str,
     account_name: &str,
     location: &str,
-) -> Result<(), ServiceResponse> {
+) -> Result<(), ServiceError> {
     if !is_location_valid(location)? {
         return Err(bad_request_from_string!(&format!(
             "Invalid location: {}",
@@ -411,7 +411,7 @@ pub fn create_cosmos_account(
 pub fn delete_cosmos_account(
     cosmos_db_name: &str,
     resource_group_name: &str,
-) -> Result<(), ServiceResponse> {
+) -> Result<(), ServiceError> {
     let cmd_args = [
         "cosmosdb",
         "delete",
@@ -438,7 +438,7 @@ pub fn delete_cosmos_account(
 pub fn cosmos_account_exists(
     cosmos_db_name: &str,
     resource_group_name: &str,
-) -> Result<bool, ServiceResponse> {
+) -> Result<bool, ServiceError> {
     let cmd_args = [
         "cosmosdb",
         "list",
@@ -473,7 +473,7 @@ pub fn cosmos_account_exists(
 pub fn get_cosmos_secrets(
     cosmos_db_name: &str,
     resource_group: &str,
-) -> Result<Vec<CosmosSecret>, ServiceResponse> {
+) -> Result<Vec<CosmosSecret>, ServiceError> {
     let sub_id = verify_login_or_panic();
     let cmd_args = [
         "cosmosdb",
@@ -508,8 +508,8 @@ pub fn get_cosmos_secrets(
 pub fn store_cosmos_secrets_in_keyvault(
     secrets: &CosmosSecret,
     keyvault_name: &str,
-) -> Result<(), ServiceResponse> {
-    let secrets_json = serde_json::to_string(secrets).map_err(ServiceResponse::from)?;
+) -> Result<(), ServiceError> {
+    let secrets_json = serde_json::to_string(secrets).map_err(ServiceError::from)?;
     key_vault_save_secret(keyvault_name, "cosmos-secrets", &secrets_json)?;
     Ok(())
 }
@@ -551,7 +551,7 @@ pub fn create_database(
     account_name: &str,
     database_name: &str,
     resource_group: &str,
-) -> Result<(), ServiceResponse> {
+) -> Result<(), ServiceError> {
     if cosmos_database_exists(account_name, database_name, resource_group)? {
         log::trace!("Database {} already exists.", database_name);
         return Ok(());
@@ -587,7 +587,7 @@ pub fn cosmos_database_exists(
     account_name: &str,
     database_name: &str,
     resource_group: &str,
-) -> Result<bool, ServiceResponse> {
+) -> Result<bool, ServiceError> {
     let cmd_args = [
         "cosmosdb",
         "sql",
@@ -623,7 +623,7 @@ pub fn create_collection(
     database_name: &str,
     collection_name: &str,
     resource_group: &str,
-) -> Result<(), ServiceResponse> {
+) -> Result<(), ServiceError> {
     if cosmos_collection_exists(account_name, database_name, collection_name, resource_group)? {
         log::trace!("Collection {} already exists", collection_name);
         return Ok(());
@@ -665,7 +665,7 @@ pub fn cosmos_collection_exists(
     database_name: &str,
     collection_name: &str,
     resource_group: &str,
-) -> Result<bool, ServiceResponse> {
+) -> Result<bool, ServiceError> {
     let cmd_args = [
         "cosmosdb",
         "sql",
@@ -736,7 +736,7 @@ pub fn print_cmd(args: &[&str]) -> String {
 /// # Returns
 ///
 /// * `Ok(true)` if the Key Vault exists, `Ok(false)` otherwise.
-pub fn keyvault_exists(kv_name: &str) -> Result<bool, ServiceResponse> {
+pub fn keyvault_exists(kv_name: &str) -> Result<bool, ServiceError> {
     let args = ["keyvault", "show", "--name", kv_name];
     print_cmd(&args);
     let output = exec_os(&args)?;
@@ -767,7 +767,7 @@ pub fn key_vault_save_secret(
     keyvault_name: &str,
     secret_name: &str,
     secret_value: &str,
-) -> Result<(), ServiceResponse> {
+) -> Result<(), ServiceError> {
     let args = [
         "keyvault",
         "secret",
@@ -824,7 +824,7 @@ pub fn key_vault_save_secret(
 pub fn key_vault_get_secret(
     keyvault_name: &str,
     secret_name: &str,
-) -> Result<String, ServiceResponse> {
+) -> Result<String, ServiceError> {
     let args = [
         "keyvault",
         "secret",
@@ -839,10 +839,10 @@ pub fn key_vault_get_secret(
 
     // Parse the top-level JSON
     let top_level: serde_json::Value =
-        serde_json::from_str(&secret_json).map_err(ServiceResponse::from)?;
+        serde_json::from_str(&secret_json).map_err(ServiceError::from)?;
 
     // Extract the 'value' field from the JSON.
-    let answer: Result<String, ServiceResponse> = top_level["value"]
+    let answer: Result<String, ServiceError> = top_level["value"]
         .as_str()
         .map(|s| s.to_string())
         .ok_or(bad_request_from_string!(&format!(
@@ -872,7 +872,7 @@ pub fn key_vault_get_secret(
 /// ```ignore
 /// az communication sms send --sender +1866XXXYYYY --recipient +1206XXXYYYY --message "Hey -- this is a test!"
 /// ```
-pub fn send_text_message(to: &str, msg: &str) -> Result<ServiceResponse, ServiceResponse> {
+pub fn send_text_message(to: &str, msg: &str) -> Result<(), ServiceError> {
     let args = [
         "communication",
         "sms",
@@ -886,12 +886,7 @@ pub fn send_text_message(to: &str, msg: &str) -> Result<ServiceResponse, Service
     ];
     print_cmd(&args);
     exec_os(&args)?;
-    Ok(ServiceResponse::new(
-        "sent",
-        StatusCode::OK,
-        ResponseType::NoData,
-        GameError::NoError(String::default()),
-    ))
+    Ok(())
 }
 
 /// Sends an email using Azure Communication Services.
@@ -914,7 +909,7 @@ pub fn send_text_message(to: &str, msg: &str) -> Result<ServiceResponse, Service
 /// ```ignore
 /// az communication email send --sender "<provisioned email>" --subject "Test email" --to "xxxx@outlook.com" --text "This is a test from the Catan Service"
 /// ```
-pub fn send_email(to: &str, from: &str, subject: &str, msg: &str) -> Result<(), String> {
+pub fn send_email(to: &str, from: &str, subject: &str, msg: &str) -> Result<(), ServiceError> {
     let args = [
         "communication",
         "email",
@@ -958,7 +953,7 @@ pub fn send_email(to: &str, from: &str, subject: &str, msg: &str) -> Result<(), 
             log::trace!("Output: {}", output);
             Ok(())
         }
-        Err(error) => Err(format!("Failed to send email. Error: {:#?}", error)),
+        Err(error) => Err(error),
     }
 }
 
@@ -966,7 +961,7 @@ pub fn verify_or_create_account(
     resource_group: &str,
     account_name: &str,
     location: &str,
-) -> Result<(), ServiceResponse> {
+) -> Result<(), ServiceError> {
     let exists = cosmos_account_exists(&account_name, resource_group)?;
     if !exists {
         create_cosmos_account(resource_group, account_name, location)?;
@@ -978,7 +973,7 @@ pub fn verify_or_create_database(
     account_name: &str,
     database_name: &str,
     resource_group: &str,
-) -> Result<(), ServiceResponse> {
+) -> Result<(), ServiceError> {
     let exists = cosmos_database_exists(account_name, database_name, resource_group)?;
 
     if !exists {
@@ -993,7 +988,7 @@ pub fn verify_or_create_collection(
     database_name: &str,
     collection_name: &str,
     resource_group: &str,
-) -> Result<(), ServiceResponse> {
+) -> Result<(), ServiceError> {
     let exists =
         cosmos_collection_exists(account_name, database_name, collection_name, resource_group)?;
 
@@ -1037,7 +1032,7 @@ mod tests {
     use crate::shared::service_models::Role;
     use crate::shared::shared_models::GameError;
     use crate::shared::shared_models::ResponseType;
-    use crate::shared::shared_models::ServiceResponse;
+    use crate::shared::shared_models::ServiceError;
     use crate::trace_function;
 
 

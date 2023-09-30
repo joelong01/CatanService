@@ -9,7 +9,7 @@ use crate::{
         shared::game_enums::GameAction,
     },
 
-    user_service::user_handlers::create_http_response,
+    user_service::user_handlers::create_http_response, api_call,
 };
 
 /**
@@ -17,16 +17,12 @@ use crate::{
  * HTTP response
  */
 
-pub async fn next_handler(game_id: web::Path<String>) -> impl Responder {
-    super::actions::next(&game_id).await
-    .map(|sr| sr.to_http_response())
-    .unwrap_or_else(|sr| sr.to_http_response())
+pub async fn next_handler(game_id: web::Path<String>) ->  HttpResponse {
+    api_call!(super::actions::next(&game_id).await)
 }
 /**
  * look at the state of the game and answer the question "what are the valid actions"
  */
-pub async fn valid_actions(game_id: web::Path<String>, _req: HttpRequest) -> impl Responder {
-    super::actions::valid_actions(&game_id).await
-    .map(|sr| sr.to_http_response())
-    .unwrap_or_else(|sr| sr.to_http_response())
+pub async fn valid_actions(game_id: web::Path<String>, _req: HttpRequest) ->  HttpResponse {
+    api_call!(super::actions::valid_actions(&game_id).await)
 }

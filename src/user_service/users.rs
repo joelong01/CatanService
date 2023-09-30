@@ -2,6 +2,7 @@
 #![allow(unused_variables)]
 #![allow(unused_imports)]
 
+use actix_web::dev::Server;
 use azure_core::request_options::User;
 use bcrypt::{hash, verify};
 use rand::Rng;
@@ -27,9 +28,7 @@ use crate::{
 use crate::games_service::long_poller::long_poller::LongPoller;
 
 use crate::middleware::request_context_mw::RequestContext;
-use crate::shared::shared_models::{
-    GameError, ResponseType, ServiceResponse, UserProfile, UserType,
-};
+use crate::shared::shared_models::{GameError, ResponseType, ServiceError, UserProfile, UserType};
 
 use reqwest::StatusCode;
 
@@ -41,7 +40,7 @@ use reqwest::StatusCode;
  * the users database will be created out of band and this path is just for test users.
  */
 
-pub async fn verify_cosmosdb(context: &RequestContext) -> Result<ServiceResponse, ServiceResponse> {
+pub async fn verify_cosmosdb(context: &RequestContext) -> Result<(), ServiceError> {
     trace_function!("setup");
     let use_cosmos_db = match &context.test_context {
         Some(tc) => tc.use_cosmos_db,
@@ -57,7 +56,7 @@ pub async fn verify_cosmosdb(context: &RequestContext) -> Result<ServiceResponse
         )
         .is_err()
         {
-            return Err(ServiceResponse::new(
+            return Err(ServiceError::new(
                 &format!("account {} does not exist", context.config.cosmos_account),
                 StatusCode::NOT_FOUND,
                 ResponseType::NoData,
@@ -72,7 +71,7 @@ pub async fn verify_cosmosdb(context: &RequestContext) -> Result<ServiceResponse
         )
         .is_err()
         {
-            return Err(ServiceResponse::new(
+            return Err(ServiceError::new(
                 &format!(
                     "account {} does exists, but database {} does not",
                     context.config.cosmos_account, context.config.cosmos_database_name
@@ -83,7 +82,11 @@ pub async fn verify_cosmosdb(context: &RequestContext) -> Result<ServiceResponse
             ));
         }
 
-        for collection in &context.database.as_user_db().get_collection_names(context.is_test()) {
+        for collection in &context
+            .database
+            .as_user_db()
+            .get_collection_names(context.is_test())
+        {
             let collection_exists = cosmos_collection_exists(
                 &context.config.cosmos_account,
                 &context.config.cosmos_database_name,
@@ -97,7 +100,7 @@ pub async fn verify_cosmosdb(context: &RequestContext) -> Result<ServiceResponse
                     context.config.cosmos_account, context.config.cosmos_database_name, collection
                 );
 
-                return Err(ServiceResponse::new(
+                return Err(ServiceError::new(
                     &error_message,
                     StatusCode::NOT_FOUND,
                     ResponseType::NoData,
@@ -106,12 +109,7 @@ pub async fn verify_cosmosdb(context: &RequestContext) -> Result<ServiceResponse
             }
         }
     }
-    Ok(ServiceResponse::new(
-        "already exists",
-        StatusCode::ACCEPTED,
-        ResponseType::NoData,
-        GameError::NoError(String::default()),
-    ))
+    Ok(())
 }
 
 async fn internal_register_user(
@@ -119,20 +117,21 @@ async fn internal_register_user(
     profile_in: &UserProfile,
     roles: &mut Vec<Role>,
     request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
+) -> Result<UserProfile, ServiceError> {
     let email = match &profile_in.pii {
         Some(pii) => pii.email.clone(),
         None => return Err(bad_request_from_string!("no email specified")),
     };
 
     if request_context
-        .database.as_user_db()
+        .database
+        .as_user_db()
         .find_user_by_email(&email)
         .await
         .is_ok()
     // you can't register twice!
     {
-        return Err(ServiceResponse::new(
+        return Err(ServiceError::new(
             "User already exists",
             StatusCode::CONFLICT,
             ResponseType::NoData,
@@ -150,7 +149,7 @@ async fn internal_register_user(
         Ok(hp) => hp,
         Err(e) => {
             let err_message = format!("{:#?}", e);
-            return Err(ServiceResponse::new(
+            return Err(ServiceError::new(
                 "Error Hashing Password",
                 StatusCode::INTERNAL_SERVER_ERROR,
                 ResponseType::ErrorInfo(err_message.to_owned()),
@@ -168,9 +167,12 @@ async fn internal_register_user(
     persist_user.user_profile.games_won = Some(0);
     persist_user.roles = roles.clone();
     request_context
-        .database.as_user_db()
+        .database
+        .as_user_db()
         .update_or_create_user(&persist_user)
-        .await
+        .await?;
+
+    Ok(persist_user.user_profile)
 }
 
 /// Registers a new user by hashing the provided password and creating a `PersistUser` record in the database.
@@ -189,7 +191,7 @@ pub async fn register(
     password: &str,
     profile_in: &UserProfile,
     request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
+) -> Result<UserProfile, ServiceError> {
     if request_context.is_test() {
         return new_unauthorized_response!(
             "can't create a test user through this api.  use register-test-user"
@@ -201,16 +203,22 @@ pub async fn register(
 pub async fn update_profile(
     profile_in: &UserProfile,
     request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
+) -> Result<(), ServiceError> {
     let claims = request_context.claims.as_ref().unwrap();
 
-    let mut persist_user = request_context.database.as_user_db().find_user_by_id(&claims.id).await?;
+    let mut persist_user = request_context
+        .database
+        .as_user_db()
+        .find_user_by_id(&claims.id)
+        .await?;
     persist_user.update_profile(&profile_in);
 
     request_context
-        .database.as_user_db()
+        .database
+        .as_user_db()
         .update_or_create_user(&persist_user)
-        .await
+        .await?;
+    Ok(())
 }
 
 ///
@@ -220,7 +228,7 @@ pub async fn register_test_user(
     password: &str,
     profile_in: &UserProfile,
     request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
+) -> Result<UserProfile, ServiceError> {
     if !request_context.is_caller_in_role(Role::Admin) {
         return new_unauthorized_response!("");
     }
@@ -249,16 +257,17 @@ pub async fn login(
     username: &str,
     password: &str,
     request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
+) -> Result<String, ServiceError> {
     let user = request_context
-        .database.as_user_db()
+        .database
+        .as_user_db()
         .find_user_by_email(username)
         .await?;
 
     let password_hash: String = match user.password_hash {
         Some(p) => p,
         None => {
-            return Err(ServiceResponse::new(
+            return Err(ServiceError::new(
                 "user document does not contain a password hash",
                 StatusCode::INTERNAL_SERVER_ERROR,
                 ResponseType::NoData,
@@ -270,7 +279,7 @@ pub async fn login(
     let is_password_match = match result {
         Ok(m) => m,
         Err(e) => {
-            return Err(ServiceResponse::new(
+            return Err(ServiceError::new(
                 &format!("Error from bcrypt library: {:#?}", e),
                 StatusCode::INTERNAL_SERVER_ERROR,
                 ResponseType::NoData,
@@ -292,14 +301,9 @@ pub async fn login(
             .login_keys
             .sign_claims(&claims);
         match token_result {
-            Ok(token) => Ok(ServiceResponse::new(
-                "",
-                StatusCode::OK,
-                ResponseType::Token(token),
-                GameError::NoError("ok".to_owned()),
-            )),
+            Ok(token) => Ok(token),
             Err(e) => {
-                return Err(ServiceResponse::new(
+                return Err(ServiceError::new(
                     "Error Hashing token",
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ResponseType::ErrorInfo(format!("{:#?}", e)),
@@ -318,7 +322,7 @@ pub async fn login(
  */
 pub async fn list_users(
     request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
+) -> Result<Vec<UserProfile>, ServiceError> {
     // Get list of users
     match request_context.database.as_user_db().list().await {
         Ok(users) => {
@@ -327,15 +331,10 @@ pub async fn list_users(
                 .map(|user| UserProfile::from_persist_user(&user))
                 .collect();
 
-            Ok(ServiceResponse::new(
-                "",
-                StatusCode::OK,
-                ResponseType::Profiles(user_profiles),
-                GameError::NoError(String::default()),
-            ))
+            Ok(user_profiles)
         }
         Err(err) => {
-            return Err(ServiceResponse::new(
+            return Err(ServiceError::new(
                 "",
                 StatusCode::NOT_FOUND,
                 ResponseType::ErrorInfo(format!("Failed to retrieve user list: {}", err)),
@@ -352,7 +351,7 @@ pub async fn list_users(
 pub async fn get_profile(
     id_or_email: &str,
     request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
+) -> Result<UserProfile, ServiceError> {
     let lookup_value: String;
 
     let user_id = request_context
@@ -400,30 +399,24 @@ pub async fn get_profile(
     let user = match lookup_value.contains("@") {
         true => {
             request_context
-                .database.as_user_db()
+                .database
+                .as_user_db()
                 .find_user_by_email(&lookup_value)
                 .await?
         }
         false => {
             request_context
-                .database.as_user_db()
+                .database
+                .as_user_db()
                 .find_user_by_id(&lookup_value)
                 .await?
         }
     };
 
-    Ok(ServiceResponse::new(
-        "",
-        StatusCode::OK,
-        ResponseType::Profile(UserProfile::from_persist_user(&user)),
-        GameError::NoError(String::default()),
-    ))
+    Ok(UserProfile::from_persist_user(&user))
 }
 
-pub async fn delete(
-    id: &str,
-    request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
+pub async fn delete(id: &str, request_context: &RequestContext) -> Result<(), ServiceError> {
     let user_id = request_context
         .claims
         .as_ref()
@@ -438,14 +431,9 @@ pub async fn delete(
     let result = request_context.database.as_user_db().delete_user(id).await;
 
     match result {
-        Ok(..) => Ok(ServiceResponse::new(
-            &format!("deleted user with id: {}", user_id),
-            StatusCode::OK,
-            ResponseType::NoData,
-            GameError::NoError(String::default()),
-        )),
+        Ok(..) => Ok(()),
         Err(err) => {
-            return Err(ServiceResponse::new(
+            return Err(ServiceError::new(
                 "failed to delete user",
                 StatusCode::BAD_REQUEST,
                 ResponseType::NoData,
@@ -460,7 +448,7 @@ pub async fn delete(
 /// get the profile
 /// mark the email as validated
 /// save the profile
-pub async fn validate_email(token: &str) -> Result<ServiceResponse, ServiceResponse> {
+pub async fn validate_email(token: &str) -> Result<(), ServiceError> {
     trace_function!("validate_email");
     let decoded_token = form_urlencoded::parse(token.as_bytes())
         .map(|(key, _)| key)
@@ -486,10 +474,19 @@ pub async fn validate_email(token: &str) -> Result<ServiceResponse, ServiceRespo
     );
 
     let id = &claims.id; // Borrowing here.
-    let mut user = request_context.database.as_user_db().find_user_by_id(id).await?;
+    let mut user = request_context
+        .database
+        .as_user_db()
+        .find_user_by_id(id)
+        .await?;
 
     user.user_profile.validated_email = true;
-    request_context.database.as_user_db().update_or_create_user(&user).await
+    request_context
+        .database
+        .as_user_db()
+        .update_or_create_user(&user)
+        .await?;
+    Ok(())
 }
 
 //
@@ -524,9 +521,7 @@ pub fn get_validation_url(
 /// Send a validation email
 /// returns an error or a ServiceResponse that has the validation URL embedded in it.  RegistgerUser should call
 /// this and drop the Ok() response. the Ok() response is useful for the test cases.
-pub fn send_validation_email(
-    request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
+pub fn send_validation_email(request_context: &RequestContext) -> Result<(), ServiceError> {
     trace_function!("send_validation_email");
     let host_name = std::env::var("HOST_NAME").expect("HOST_NAME must be set");
     let claims = request_context
@@ -540,26 +535,12 @@ pub fn send_validation_email(
          If you did not register with the service, something has gone terribly wrong.",
         url
     );
-    let result = send_email(
+    send_email(
         &claims.sub,
         &SERVICE_CONFIG.service_email,
         "Please validate your email",
         &msg,
-    );
-    match result {
-        Ok(_) => Ok(ServiceResponse::new(
-            "sent",
-            StatusCode::OK,
-            ResponseType::Url(url),
-            GameError::NoError(String::default()),
-        )),
-        Err(e) => Err(ServiceResponse::new(
-            "Error sending email",
-            reqwest::StatusCode::INTERNAL_SERVER_ERROR,
-            ResponseType::ErrorInfo(e),
-            GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
-        )),
-    }
+    )
 }
 ///
 /// 1. get the user profile
@@ -567,9 +548,7 @@ pub fn send_validation_email(
 /// 3. store the number in the profile
 /// 4. update the profile
 /// 5. send the text message to the phone
-pub async fn send_phone_code(
-    request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
+pub async fn send_phone_code(request_context: &RequestContext) -> Result<(), ServiceError> {
     let user_id = request_context
         .claims
         .as_ref()
@@ -597,8 +576,12 @@ async fn internal_send_phone_code(
     user_id: &str,
     code: i32,
     request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
-    let mut persist_user = request_context.database.as_user_db().find_user_by_id(user_id).await?;
+) -> Result<(), ServiceError> {
+    let mut persist_user = request_context
+        .database
+        .as_user_db()
+        .find_user_by_id(user_id)
+        .await?;
 
     let phone_number = match &persist_user.user_profile.pii {
         Some(pii) => pii.phone_number.clone(),
@@ -607,7 +590,8 @@ async fn internal_send_phone_code(
 
     persist_user.phone_code = Some(code.to_string());
     request_context
-        .database.as_user_db()
+        .database
+        .as_user_db()
         .update_or_create_user(&persist_user)
         .await?;
     let msg = format!(
@@ -637,7 +621,7 @@ async fn internal_send_phone_code(
 pub async fn validate_phone(
     code: &str,
     request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
+) -> Result<(), ServiceError> {
     let user_id = request_context
         .claims
         .as_ref()
@@ -645,7 +629,11 @@ pub async fn validate_phone(
         .id
         .clone();
 
-    let mut persist_user = request_context.database.as_user_db().find_user_by_id(&user_id).await?;
+    let mut persist_user = request_context
+        .database
+        .as_user_db()
+        .find_user_by_id(&user_id)
+        .await?;
 
     match &persist_user.phone_code {
         // If the stored code matches the provided code, validate the phone.
@@ -653,18 +641,14 @@ pub async fn validate_phone(
             persist_user.user_profile.validated_phone = true;
             persist_user.phone_code = None;
             request_context
-                .database.as_user_db()
+                .database
+                .as_user_db()
                 .update_or_create_user(&persist_user)
                 .await?;
-            Ok(ServiceResponse::new(
-                "validated",
-                StatusCode::OK,
-                ResponseType::NoData,
-                GameError::NoError(String::default()),
-            ))
+            Ok(())
         }
         // Handle all other cases (mismatch or missing code) as errors.
-        _ => Err(ServiceResponse::new(
+        _ => Err(ServiceError::new(
             "incorrect code.  request a new one",
             reqwest::StatusCode::BAD_REQUEST,
             ResponseType::NoData,
@@ -677,9 +661,7 @@ pub async fn validate_phone(
 /// rotates the login keys -- admin only
 ///
 
-pub async fn rotate_login_keys(
-    request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
+pub async fn rotate_login_keys(request_context: &RequestContext) -> Result<(), ServiceError> {
     panic!("update this to match the new SecurityContext naming convention");
     // if !request_context.is_caller_in_role(Role::Admin) {
     //     return new_unauthorized_response!("");
@@ -708,15 +690,30 @@ pub async fn rotate_login_keys(
 pub async fn find_user_by_id(
     id: &str,
     request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
-    let persist_user = request_context.database.as_user_db().find_user_by_id(&id).await?;
+) -> Result<UserProfile, ServiceError> {
+    let claims_id = request_context
+        .claims
+        .as_ref()
+        .expect("auth_mw should have added this or rejected the call")
+        .id
+        .clone();
 
-    Ok(ServiceResponse::new(
-        "",
-        StatusCode::OK,
-        ResponseType::Profile(UserProfile::from_persist_user(&persist_user)),
-        GameError::NoError(String::default()),
-    ))
+    if claims_id != *id && !request_context.is_caller_in_role(Role::Admin) {
+        return Err(ServiceError::new(
+            "you can't peak at somebody else's profile!",
+            StatusCode::UNAUTHORIZED,
+            ResponseType::NoData,
+            GameError::HttpError(StatusCode::UNAUTHORIZED),
+        ));
+    }
+
+    let persist_user = request_context
+        .database
+        .as_user_db()
+        .find_user_by_id(&id)
+        .await?;
+
+    Ok(UserProfile::from_persist_user(&persist_user))
 }
 
 /// a "local user" is a user that can play in the game, but does not participate in the long polling. instead messages
@@ -731,7 +728,7 @@ pub async fn find_user_by_id(
 pub async fn create_local_user(
     profile_in: &UserProfile,
     request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
+) -> Result<(), ServiceError> {
     let user_id = request_context
         .claims
         .as_ref()
@@ -751,9 +748,11 @@ pub async fn create_local_user(
     let persist_user = PersistUser::from_local_user(&user_id, &profile);
 
     request_context
-        .database.as_user_db()
+        .database
+        .as_user_db()
         .update_or_create_user(&persist_user)
-        .await
+        .await?;
+    Ok(())
 }
 
 ///
@@ -761,7 +760,7 @@ pub async fn create_local_user(
 pub async fn update_local_user(
     new_profile: &UserProfile,
     request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
+) -> Result<(), ServiceError> {
     // Check that PII is not filled in for local users
     if new_profile.pii.is_some() {
         return Err(bad_request_from_string!("Local Users have no PII!"));
@@ -788,7 +787,8 @@ pub async fn update_local_user(
 
     // Find the local user by ID
     let mut local_user = request_context
-        .database.as_user_db()
+        .database
+        .as_user_db()
         .find_user_by_id(local_user_id)
         .await?;
 
@@ -809,9 +809,11 @@ pub async fn update_local_user(
 
     // Save the updated user
     request_context
-        .database.as_user_db()
+        .database
+        .as_user_db()
         .update_or_create_user(&local_user)
-        .await
+        .await?;
+    Ok(())
 }
 
 ///
@@ -822,14 +824,15 @@ pub async fn update_local_user(
 pub async fn delete_local_user(
     local_user_primary_key: &str,
     request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
+) -> Result<(), ServiceError> {
     let local_user_profile = request_context
-        .database.as_user_db()
+        .database
+        .as_user_db()
         .find_user_by_id(&local_user_primary_key)
         .await?;
 
     if local_user_profile.connected_user_id.is_none() {
-        return Err(bad_request_from_string!("invalid local user id"));
+        return Err(ServiceError::new_bad_id("invalid local user id", local_user_primary_key));
     }
 
     let id_in_claims = request_context
@@ -848,10 +851,11 @@ pub async fn delete_local_user(
 
     if id_in_claims == connected_id || request_context.is_caller_in_role(Role::Admin) {
         request_context
-            .database.as_user_db()
+            .database
+            .as_user_db()
             .delete_user(&local_user_primary_key)
             .await?;
-        return Ok(new_ok_response!(""));
+        return Ok(());
     }
 
     return new_unauthorized_response!("");
@@ -860,7 +864,7 @@ pub async fn delete_local_user(
 pub async fn get_local_users(
     connected_user_id: &str,
     request_context: &RequestContext,
-) -> Result<ServiceResponse, ServiceResponse> {
+) -> Result<Vec<UserProfile>, ServiceError> {
     let id_in_claims = request_context
         .claims
         .as_ref()
@@ -875,19 +879,15 @@ pub async fn get_local_users(
     };
     if id_in_claims == connected_id || request_context.is_caller_in_role(Role::Admin) {
         let users = request_context
-            .database.as_user_db()
+            .database
+            .as_user_db()
             .get_connected_users(&connected_id)
             .await?;
         let user_profiles: Vec<UserProfile> = users
             .iter()
             .map(|user| UserProfile::from_persist_user(&user))
             .collect();
-        return Ok(ServiceResponse::new(
-            "",
-            StatusCode::OK,
-            ResponseType::Profiles(user_profiles),
-            GameError::NoError(String::default()),
-        ));
+        return Ok(user_profiles);
     };
 
     return new_unauthorized_response!("");
@@ -919,8 +919,8 @@ mod tests {
         let code = 569342;
         let mut proxy = TestProxy::new(&app, Some(TestContext::new(false, Some(code), None)));
 
-        let auth_token = delete_all_test_users(&mut proxy).await;
-        let users = register_test_users(&mut proxy, Some(auth_token)).await;
+        let auth_token = TestHelpers::delete_all_test_users(&mut proxy).await;
+        let users = TestHelpers::register_test_users(&mut proxy, Some(auth_token)).await;
         //
         // i'm logged in as the admin
         let last_id = users
@@ -930,39 +930,34 @@ mod tests {
             .unwrap_or_else(|| panic!("UserProfile should have an id!"));
 
         full_info!("deleting user: {}", &last_id);
-        proxy.delete_user(&last_id).await;
+        proxy.delete_local_user(&last_id).await.expect("success");
 
         full_info!("logging in as test user");
         // login as the test user that is going to create the local user and set the auth token in the proxy
         let first_user = users.first().unwrap().clone();
-        let service_response = proxy
+        let test_token = proxy
             .login(&first_user.get_email_or_panic(), "password")
-            .await;
-        assert!(service_response.status.is_success());
-        let test_token = service_response
-            .get_token()
-            .expect("login needs to return a token");
-        proxy.set_auth_token(&Some(test_token));
+            .await
+            .expect("success");
+
+        proxy.set_auth_token(Some(test_token));
 
         full_info!("creating local users");
         // now we are logged in as the first test user...create a test local user connected to the first user
-        let service_response = proxy
+        proxy
             .create_local_user(&users.last().unwrap().clone())
-            .await;
-        assert!(service_response.status.is_success());
+            .await
+            .expect("success");
+
         for i in 0..3 {
-            let service_response = proxy
+            let service_error = proxy
                 .create_local_user(&UserProfile::new_test_user(None))
-                .await;
-            assert!(service_response.status.is_success());
+                .await
+                .expect("success");
         }
 
         full_info!("getting local users");
-        let service_response = proxy.get_local_users("Self").await;
-        assert!(service_response.status.is_success());
-        let local_user_profiles = service_response
-            .to_profile_vec()
-            .expect("there should be 4 users in this vec");
+        let local_user_profiles = proxy.get_local_users("Self").await.expect("success");
         assert_eq!(local_user_profiles.len(), 4);
 
         let first_id = users
@@ -972,8 +967,7 @@ mod tests {
             .unwrap_or_else(|| panic!("UserProfile should have an id!"));
 
         full_info!("deleting local users");
-        let service_response = proxy.delete_local_user(&first_id).await;
-        assert!(service_response.status.is_client_error()); // this is the user_id of the connected user, not the local user
+        proxy.delete_local_user(&first_id).await.expect("success");
 
         let first_id = local_user_profiles
             .first()
@@ -981,13 +975,9 @@ mod tests {
             .map(|id| id.clone())
             .unwrap_or_else(|| panic!("UserProfile should have an id!"));
 
-        let service_response = proxy.delete_local_user(&first_id).await;
-        assert!(service_response.status.is_success());
-        let service_response = proxy.get_local_users("Self").await;
-        assert!(service_response.status.is_success());
-        let local_user_profiles = service_response
-            .to_profile_vec()
-            .expect("there should be 3 users in this vec");
+        proxy.delete_local_user(&first_id).await.expect("success");
+
+        let local_user_profiles = proxy.get_local_users("Self").await.expect("success");
         assert_eq!(local_user_profiles.len(), 3);
         // testing update_local_user
         full_info!("updating local users");
@@ -997,16 +987,13 @@ mod tests {
             .clone();
 
         first_profile.games_won = Some(1);
-        let service_response = proxy.update_local_user(&first_profile).await;
-        assert!(service_response.status.is_success());
-
+        proxy
+            .update_local_user(&first_profile)
+            .await
+            .expect("success");
         //
         //   get the profiles
-        let service_response = proxy.get_local_users("Self").await;
-        assert!(service_response.status.is_success());
-        let local_user_profiles = service_response
-            .to_profile_vec()
-            .expect("there should be 3 users in this vec");
+        let local_user_profiles = proxy.get_local_users("Self").await.expect("success");
         assert_eq!(local_user_profiles.len(), 3);
     }
 
@@ -1025,12 +1012,13 @@ mod tests {
         // let response = verify_cosmosdb(&request_context).await;
         // assert!(response.is_ok());
         // Register the user first
-        let result = register("password", &profile, &request_context).await;
-        assert!(result.is_ok());
-        let sr = result.unwrap();
-        let user_profile = sr.to_profile().expect("This should be a client user");
+        let user_profile = register_test_user("password", &profile, &request_context)
+            .await
+            .expect("success");
+
         request_context
-            .database.as_user_db()
+            .database
+            .as_user_db()
             .find_user_by_email(&user_profile.pii.unwrap().email)
             .await
             .expect("we just put this here!");

@@ -18,7 +18,7 @@ use crate::{
     },
     shared::{
         service_models::PersistGame,
-        shared_models::{ServiceResponse, UserProfile, UserType},
+        shared_models::{ServiceError, UserProfile, UserType},
     },
 };
 
@@ -161,10 +161,10 @@ impl GameStacks {
     /// Moves the current game from the `undo_stack` to the `redo_stack` and returns the updated current game.
     ///
     /// Returns an error if there are fewer than two games in the `undo_stack` or if the current game cannot be undone.
-    pub async fn undo(&mut self) -> Result<RegularGame, ServiceResponse> {
+    pub async fn undo(&mut self) -> Result<RegularGame, ServiceError> {
         let can_undo = self.can_undo().await?;
         if !can_undo {
-            return Err(ServiceResponse::new_container_error(
+            return Err(ServiceError::new_container_error(
                 "current state does not allow an undo",
             ));
         }
@@ -177,11 +177,11 @@ impl GameStacks {
     /// Pops a game from the `redo_stack`, pushes it onto the `undo_stack`, and returns the game.
     ///
     /// Returns an error if the `redo_stack` is empty.
-    pub async fn redo(&mut self) -> Result<RegularGame, ServiceResponse> {
+    pub async fn redo(&mut self) -> Result<RegularGame, ServiceError> {
         let len = self.redo_stack.len();
         if len < 2 {
             // 2 because we do not undo a created game -- create a new game instead.
-            return Err(ServiceResponse::new_container_error(
+            return Err(ServiceError::new_container_error(
                 "nothing to redo in this container",
             ));
         }
@@ -196,16 +196,16 @@ impl GameStacks {
     /// Returns the last item on the `undo_stack` as the current game.
     ///
     /// Returns an error if the `undo_stack` is empty.
-    pub async fn current(&self) -> Result<RegularGame, ServiceResponse> {
+    pub async fn current(&self) -> Result<RegularGame, ServiceError> {
         match self.undo_stack.last() {
             Some(g) => Ok(g.clone()),
-            None => Err(ServiceResponse::new_container_error(
+            None => Err(ServiceError::new_container_error(
                 "no current game available in this container!",
             )),
         }
     }
 
-    pub async fn can_undo(&self) -> Result<bool, ServiceResponse> {
+    pub async fn can_undo(&self) -> Result<bool, ServiceError> {
         let len = self.undo_stack.len();
         if len < 2 {
             return Ok(false);
@@ -215,7 +215,7 @@ impl GameStacks {
         Ok(current.can_undo)
     }
 
-    pub async fn can_redo(&self) -> Result<bool, ServiceResponse> {
+    pub async fn can_redo(&self) -> Result<bool, ServiceError> {
         Ok(self.redo_stack.len() > 0)
     }
 }
@@ -230,10 +230,10 @@ impl GameContainer {
         game_id: &str,
         game: &RegularGame,
         request_context: &RequestContext,
-    ) -> Result<ServiceResponse, ServiceResponse> {
+    ) -> Result<(), ServiceError> {
         let mut game_map = GAME_MAP.write().await; // Acquire write lock
         if game_map.contains_key(game_id) {
-            return Err(ServiceResponse::new_bad_id("GameId", game_id));
+            return Err(ServiceError::new_bad_id("GameId", game_id));
         }
 
         let mut game_container = GameContainer::new(game_id, request_context);
@@ -241,7 +241,7 @@ impl GameContainer {
         game_container.stacks.push_game(&game).await;
         game_map.insert(game_id.to_owned(), Arc::new(RwLock::new(game_container)));
 
-        Ok(ServiceResponse::new_generic_ok("added"))
+        Ok(())
     }
 
     fn new(game_id: &str, request_context: &RequestContext) -> Self {
@@ -253,11 +253,11 @@ impl GameContainer {
 
     pub async fn get_locked_container(
         game_id: &str,
-    ) -> Result<Arc<RwLock<GameContainer>>, ServiceResponse> {
+    ) -> Result<Arc<RwLock<GameContainer>>, ServiceError> {
         let game_map = GAME_MAP.read().await; // Acquire read lock
         match game_map.get(game_id) {
             Some(container) => Ok(container.clone()),
-            None => Err(ServiceResponse::new_bad_id("GameId", game_id)),
+            None => Err(ServiceError::new_bad_id("GameId", game_id)),
         }
     }
 
@@ -269,7 +269,7 @@ impl GameContainer {
     pub async fn add_player(
         game_id: &str,
         client_user: &UserProfile,
-    ) -> Result<ServiceResponse, ServiceResponse> {
+    ) -> Result<(), ServiceError> {
         let game_container = Self::get_locked_container(&game_id).await?;
         let mut game_container = game_container.write().await; // drop read lock
 
@@ -279,7 +279,7 @@ impl GameContainer {
         drop(game_container);
         let keys_vec: Vec<String> = game.players.keys().cloned().collect();
         let _ = Self::broadcast_message(game_id, &CatanMessage::PlayerAdded(keys_vec)).await;
-        Ok(ServiceResponse::new_generic_ok("added"))
+        Ok(())
     }
     /**
      *  send the message to all connected players in game_id
@@ -287,12 +287,13 @@ impl GameContainer {
     pub async fn broadcast_message(
         game_id: &str,
         message: &CatanMessage,
-    ) -> Result<ServiceResponse, ServiceResponse> {
+    ) -> Result<(), ServiceError> {
         let ids = GameContainer::get_connected_players(game_id).await?;
 
-        LongPoller::send_message(ids, message).await
+        LongPoller::send_message(ids, message).await?;
+        Ok(())
     }
-    pub async fn get_connected_players(game_id: &str) -> Result<Vec<String>, ServiceResponse> {
+    pub async fn get_connected_players(game_id: &str) -> Result<Vec<String>, ServiceError> {
         let (game, _) = GameContainer::current_game(game_id).await?;
         let connected_players: Vec<String> = game
             .players
@@ -303,7 +304,7 @@ impl GameContainer {
 
         Ok(connected_players)
     }
-    pub async fn get_game_players(game_id: &str) -> Result<Vec<String>, ServiceResponse> {
+    pub async fn get_game_players(game_id: &str) -> Result<Vec<String>, ServiceError> {
         let mut players = Vec::new();
         let (game, _) = GameContainer::current_game(game_id).await?;
         for p in game.players.values() {
@@ -313,16 +314,16 @@ impl GameContainer {
         Ok(players)
     }
 
-    pub async fn undo(game_id: &String) -> Result<ServiceResponse, ServiceResponse> {
+    pub async fn undo(game_id: &String) -> Result<(), ServiceError> {
         let game_container = Self::get_locked_container(game_id).await?;
         let mut game_container = game_container.write().await;
         let game = game_container.stacks.undo().await?;
         drop(game_container);
         let _ = Self::broadcast_message(game_id, &CatanMessage::GameUpdate(game)).await;
-        Ok(ServiceResponse::new_generic_ok(""))
+        Ok(())
     }
 
-    pub async fn current_game(game_id: &str) -> Result<(RegularGame, bool), ServiceResponse> {
+    pub async fn current_game(game_id: &str) -> Result<(RegularGame, bool), ServiceError> {
         let game_container = Self::get_locked_container(game_id).await?;
         let game_container = game_container.read().await;
         Ok((
@@ -331,7 +332,7 @@ impl GameContainer {
         ))
     }
 
-    pub async fn push_game(game_id: &str, game: &RegularGame) -> Result<(), ServiceResponse> {
+    pub async fn push_game(game_id: &str, game: &RegularGame) -> Result<(), ServiceError> {
         let game_container = Self::get_locked_container(game_id).await?;
         let mut game_container = game_container.write().await;
         game_container.stacks.push_game(&game).await;
@@ -343,15 +344,12 @@ impl GameContainer {
     pub async fn load_game(
         game_id: &str,
         _request_context: &RequestContext,
-    ) -> Result<ServiceResponse, ServiceResponse> {
+    ) -> Result<(), ServiceError> {
         let response = GameContainer::current_game(&game_id.to_owned()).await;
 
         match response {
-            Ok((game, _)) => {
-                return Ok(ServiceResponse::new_game_response(
-                    "game already in memory",
-                    &game,
-                ));
+            Ok(_) => {
+                return Ok(());
             }
             Err(_) => {
                 // let game_stacks = request_context.user_database.

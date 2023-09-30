@@ -3,7 +3,7 @@
 use crate::middleware::request_context_mw::TestContext;
 use crate::middleware::service_config::ServiceConfig;
 use crate::shared::service_models::{PersistGame, PersistUser};
-use crate::shared::shared_models::ServiceResponse;
+use crate::shared::shared_models::ServiceError;
 use async_trait::async_trait;
 use super::cosmosdb::CosmosDb;
 use super::mocked_db::TestDb;
@@ -40,30 +40,30 @@ pub static COLLECTION_NAME_VALUES: [CosmosCollectionNameValues; 3] = [
 ];
 #[async_trait]
 pub trait GameDbTrait: Send + Sync {
-    async fn load_game(&self, game_id: &str) -> Result<Vec<u8>, ServiceResponse>;
-    async fn delete_games(&self, game_id: &str) -> Result<(), ServiceResponse>;
+    async fn load_game(&self, game_id: &str) -> Result<Vec<u8>, ServiceError>;
+    async fn delete_games(&self, game_id: &str) -> Result<(), ServiceError>;
     async fn update_game_data(
         &self,
         game_id: &str,
         to_write: &PersistGame,
-    ) -> Result<(), ServiceResponse>;
+    ) -> Result<(), ServiceError>;
 }
 
 #[async_trait]
 pub trait UserDbTrait: Send + Sync {
-     async fn setupdb(&self) -> Result<(), ServiceResponse>;
-    async fn list(&self) -> Result<Vec<PersistUser>, ServiceResponse>;
+     async fn setupdb(&self) -> Result<(), ServiceError>;
+    async fn list(&self) -> Result<Vec<PersistUser>, ServiceError>;
     async fn update_or_create_user(
         &self,
         user: &PersistUser,
-    ) -> Result<ServiceResponse, ServiceResponse>;
-    async fn delete_user(&self, unique_id: &str) -> Result<(), ServiceResponse>;
-    async fn find_user_by_id(&self, val: &str) -> Result<PersistUser, ServiceResponse>;
-    async fn find_user_by_email(&self, val: &str) -> Result<PersistUser, ServiceResponse>;
+    ) -> Result<(), ServiceError>;
+    async fn delete_user(&self, unique_id: &str) -> Result<(), ServiceError>;
+    async fn find_user_by_id(&self, val: &str) -> Result<PersistUser, ServiceError>;
+    async fn find_user_by_email(&self, val: &str) -> Result<PersistUser, ServiceError>;
     async fn get_connected_users(
         &self,
         connected_user_id: &str,
-    ) -> Result<Vec<PersistUser>, ServiceResponse>;
+    ) -> Result<Vec<PersistUser>, ServiceError>;
 
     fn get_collection_names(&self, is_test: bool) -> Vec<String> {
         COLLECTION_NAME_VALUES
@@ -85,14 +85,14 @@ pub enum Database {
 
 #[async_trait]
 impl UserDbTrait for Database {
-    async fn setupdb(&self) -> Result<(), ServiceResponse> {
+    async fn setupdb(&self) -> Result<(), ServiceError> {
         match self {
             Database::Cosmos(db) => db.setupdb().await,
             Database::Test(db) => db.setupdb().await,
         }
     }
 
-    async fn list(&self) -> Result<Vec<PersistUser>, ServiceResponse> {
+    async fn list(&self) -> Result<Vec<PersistUser>, ServiceError> {
         match self {
             Database::Cosmos(db) => db.list().await,
             Database::Test(db) => db.list().await,
@@ -102,28 +102,28 @@ impl UserDbTrait for Database {
     async fn update_or_create_user(
         &self,
         user: &PersistUser,
-    ) -> Result<ServiceResponse, ServiceResponse> {
+    ) -> Result<(), ServiceError> {
         match self {
             Database::Cosmos(db) => db.update_or_create_user(user).await,
             Database::Test(db) => db.update_or_create_user(user).await,
         }
     }
 
-    async fn delete_user(&self, unique_id: &str) -> Result<(), ServiceResponse> {
+    async fn delete_user(&self, unique_id: &str) -> Result<(), ServiceError> {
         match self {
             Database::Cosmos(db) => db.delete_user(unique_id).await,
             Database::Test(db) => db.delete_user(unique_id).await,
         }
     }
 
-    async fn find_user_by_id(&self, val: &str) -> Result<PersistUser, ServiceResponse> {
+    async fn find_user_by_id(&self, val: &str) -> Result<PersistUser, ServiceError> {
         match self {
             Database::Cosmos(db) => db.find_user_by_id(val).await,
             Database::Test(db) => db.find_user_by_id(val).await,
         }
     }
 
-    async fn find_user_by_email(&self, val: &str) -> Result<PersistUser, ServiceResponse> {
+    async fn find_user_by_email(&self, val: &str) -> Result<PersistUser, ServiceError> {
         match self {
             Database::Cosmos(db) => db.find_user_by_email(val).await,
             Database::Test(db) => db.find_user_by_email(val).await,
@@ -133,7 +133,7 @@ impl UserDbTrait for Database {
     async fn get_connected_users(
         &self,
         connected_user_id: &str,
-    ) -> Result<Vec<PersistUser>, ServiceResponse> {
+    ) -> Result<Vec<PersistUser>, ServiceError> {
         match self {
             Database::Cosmos(db) => db.get_connected_users(connected_user_id).await,
             Database::Test(db) => db.get_connected_users(connected_user_id).await,
@@ -151,14 +151,14 @@ impl UserDbTrait for Database {
 
 #[async_trait]
 impl GameDbTrait for Database {
-    async fn load_game(&self, game_id: &str) -> Result<Vec<u8>, ServiceResponse> {
+    async fn load_game(&self, game_id: &str) -> Result<Vec<u8>, ServiceError> {
         match self {
             Database::Cosmos(db) => db.load_game(game_id).await,
             Database::Test(db) => db.load_game(game_id).await,
         }
     }
 
-    async fn delete_games(&self, game_id: &str) -> Result<(), ServiceResponse> {
+    async fn delete_games(&self, game_id: &str) -> Result<(), ServiceError> {
         match self {
             Database::Cosmos(db) => db.delete_games(game_id).await,
             Database::Test(db) => db.delete_games(game_id).await,
@@ -169,7 +169,7 @@ impl GameDbTrait for Database {
         &self,
         game_id: &str,
         to_write: &PersistGame,
-    ) -> Result<(), ServiceResponse> {
+    ) -> Result<(), ServiceError> {
         match self {
             Database::Cosmos(db) => db.update_game_data(game_id, to_write).await,
             Database::Test(db) => db.update_game_data(game_id, to_write).await,

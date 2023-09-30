@@ -1,19 +1,22 @@
 #![allow(dead_code)]
 
+use actix_web::http;
 use actix_web::http::header::{self, HeaderName, HeaderValue};
+use serde::de::DeserializeOwned;
 
-use actix_web::test::{self, TestRequest};
-use serde::Serialize;
+use crate::full_info;
 use crate::games_service::catan_games::games::regular::regular_game::RegularGame;
 use crate::games_service::game_container::game_messages::{
-    GameHeader, Invitation, InvitationResponseData,
+    GameHeader, Invitation, InvitationResponseData, CatanMessage,
 };
-use crate::games_service::shared::game_enums::CatanGames;
+use crate::games_service::shared::game_enums::{CatanGames, GameAction};
 use crate::middleware::request_context_mw::TestContext;
+use crate::shared::shared_models::ServiceError;
 use crate::shared::shared_models::UserProfile;
-use crate::shared::shared_models::ServiceResponse;
+use actix_web::test::{self, TestRequest};
+use serde::Serialize;
 
-use actix_http::Request;
+use actix_http::{Method, Request};
 use actix_service::Service;
 use actix_web::dev::ServiceResponse as ActixServiceResponse;
 use actix_web::web::Bytes;
@@ -21,7 +24,6 @@ use actix_web::{
     body::{BoxBody, EitherBody},
     Error,
 };
-
 
 use std::collections::HashMap;
 
@@ -44,35 +46,71 @@ where
         }
     }
 
-    pub fn set_auth_token(&mut self, auth_token: &Option<String>) {
+    pub fn set_auth_token(&mut self, auth_token: Option<String>) {
         self.auth_token = auth_token.clone();
     }
 
-    pub fn set_test_context(&mut self, test_context: &Option<TestContext>) {
+    pub fn set_test_context(&mut self, test_context: Option<TestContext>) {
         self.test_context = test_context.clone();
     }
 
-    pub async fn post<B: Serialize>(
+    pub fn test_context(&self) -> Option<TestContext> {
+        return self.test_context.clone();
+    }
+
+    pub async fn send_request<B, T>(
         &self,
+        method: Method,
         url: &str,
         headers: Option<&HashMap<HeaderName, HeaderValue>>,
         body: Option<B>,
-    ) -> ServiceResponse {
-        let mut request = TestRequest::post().uri(url);
+    ) -> Result<T, ServiceError>
+    where
+        B: Serialize,
+        T: DeserializeOwned + 'static,
+    {
+        full_info!("calling url: {}", url);
+        
+        let mut request = match method {
+            Method::GET => TestRequest::get().uri(url),
+            Method::POST => TestRequest::post().uri(url),
+            Method::PUT => TestRequest::put().uri(url),
+            Method::DELETE => TestRequest::delete().uri(url),
+            // Add other HTTP methods as necessary
+            _ => {
+                return Err(ServiceError::new_internal_server_fault(
+                    "Unsupported HTTP method",
+                ))
+            }
+        };
 
-        // Adding Content-Type header for JSON
-        request = request.append_header((header::CONTENT_TYPE, "application/json"));
-
+        // Always process headers if they're present
         if let Some(header_map) = headers {
             for (key, value) in header_map {
                 request = request.append_header((key, value));
             }
         }
 
-        if let Some(body_content) = body {
-            let bytes = serde_json::to_vec(&body_content).expect("Failed to serialize body");
-            request = request.set_payload(Bytes::from(bytes));
+        // Only process bodies for PUT and POST methods
+        if method == Method::PUT || method == Method::POST {
+            // Adding Content-Type header for JSON
+            request = request.append_header((header::CONTENT_TYPE, "application/json"));
+
+            if let Some(body_content) = body {
+                match serde_json::to_vec(&body_content) {
+                    Ok(bytes) => {
+                        request = request.set_payload(Bytes::from(bytes));
+                    }
+                    Err(e) => {
+                        return Err(ServiceError::new_json_error(
+                            "setting payload in TestProxy::send_request",
+                            &e,
+                        )); // Assuming you have such a method or variant
+                    }
+                }
+            }
         }
+
         //
         // auth header
         if let Some(auth_token) = &self.auth_token {
@@ -89,129 +127,71 @@ where
         let request = request.to_request();
 
         let response = test::call_service(self.service, request).await;
-        let service_response: ServiceResponse = test::try_read_body_json(response)
-            .await
-            .expect("should be a ServiceResponse");
-
-        service_response
-    }
-    pub async fn get(
-        &self,
-        url: &str,
-        headers: Option<&HashMap<HeaderName, HeaderValue>>,
-    ) -> ServiceResponse {
-        let mut request = TestRequest::get().uri(url);
-
-        if let Some(header_map) = headers {
-            for (key, value) in header_map {
-                request = request.append_header((key, value));
+        full_info!("api returned status: {}", response.status());
+        match response.status() {
+            http::StatusCode::OK => {
+                let parsed_body: T = test::try_read_body_json(response)
+                    .await
+                    .expect("Failed to parse the response body");
+                Ok(parsed_body)
+            }
+            _ => {
+                let error_response: ServiceError = test::try_read_body_json(response)
+                    .await
+                    .expect("Failed to parse the error response");
+                Err(error_response)
             }
         }
-
-        // Add the test header
-        if let Some(test_context) = &self.test_context {
-            let json = serde_json::to_string(test_context).unwrap();
-            request = request.append_header((GameHeader::TEST, json));
-        }
-
-        if let Some(auth_token) = &self.auth_token {
-            let header_value = format!("Bearer {}", auth_token);
-            request = request.append_header(("Authorization", header_value));
-        }
-
-        let request = request.to_request();
-
-        let response = test::call_service(self.service, request).await;
-        let service_response: ServiceResponse = test::try_read_body_json(response)
-            .await
-            .expect("should be a ServiceResponse");
-
-        service_response
     }
-    pub async fn put<B: Serialize>(
+
+    pub async fn post<B, T>(
         &self,
         url: &str,
         headers: Option<&HashMap<HeaderName, HeaderValue>>,
         body: Option<B>,
-    ) -> ServiceResponse {
-        let mut request = TestRequest::put().uri(url);  // <-- Use PUT here
-    
-        // Adding Content-Type header for JSON
-        request = request.append_header((header::CONTENT_TYPE, "application/json"));
-    
-        if let Some(header_map) = headers {
-            for (key, value) in header_map {
-                request = request.append_header((key, value));
-            }
-        }
-    
-        if let Some(body_content) = body {
-            let bytes = serde_json::to_vec(&body_content).expect("Failed to serialize body");
-            request = request.set_payload(Bytes::from(bytes));
-        }
-    
-        // auth header
-        if let Some(auth_token) = &self.auth_token {
-            let header_value = format!("Bearer {}", auth_token);
-            request = request.append_header(("Authorization", header_value));
-        }
-    
-        // add the test header
-        if let Some(test_context) = &self.test_context {
-            let json = serde_json::to_string(&test_context).unwrap();
-            request = request.append_header((GameHeader::TEST, json));
-        }
-    
-        let request = request.to_request();
-    
-        let response = test::call_service(self.service, request).await;
-        let service_response: ServiceResponse = test::try_read_body_json(response)
-            .await
-            .expect("should be a ServiceResponse");
-    
-        service_response
+    ) -> Result<T, ServiceError>
+    where
+        B: Serialize,
+        T: DeserializeOwned + 'static,
+    {
+        self.send_request(Method::POST, url, headers, body).await
     }
-    
-   
-    pub async fn delete(
+    pub async fn get<T>(
         &self,
         url: &str,
         headers: Option<&HashMap<HeaderName, HeaderValue>>,
-    ) -> ServiceResponse {
-        let mut request = TestRequest::delete().uri(url);
-
-        // Adding Content-Type header for JSON (this might not be necessary for DELETE)
-        // but keeping it here for consistency with your POST method
-        request = request.append_header((header::CONTENT_TYPE, "application/json"));
-
-        if let Some(header_map) = headers {
-            for (key, value) in header_map {
-                request = request.append_header((key, value));
-            }
-        }
-
-        // auth header
-        if let Some(auth_token) = &self.auth_token {
-            let header_value = format!("Bearer {}", auth_token);
-            request = request.append_header(("Authorization", header_value));
-        }
-
-        // add the test header
-        if let Some(test_context) = &self.test_context {
-            let json = serde_json::to_string(&test_context).unwrap();
-            request = request.append_header((GameHeader::TEST, json));
-        }
-
-        let request = request.to_request();
-
-        let response = test::call_service(self.service, request).await;
-        let service_response: ServiceResponse = test::try_read_body_json(response)
+    ) -> Result<T, ServiceError>
+    where
+        T: DeserializeOwned + 'static,
+    {
+        self.send_request::<(), T>(Method::GET, url, headers, None)
             .await
-            .expect("should be a ServiceResponse");
-
-        service_response
     }
-    pub async fn register(&self, profile: &UserProfile, password: &str) -> ServiceResponse {
+
+    pub async fn put<B, T>(
+        &self,
+        url: &str,
+        headers: Option<&HashMap<HeaderName, HeaderValue>>,
+        body: Option<B>,
+    ) -> Result<T, ServiceError>
+    where
+        B: Serialize,
+        T: DeserializeOwned + 'static,
+    {
+        self.send_request(Method::PUT, url, headers, body).await
+    }
+
+    pub async fn delete<T>(
+        &self,
+        url: &str,
+        headers: Option<&HashMap<HeaderName, HeaderValue>>,
+    ) -> Result<T, ServiceError>
+    where
+        T: DeserializeOwned + 'static,
+    {
+        self.send_request::<(), T>(Method::DELETE, url, headers, None).await
+    }
+    pub async fn register(&self, profile: &UserProfile, password: &str) -> Result<UserProfile, ServiceError> {
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
 
         headers.insert(
@@ -220,7 +200,7 @@ where
         );
 
         let url = "/api/v1/users/register";
-        self.post::<&UserProfile>(url, Some(&headers), Some(profile))
+        self.post::<&UserProfile, UserProfile>(url, Some(&headers), Some(profile))
             .await
     }
 
@@ -228,7 +208,7 @@ where
         &self,
         profile: &UserProfile,
         password: &str,
-    ) -> ServiceResponse {
+    ) -> Result<UserProfile, ServiceError> {
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
 
         headers.insert(
@@ -237,11 +217,11 @@ where
         );
 
         let url = "/auth/api/v1/users/register-test-user";
-        self.post::<&UserProfile>(url, Some(&headers), Some(profile))
+        self.post::<&UserProfile, UserProfile>(url, Some(&headers), Some(profile))
             .await
     }
 
-    pub async fn login(&self, username: &str, password: &str) -> ServiceResponse {
+    pub async fn login(&self, username: &str, password: &str) -> Result<String, ServiceError> {
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
 
         headers.insert(
@@ -253,14 +233,14 @@ where
             HeaderValue::from_str(username).expect("Invalid header value"),
         );
         let url = "/api/v1/users/login";
-        self.post::<()>(url, Some(&headers), None).await
+        self.post::<(), String>(url, Some(&headers), None).await
     }
-    pub async fn setup(&self) -> ServiceResponse {
+    pub async fn setup(&self) -> Result<(), ServiceError> {
         let url = "/api/v1/test/verify-service";
-        let sr = self.post::<()>(url, None, None).await;
+        let sr = self.post::<(), ()>(url, None, None).await;
         sr
     }
-    pub async fn get_profile(&self, id: &str) -> ServiceResponse {
+    pub async fn get_profile(&self, id: &str) -> Result<UserProfile, ServiceError> {
         let url = format!("/auth/api/v1/profile/{}", id);
 
         self.get(&url, None).await
@@ -270,22 +250,22 @@ where
         &self,
         game_type: CatanGames,
         game: Option<&RegularGame>,
-    ) -> ServiceResponse {
+    ) -> Result<RegularGame, ServiceError> {
         let url = format!("/auth/api/v1/games/{:?}", game_type);
-        let service_response = match game {
-            Some(g) => self.post::<&RegularGame>(&url, None, Some(g)).await,
-            None => self.post::<()>(&url, None, None).await,
+        let service_error = match game {
+            Some(g) => self.post(&url, None, Some(g)).await,
+            None => self.post::<(), RegularGame>(&url, None, None).await,
         };
 
-        service_response
+        service_error
     }
 
-    pub async fn get_lobby(&self) -> ServiceResponse {
+    pub async fn get_lobby(&self) -> Result<Vec<UserProfile>, ServiceError> {
         let url = "/auth/api/v1/lobby";
-        self.get(url, None).await
+        self.get::<Vec<UserProfile>>(url, None).await
     }
 
-    pub async fn get_actions(&self, game_id: &str) -> ServiceResponse {
+    pub async fn get_actions(&self, game_id: &str) -> Result<Vec<GameAction>, ServiceError> {
         let url = format!("/auth/api/v1/action/actions/{}", game_id);
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
 
@@ -294,10 +274,10 @@ where
             HeaderValue::from_str(game_id).expect("Invalid header value"),
         );
 
-        self.get(&url, Some(&headers)).await
+        self.get::<Vec<GameAction>>(&url, Some(&headers)).await
     }
 
-    pub async fn long_poll(&self, game_id: &str, index: u32) -> ServiceResponse {
+    pub async fn long_poll(&self, game_id: &str, index: u32) -> Result<CatanMessage, ServiceError> {
         let url = format!("/auth/api/v1/longpoll/{}", index);
         let mut headers: HashMap<HeaderName, HeaderValue> = HashMap::new();
 
@@ -306,89 +286,83 @@ where
             HeaderValue::from_str(game_id).expect("Invalid header value"),
         );
 
-        self.get(&url, Some(&headers)).await
+        self.get::<CatanMessage>(&url, Some(&headers)).await
     }
 
-    pub async fn send_invite(&self, invite: &Invitation) -> ServiceResponse {
+    pub async fn send_invite(&self, invite: &Invitation) -> Result<(), ServiceError> {
         let url = "/auth/api/v1/lobby/invite";
-        self.post::<&Invitation>(&url, None, Some(&invite)).await
+        self.post::<&Invitation, ()>(&url, None, Some(&invite)).await
     }
 
-    pub async fn invitation_response(&self, invite: &InvitationResponseData) -> ServiceResponse {
+    pub async fn invitation_response(&self, invite: &InvitationResponseData) -> Result<(), ServiceError> {
         let url = "/auth/api/v1/lobby/acceptinvite";
 
-        self.post::<&InvitationResponseData>(&url, None, Some(invite))
+        self.post::<&InvitationResponseData, ()>(&url, None, Some(invite))
             .await
     }
-    pub async fn start_game(&self, game_id: &str) -> ServiceResponse {
-        let url = format!("/auth/api/v1/action/start/{}", game_id);
-        self.post::<()>(&url, None, None).await
-    }
+    // pub async fn start_game(&self, game_id: &str) -> ServiceResponse {
+    //     let url = format!("/auth/api/v1/action/start/{}", game_id);
+    //     self.post::<()>(&url, None, None).await
+    // }
 
-    pub async fn next(&self, game_id: &str) -> ServiceResponse {
+    pub async fn next(&self, game_id: &str) -> Result<Vec<GameAction>, ServiceError> {
         let url = format!("/auth/api/v1/action/next/{}", game_id);
-        self.post::<&Invitation>(&url, None, None).await
+        self.post::<(), Vec<GameAction>>(&url, None, None).await
     }
 
-    pub async fn rotate_login_keys(&self, game_id: &str) -> ServiceResponse {
+    pub async fn rotate_login_keys(&self, game_id: &str) -> Result<(), ServiceError> {
         let url = format!("/auth/api/v1/action/start/{}", game_id);
-        self.post::<()>(&url, None, None).await
+        self.post::<(), ()>(&url, None, None).await
     }
 
-    pub async fn get_all_users(&self) -> ServiceResponse {
-        self.get("/auth/api/v1/users", None).await
+    pub async fn get_all_users(&self) -> Result<Vec<UserProfile>, ServiceError> {
+        self.get::<Vec<UserProfile>>("/auth/api/v1/users", None).await
     }
 
-    pub async fn delete_user(&self, user_id: &str) -> ServiceResponse {
+    pub async fn delete_user(&self, user_id: &str) -> Result<(), ServiceError> {
         let url = format!("/auth/api/v1/users/{}", user_id);
-        self.delete(&url, None).await
+        self.delete::<()>(&url, None).await
     }
 
-    pub async fn update_profile(&self, new_profile: &UserProfile) -> ServiceResponse {
+    pub async fn update_profile(&self, new_profile: &UserProfile) -> Result<(), ServiceError> {
         let url = "/auth/api/v1/users";
-        self.put::<&UserProfile>(url, None, Some(new_profile))
-            .await
+        self.put::<&UserProfile, ()>(url, None, Some(new_profile)).await
     }
-    pub async fn send_phone_code(&self) -> ServiceResponse {
-        let url= "/auth/api/v1/users/phone/send-code";
-        self.post::<()>(url, None, None).await
-    }
-
-    pub async fn validate_phone_code(&self, code: i32 ) -> ServiceResponse {
-        let url= format!("/auth/api/v1/users/phone/validate/{}", code);
-        self.post::<()>(&url, None, None).await
+    pub async fn send_phone_code(&self) -> Result<(), ServiceError> {
+        let url = "/auth/api/v1/users/phone/send-code";
+        self.post::<(), ()>(url, None, None).await
     }
 
-    pub async fn send_validation_email(&self)-> ServiceResponse {
-        let url= "/auth/api/v1/users/email/send-validation-email";
-        self.post::<()>(url, None, None).await
+    pub async fn validate_phone_code(&self, code: i32) -> Result<(), ServiceError> {
+        let url = format!("/auth/api/v1/users/phone/validate/{}", code);
+        self.post::<(), ()>(&url, None, None).await
     }
 
-    pub async fn validate_email(&self, token: &str)-> ServiceResponse {
-        let url= format!("/api/v1/users/validate-email/{}", token);
-        self.get(&url, None).await
+    pub async fn send_validation_email(&self) -> Result<String, ServiceError> {
+        let url = "/auth/api/v1/users/email/send-validation-email";
+        self.post::<(), String>(url, None, None).await
     }
 
-    pub async fn create_local_user(&self, new_profile: &UserProfile) -> ServiceResponse {
+    pub async fn validate_email(&self, token: &str) -> Result<(), ServiceError> {
+        let url = format!("/api/v1/users/validate-email/{}", token);
+        self.get::<()>(&url, None).await
+    }
+
+    pub async fn create_local_user(&self, new_profile: &UserProfile) -> Result<(), ServiceError> {
         let url = "/auth/api/v1/users/local";
-        self.post::<&UserProfile>(url, None, Some(new_profile))
+        self.post::<&UserProfile, ()>(url, None, Some(new_profile))
             .await
     }
-    pub async fn update_local_user(&self, new_profile: &UserProfile) -> ServiceResponse {
+    pub async fn update_local_user(&self, new_profile: &UserProfile) -> Result<(), ServiceError> {
         let url = "/auth/api/v1/users/local";
-        self.put::<&UserProfile>(url, None, Some(new_profile))
-            .await
+        self.put::<&UserProfile, ()>(url, None, Some(new_profile)).await
     }
-    pub async fn delete_local_user(&self, id: &str) -> ServiceResponse {
+    pub async fn delete_local_user(&self, id: &str) -> Result<(), ServiceError> {
         let url = format!("/auth/api/v1/users/local/{}", id);
-        self.delete(&url, None)
-            .await
+        self.delete::<()>(&url, None).await
     }
-    pub async fn get_local_users(&self, id: &str) -> ServiceResponse {
+    pub async fn get_local_users(&self, id: &str) -> Result<Vec<UserProfile>, ServiceError> {
         let url = format!("/auth/api/v1/users/local/{}", id);
-        self.get(&url, None)
-            .await
+        self.get::<Vec<UserProfile>>(&url, None).await
     }
-
 }
-

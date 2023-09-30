@@ -6,7 +6,7 @@ use crate::{
     log_return_bad_id, new_not_found_error,
     shared::{
         service_models::{PersistUser, PersistGame},
-        shared_models::{GameError, ResponseType, ServiceResponse, UserProfile},
+        shared_models::{GameError, ResponseType, ServiceError},
     }
 };
 use async_trait::async_trait;
@@ -35,47 +35,42 @@ impl TestDb {
 #[async_trait]
 impl GameDbTrait for TestDb {
 
-    async fn load_game(&self, game_id: &str) -> Result<Vec<u8>, ServiceResponse> {
+    async fn load_game(&self, game_id: &str) -> Result<Vec<u8>, ServiceError> {
         todo!();
     }
-    async fn delete_games(&self, game_id: &str) -> Result<(), ServiceResponse> {
+    async fn delete_games(&self, game_id: &str) -> Result<(), ServiceError> {
         todo!();
     }
-    async fn update_game_data(&self, game_id: &str, to_write: &PersistGame)-> Result<(), ServiceResponse> {
+    async fn update_game_data(&self, game_id: &str, to_write: &PersistGame)-> Result<(), ServiceError> {
         todo!();
     }
 }
 #[async_trait]
 impl UserDbTrait for TestDb {
     
-    async fn setupdb(&self) -> Result<(), ServiceResponse> {
+    async fn setupdb(&self) -> Result<(), ServiceError> {
         MOCKED_DB.users.write().await.clear();
         Ok(())
     }
 
-    async fn list(&self) -> Result<Vec<PersistUser>, ServiceResponse> {
+    async fn list(&self) -> Result<Vec<PersistUser>, ServiceError> {
         Ok(MOCKED_DB.users.read().await.values().cloned().collect())
     }
 
     async fn update_or_create_user(
         &self,
         user: &PersistUser,
-    ) -> Result<ServiceResponse, ServiceResponse> {
+    ) -> Result<(), ServiceError> {
         let mut map = MOCKED_DB.users.write().await;
         let result = map.insert(user.id.clone(), user.clone());
         match result {
             None => trace!("user id {} added", user.id.clone()),
             Some(_) => trace!("user id {} updated", user.id.clone()),
         }
-        Ok(ServiceResponse::new(
-            "created",
-            StatusCode::CREATED,
-            ResponseType::Profile(UserProfile::from_persist_user(user)),
-            GameError::NoError(String::default()),
-        ))
+        Ok(())
     }
 
-    async fn delete_user(&self, unique_id: &str) -> Result<(), ServiceResponse> {
+    async fn delete_user(&self, unique_id: &str) -> Result<(), ServiceError> {
         match MOCKED_DB.users.write().await.remove(unique_id) {
             Some(_) => Ok(()),
             None => {
@@ -84,7 +79,7 @@ impl UserDbTrait for TestDb {
         }
     }
 
-    async fn find_user_by_id(&self, id: &str) -> Result<PersistUser, ServiceResponse> {
+    async fn find_user_by_id(&self, id: &str) -> Result<PersistUser, ServiceError> {
         match MOCKED_DB
             .users
             .read()
@@ -99,7 +94,7 @@ impl UserDbTrait for TestDb {
     async fn get_connected_users(
         &self,
         connected_user_id: &str,
-    ) -> Result<Vec<PersistUser>, ServiceResponse> {
+    ) -> Result<Vec<PersistUser>, ServiceError> {
         let mut local_profiles = Vec::new();
     
         // Collect the values into a Vec
@@ -118,7 +113,7 @@ impl UserDbTrait for TestDb {
     
     
 
-    async fn find_user_by_email(&self, val: &str) -> Result<PersistUser, ServiceResponse> {
+    async fn find_user_by_email(&self, val: &str) -> Result<PersistUser, ServiceError> {
         match MOCKED_DB.users.read().await.iter().find(|(_key, user)| {
             // Access email through the pii field
             match &user.user_profile.pii {

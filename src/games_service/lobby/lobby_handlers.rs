@@ -4,14 +4,11 @@ use actix_web::{web, HttpRequest, HttpResponse};
 use crate::{
     bad_request_from_string,
     games_service::game_container::game_messages::{Invitation, InvitationResponseData},
-    middleware::{header_extractor::HeadersExtractor, request_context_mw::RequestContext},
+    middleware::{header_extractor::HeadersExtractor, request_context_mw::RequestContext}, api_call,
 };
 
 pub async fn get_lobby(_req: HttpRequest) -> HttpResponse {
-    super::lobby::get_lobby()
-        .await
-        .map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
+    api_call!(super::lobby::get_lobby().await)
 }
 pub async fn post_invite(
     headers: HeadersExtractor,
@@ -25,10 +22,7 @@ pub async fn post_invite(
         .id;
     let invite: &Invitation = &invite;
 
-    super::lobby::post_invite(&from_id, invite)
-        .await
-        .map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
+    api_call!(super::lobby::post_invite(&from_id, invite).await)
 }
 /**
  * pass this on to the client.  the long_poll will pass it to the client, which will update the UI to indicate this
@@ -45,10 +39,7 @@ pub async fn respond_to_invite(
 ) -> HttpResponse {
     let invite_response = invite_response.into_inner();
     let is_test = headers.is_test;
-    super::lobby::respond_to_invite(is_test, &invite_response, &request_context)
-        .await
-        .map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
+    api_call!(super::lobby::respond_to_invite(is_test, &invite_response, &request_context).await)
 }
 
 pub async fn add_local_user_handler(
@@ -61,29 +52,13 @@ pub async fn add_local_user_handler(
     } else {
         return bad_request_from_string!("missing gameid header").to_http_response();
     };
-    super::lobby::add_local_user(&game_id, &local_user_id, &request_context)
-        .await
-        .map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
+    api_call!(super::lobby::add_local_user(&game_id, &local_user_id, &request_context).await)
 }
 
-pub async fn connect_handler(
-    request_context: RequestContext,
-) -> HttpResponse {
-   
-    super::lobby::connect(&&request_context)
-        .await
-        .map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
+pub async fn connect_handler(request_context: RequestContext) -> HttpResponse {
+    api_call!(super::lobby::connect(&&request_context).await)
 }
 
-pub async fn disconnect_handler(
-    request_context: RequestContext,
-) -> HttpResponse {
-
-    super::lobby::disconnect(&&request_context)
-        .await
-        .map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
-
+pub async fn disconnect_handler(request_context: RequestContext) -> HttpResponse {
+    api_call!(super::lobby::disconnect(&&request_context).await)
 }

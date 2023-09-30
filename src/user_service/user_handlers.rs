@@ -1,18 +1,14 @@
 #![allow(dead_code)]
 use crate::{
-    get_header_value,
+    api_call, get_header_value,
     middleware::{header_extractor::HeadersExtractor, request_context_mw::RequestContext},
-    shared::{
-        service_models::Role,
-        shared_models::{GameError, ResponseType, ServiceResponse, UserProfile},
-    },
+    shared::shared_models::{GameError, ResponseType, ServiceError, UserProfile},
 };
 use actix_web::{
     web::{self},
     HttpResponse, Responder,
 };
 use reqwest::StatusCode;
-
 
 /**
  * Handlers for the "user" service.
@@ -23,11 +19,7 @@ use reqwest::StatusCode;
 
 // Set up the service
 pub async fn verify_handler(request_context: RequestContext) -> HttpResponse {
-    let result = super::users::verify_cosmosdb(&request_context).await;
-    match result {
-        Ok(sr) => sr.to_http_response(),
-        Err(e) => e.to_http_response(),
-    }
+    api_call!(super::users::verify_cosmosdb(&request_context).await)
 }
 
 // Register a new user
@@ -37,10 +29,7 @@ pub async fn register_handler(
     headers: HeadersExtractor,
 ) -> impl Responder {
     let password = get_header_value!(password, headers);
-    super::users::register(&password, &profile_in, &request_context)
-        .await
-        .map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
+    api_call!(super::users::register(&password, &profile_in, &request_context).await)
 }
 
 pub async fn register_test_user_handler(
@@ -49,11 +38,7 @@ pub async fn register_test_user_handler(
     headers: HeadersExtractor,
 ) -> impl Responder {
     let password = get_header_value!(password, headers);
-
-    super::users::register_test_user(&password, &profile_in, &request_context)
-        .await
-        .map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
+    api_call!(super::users::register_test_user(&password, &profile_in, &request_context).await)
 }
 
 // User login
@@ -63,18 +48,12 @@ pub async fn login_handler(
 ) -> HttpResponse {
     let password = get_header_value!(password, headers);
     let username = get_header_value!(email, headers);
-    super::users::login(&username, &password, &request_context)
-        .await
-        .map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
+    api_call!(super::users::login(&username, &password, &request_context).await)
 }
 
 // List users
 pub async fn list_users_handler(request_context: RequestContext) -> HttpResponse {
-    super::users::list_users(&request_context)
-        .await
-        .map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
+    api_call!(super::users::list_users(&request_context).await)
 }
 
 // Get user profile
@@ -82,20 +61,14 @@ pub async fn get_profile_handler(
     email: web::Path<String>,
     request_context: RequestContext,
 ) -> HttpResponse {
-    super::users::get_profile(&email, &request_context)
-        .await
-        .map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
+    api_call!(super::users::get_profile(&email, &request_context).await)
 }
 
 pub async fn update_profile_handler(
     request_context: RequestContext,
     profile_in: web::Json<UserProfile>,
 ) -> HttpResponse {
-    super::users::update_profile(&profile_in, &request_context)
-        .await
-        .map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
+    api_call!(super::users::update_profile(&profile_in, &request_context).await)
 }
 
 // Find user by ID
@@ -103,26 +76,7 @@ pub async fn find_user_by_id_handler(
     id: web::Path<String>,
     request_context: RequestContext,
 ) -> HttpResponse {
-    let claims_id = request_context
-        .claims
-        .as_ref()
-        .expect("auth_mw should have added this or rejected the call")
-        .id
-        .clone();
-
-    if claims_id != *id && !request_context.is_caller_in_role(Role::Admin) {
-        return ServiceResponse::new(
-            "you can't peak at somebody else's profile!",
-            StatusCode::UNAUTHORIZED,
-            ResponseType::NoData,
-            GameError::HttpError(StatusCode::UNAUTHORIZED),
-        )
-        .to_http_response();
-    }
-    super::users::find_user_by_id(&id, &request_context)
-        .await
-        .map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
+    api_call!(super::users::find_user_by_id(&id, &request_context).await)
 }
 
 // Delete user
@@ -130,21 +84,15 @@ pub async fn delete_handler(
     id: web::Path<String>,
     request_context: RequestContext,
 ) -> HttpResponse {
-    super::users::delete(&id, &request_context)
-        .await
-        .map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
+    api_call!(super::users::delete(&id, &request_context).await)
 }
 
-pub async fn validate_email(token: web::Path<String>) -> HttpResponse {
-    super::users::validate_email(&token)
-        .await
-        .map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
+pub async fn validate_email_handler(token: web::Path<String>) -> HttpResponse {
+    api_call!(super::users::validate_email(&token).await)
 }
 
 pub fn create_http_response(status_code: StatusCode, message: &str, body: &str) -> HttpResponse {
-    let response = ServiceResponse::new(
+    let response = ServiceError::new(
         message,
         status_code,
         ResponseType::Todo(body.to_string()),
@@ -166,66 +114,43 @@ pub async fn validate_phone_handler(
     code: web::Path<String>,
     request_context: RequestContext,
 ) -> HttpResponse {
-    super::users::validate_phone(&code, &request_context)
-        .await
-        .map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
+    api_call!(super::users::validate_phone(&code, &request_context).await)
 }
 
 pub async fn send_phone_code_handler(request_context: RequestContext) -> HttpResponse {
-    super::users::send_phone_code(&request_context)
-        .await
-        .map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
+    api_call!(super::users::send_phone_code(&request_context).await)
 }
 
-pub async fn send_validation_email(request_context: RequestContext) -> HttpResponse {
-    super::users::send_validation_email(&request_context)
-        .map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
+pub async fn send_validation_email_handler(request_context: RequestContext) -> HttpResponse {
+    api_call!(super::users::send_validation_email(&request_context))
 }
 
 pub async fn rotate_login_keys_handler(request_context: RequestContext) -> HttpResponse {
-    super::users::rotate_login_keys(&request_context)
-        .await
-        .map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
+    api_call!(super::users::rotate_login_keys(&request_context).await)
 }
 pub async fn create_local_user_handler(
     profile_in: web::Json<UserProfile>,
     request_context: RequestContext,
 ) -> HttpResponse {
-    super::users::create_local_user(&profile_in, &request_context)
-        .await
-        .map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
+    api_call!(super::users::create_local_user(&profile_in, &request_context).await)
 }
 
 pub async fn update_local_user_handler(
     profile_in: web::Json<UserProfile>,
     request_context: RequestContext,
 ) -> HttpResponse {
-    super::users::update_local_user(&profile_in, &request_context)
-        .await
-        .map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
+    api_call!(super::users::update_local_user(&profile_in, &request_context).await)
 }
 
 pub async fn delete_local_user_handler(
     id: web::Path<String>,
     request_context: RequestContext,
 ) -> HttpResponse {
-    super::users::delete_local_user(&id, &request_context)
-        .await
-        .map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
+    api_call!(super::users::delete_local_user(&id, &request_context).await)
 }
 pub async fn get_local_users_handler(
     id: web::Path<String>,
     request_context: RequestContext,
 ) -> HttpResponse {
-    super::users::get_local_users(&id, &request_context)
-        .await
-        .map(|sr| sr.to_http_response())
-        .unwrap_or_else(|sr| sr.to_http_response())
+    api_call!(super::users::get_local_users(&id, &request_context).await)
 }

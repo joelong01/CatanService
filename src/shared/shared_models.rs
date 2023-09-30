@@ -1,25 +1,13 @@
 #![allow(dead_code)]
-
-use actix_web::HttpResponse;
-
 /**
  * this is the module where I define the structures needed for the data in Cosmos
  */
+use actix_web::HttpResponse;
 use reqwest::StatusCode;
-
 use serde::{Deserialize, Serialize};
 use strum_macros::Display;
-
-use std::{fmt, fmt::Display, fmt::Formatter};
-
 use anyhow::Result;
-
-use crate::games_service::{
-    catan_games::games::regular::regular_game::RegularGame,
-    game_container::game_messages::CatanMessage,
-    shared::game_enums::{CatanGames, GameAction},
-};
-
+use std::{fmt, fmt::Display, fmt::Formatter};
 use super::service_models::PersistUser;
 
 //
@@ -92,7 +80,7 @@ impl fmt::Display for GameError {
             GameError::JsonError(e) => write!(f, "Serde Error: {:#?}", e),
             GameError::AzureCoreError(e) => write!(f, "Azure Core error: {:#?}", e),
             GameError::ContainerError(e) => write!(f, "GameContainer Error: {:#?}", e),
-        } 
+        }
     }
 }
 
@@ -299,20 +287,12 @@ impl UserProfile {
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Display)]
 pub enum ResponseType {
-    Profile(UserProfile),
-    Profiles(Vec<UserProfile>),
-    Token(String),
-    Url(String),
     ErrorInfo(String),
     Todo(String),
-    NoData,
-    ValidActions(Vec<GameAction>),
-    Game(RegularGame),
-    SupportedGames(Vec<CatanGames>),
     SendMessageError(Vec<(String, GameError)>),
-    ServiceMessage(CatanMessage),
     AzError(String),
     SerdeError(String),
+    NoData,
 }
 
 /**
@@ -320,7 +300,7 @@ pub enum ResponseType {
  */
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "PascalCase")]
-pub struct ServiceResponse {
+pub struct ServiceError {
     pub message: String,
     #[serde(serialize_with = "serialize_status_code")]
     #[serde(deserialize_with = "deserialize_status_code")]
@@ -328,7 +308,7 @@ pub struct ServiceResponse {
     pub response_type: ResponseType,
     pub game_error: GameError,
 }
-impl Display for ServiceResponse {
+impl Display for ServiceError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         // Convert the struct to a pretty-printed JSON string.
         let json = serde_json::to_string_pretty(self).map_err(|_| fmt::Error)?;
@@ -336,9 +316,9 @@ impl Display for ServiceResponse {
     }
 }
 
-impl From<serde_json::Error> for ServiceResponse {
+impl From<serde_json::Error> for ServiceError {
     fn from(err: serde_json::Error) -> Self {
-        ServiceResponse::new(
+        ServiceError::new(
             "Unable to deserialize response",
             StatusCode::INTERNAL_SERVER_ERROR,
             ResponseType::NoData,
@@ -347,14 +327,14 @@ impl From<serde_json::Error> for ServiceResponse {
     }
 }
 
-impl ServiceResponse {
+impl ServiceError {
     pub fn new(
         message: &str,
         status: StatusCode,
         response_type: ResponseType,
         error: GameError,
     ) -> Self {
-        ServiceResponse {
+        ServiceError {
             message: message.into(),
             status,
             response_type,
@@ -362,25 +342,17 @@ impl ServiceResponse {
         }
     }
 
-    pub fn new_generic_ok(msg: &str) -> Self {
-        ServiceResponse {
+    pub fn new_internal_server_fault(msg: &str) -> Self {
+        ServiceError {
             message: msg.to_owned(),
-            status: StatusCode::OK,
+            status: StatusCode::INTERNAL_SERVER_ERROR,
             response_type: ResponseType::NoData,
-            game_error: GameError::NoError(String::default()),
+            game_error: GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
         }
-    }
-
-    pub fn assert_success(&self, msg: &str) -> &Self {
-        if !self.status.is_success() {
-            panic!("{}", msg.to_string());
-        }
-
-        self
     }
 
     pub fn new_bad_id(msg: &str, id: &str) -> Self {
-        ServiceResponse {
+        ServiceError {
             message: msg.to_owned(),
             status: StatusCode::BAD_REQUEST,
             response_type: ResponseType::NoData,
@@ -389,7 +361,7 @@ impl ServiceResponse {
     }
 
     pub fn new_container_error(msg: &str) -> Self {
-        ServiceResponse {
+        ServiceError {
             message: msg.to_string(),
             status: StatusCode::BAD_REQUEST,
             response_type: ResponseType::NoData,
@@ -397,26 +369,17 @@ impl ServiceResponse {
         }
     }
 
-    pub fn new_game_response(msg: &str, game: &RegularGame) -> Self {
-        ServiceResponse {
-            message: msg.to_owned(),
-            status: StatusCode::OK,
-            response_type: ResponseType::Game(game.clone()),
-            game_error: GameError::NoError(String::default()),
-        }
-    }
-
     pub fn new_not_found_error(id: &str) -> Self {
-        ServiceResponse {
+        ServiceError {
             message: format!("id {} not found", id),
             status: StatusCode::NOT_FOUND,
             response_type: ResponseType::NoData,
-            game_error: GameError::HttpError(StatusCode::NOT_FOUND)
+            game_error: GameError::HttpError(StatusCode::NOT_FOUND),
         }
     }
 
     pub fn new_database_error(msg: &str, error: &str) -> Self {
-        ServiceResponse {
+        ServiceError {
             message: msg.to_string(),
             status: StatusCode::INTERNAL_SERVER_ERROR,
             response_type: ResponseType::ErrorInfo(error.to_string()),
@@ -425,123 +388,35 @@ impl ServiceResponse {
     }
 
     pub fn new_json_error(msg: &str, error: &serde_json::Error) -> Self {
-        ServiceResponse {
+        ServiceError {
             message: msg.to_string(),
             status: StatusCode::INTERNAL_SERVER_ERROR,
             response_type: ResponseType::ErrorInfo(error.to_string()),
             game_error: GameError::JsonError(format!("{:#?}", error)),
-
         }
     }
     pub fn new_azure_core_error(msg: &str, error: &azure_core::Error) -> Self {
-        ServiceResponse {
+        ServiceError {
             message: msg.to_string(),
             status: StatusCode::INTERNAL_SERVER_ERROR,
             response_type: ResponseType::AzError(error.to_string()),
             game_error: GameError::AzureCoreError(format!("{:#?}", error)),
-
         }
     }
 
     pub fn to_http_response(&self) -> HttpResponse {
-        let serialized = serde_json::to_string(self).expect("Failed to serialize ServiceResponse");
+        let serialized = serde_json::to_string(&self).expect("Failed to serialize Response Type");
         let response = HttpResponse::build(self.status).body(serialized);
         response
     }
 
-    pub fn to_profile(&self) -> Option<UserProfile> {
-        match self.response_type.clone() {
-            ResponseType::Profile(data) => Some(data),
-            _ => None,
-        }
-    }
-
-    pub fn to_profile_vec(&self) -> Option<Vec<UserProfile>> {
-        match self.response_type.clone() {
-            ResponseType::Profiles(data) => Some(data),
-            _ => None,
-        }
-    }
-
-    pub fn profile_from_json(json: &str) -> Option<(ServiceResponse, UserProfile)> {
-        let service_response: ServiceResponse = match serde_json::from_str(json) {
+    pub fn to_error_info(json: &str) -> Option<(ServiceError, String)> {
+        let service_error: ServiceError = match serde_json::from_str(json) {
             Ok(sr) => sr,
             Err(_) => return None,
         };
-        match service_response.response_type.clone() {
-            ResponseType::Profile(client_user) => Some((service_response, client_user)),
-            _ => None,
-        }
-    }
-
-    // pub fn to_profile_vec(json: &str) -> Option<(ServiceResponse, Vec<UserProfile>)> {
-    //     let service_response: ServiceResponse = match serde_json::from_str(json) {
-    //         Ok(sr) => sr,
-    //         Err(_) => return None,
-    //     };
-    //     match service_response.response_type.clone() {
-    //         ResponseType::Profiles(client_users) => Some((service_response, client_users)),
-    //         _ => None,
-    //     }
-    // }
-
-    pub fn json_to_token(json: &str) -> Option<(ServiceResponse, String)> {
-        let service_response: ServiceResponse = match serde_json::from_str(json) {
-            Ok(sr) => sr,
-            Err(_) => return None,
-        };
-        match service_response.get_token() {
-            Some(token) => Some((service_response, token)),
-            None => None,
-        }
-    }
-    pub fn get_token(&self) -> Option<String> {
-        // Extract auth token from response
-        match &self.response_type {
-            ResponseType::Token(token) => Some(token.clone()),
-            _ => None,
-        }
-    }
-    pub fn get_url(&self) -> Option<String> {
-        // Extract auth token from response
-        match &self.response_type {
-            ResponseType::Url(url) => Some(url.clone()),
-            _ => None,
-        }
-    }
-    pub fn get_game(&self) -> Option<RegularGame> {
-        match &self.response_type {
-            ResponseType::Game(game) => Some(game.clone()),
-            _ => None,
-        }
-    }
-
-    pub fn get_profile_vec(&self) -> Option<Vec<UserProfile>> {
-        match &self.response_type {
-            ResponseType::Profiles(users) => Some(users.clone()),
-            _ => None,
-        }
-    }
-    pub fn get_actions(&self) -> Option<Vec<GameAction>> {
-        match &self.response_type {
-            ResponseType::ValidActions(actions) => Some(actions.clone()),
-            _ => None,
-        }
-    }
-    pub fn get_service_message(&self) -> Option<CatanMessage> {
-        match &self.response_type {
-            ResponseType::ServiceMessage(msg) => Some(msg.clone()),
-            _ => None,
-        }
-    }
-
-    pub fn to_error_info(json: &str) -> Option<(ServiceResponse, String)> {
-        let service_response: ServiceResponse = match serde_json::from_str(json) {
-            Ok(sr) => sr,
-            Err(_) => return None,
-        };
-        match service_response.response_type.clone() {
-            ResponseType::ErrorInfo(error_info) => Some((service_response, error_info)),
+        match service_error.response_type.clone() {
+            ResponseType::ErrorInfo(error_info) => Some((service_error, error_info)),
             _ => None,
         }
     }

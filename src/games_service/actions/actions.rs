@@ -8,15 +8,15 @@ use crate::{
         catan_games::traits::game_trait::GameTrait, game_container::game_container::GameContainer,
         shared::game_enums::GameAction,
     },
-    shared::shared_models::{GameError, ResponseType, ServiceResponse},
+    shared::shared_models::{GameError, ResponseType, ServiceError},
     user_service::user_handlers::create_http_response,
 };
 
-pub async fn next(game_id: &str) -> Result<ServiceResponse, ServiceResponse> {
+pub async fn next(game_id: &str) -> Result<Vec<GameAction>, ServiceError> {
     let (game, can_redo) = match GameContainer::current_game(game_id).await {
         Ok(g) => g,
         Err(e) => {
-            return Err(ServiceResponse::new(
+            return Err(ServiceError::new(
                 &format!("invalid game id: {}", game_id),
                 StatusCode::NOT_FOUND,
                 ResponseType::ErrorInfo(format!("{:#?}", e)),
@@ -26,7 +26,7 @@ pub async fn next(game_id: &str) -> Result<ServiceResponse, ServiceResponse> {
     };
     let actions = game.valid_actions(can_redo);
     if !actions.contains(&GameAction::Next) {
-        return Err(ServiceResponse::new(
+        return Err(ServiceError::new(
             "failed to delete user",
             StatusCode::BAD_REQUEST,
             ResponseType::NoData,
@@ -40,23 +40,16 @@ pub async fn next(game_id: &str) -> Result<ServiceResponse, ServiceResponse> {
 
     let game_clone = game.set_next_state().unwrap();
     let _ = GameContainer::push_game(game_id, &game_clone).await;
-    Ok(ServiceResponse::new(
-        "",
-        StatusCode::OK,
-        ResponseType::ValidActions(game_clone.valid_actions(can_redo)),
-        GameError::NoError(String::default()),
-    ))
+    Ok(game_clone.valid_actions(can_redo))
 }
 /**
  * look at the state of the game and answer the question "what are the valid actions"
  */
-pub async fn valid_actions(game_id: &str) -> Result<ServiceResponse, ServiceResponse> {
-
-
+pub async fn valid_actions(game_id: &str) -> Result<Vec<GameAction>, ServiceError> {
     let (game, can_redo) = match GameContainer::current_game(game_id).await {
         Ok(g) => g,
         Err(e) => {
-            return Err(ServiceResponse::new(
+            return Err(ServiceError::new(
                 &format!("invalid game id: {}", game_id),
                 StatusCode::NOT_FOUND,
                 ResponseType::ErrorInfo(format!("{:#?}", e)),
@@ -64,10 +57,5 @@ pub async fn valid_actions(game_id: &str) -> Result<ServiceResponse, ServiceResp
             ))
         }
     };
-    Ok(ServiceResponse::new(
-        "",
-        StatusCode::OK,
-        ResponseType::ValidActions(game.valid_actions(can_redo)),
-        GameError::NoError(String::default()),
-    ))
+    Ok(game.valid_actions(can_redo))
 }

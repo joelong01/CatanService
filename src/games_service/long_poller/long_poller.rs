@@ -8,7 +8,7 @@ use tokio::sync::{mpsc, Mutex, RwLock};
 use crate::{
     full_info,
     games_service::game_container::game_messages::{CatanMessage, GameStatus},
-    shared::shared_models::{GameError, ResponseType, ServiceResponse, UserProfile},
+    shared::shared_models::{GameError, ResponseType, ServiceError, UserProfile},
 };
 //
 //  this is a map of "waiters" - holding all the state necessary for a Long Poller to wait on a thread
@@ -22,8 +22,8 @@ lazy_static::lazy_static! {
 pub struct LongPoller {
     user_id: String, // can be any kind of id
     user_profile: UserProfile,
-    pub tx: mpsc::Sender<ServiceResponse>,
-    pub rx: Arc<Mutex<mpsc::Receiver<ServiceResponse>>>,
+    pub tx: mpsc::Sender<CatanMessage>,
+    pub rx: Arc<Mutex<mpsc::Receiver<CatanMessage>>>,
     pub status: GameStatus,
 }
 
@@ -47,10 +47,7 @@ impl LongPoller {
     /// # Returns
     ///
     /// * `Result<(), GameError>` - Ok if the user was successfully added; Err with a GameError if the user already exists.
-    pub async fn add_user(
-        user_id: &str,
-        profile: &UserProfile,
-    ) -> Result<ServiceResponse, ServiceResponse> {
+    pub async fn add_user(user_id: &str, profile: &UserProfile) -> Result<(), ServiceError> {
         full_info!("add_user.  adding: {}", profile.display_name.clone());
         let mut users_map = ALL_USERS_MAP.write().await; // Acquire write lock
         if users_map.contains_key(user_id) {
@@ -72,7 +69,7 @@ impl LongPoller {
             profile.display_name,
             users_map.keys().len()
         );
-        Ok(ServiceResponse::new_generic_ok(""))
+        Ok(())
     }
 
     /// Removes the user from the map, returning an error if they aren't there.
@@ -84,12 +81,12 @@ impl LongPoller {
     /// # Returns
     ///
     /// * `Result<(), GameError>` - Ok if the user was successfully removed; Err with a GameError if the user does not exist.
-    pub async fn remove_user(user_id: &str) -> Result<ServiceResponse, ServiceResponse> {
+    pub async fn remove_user(user_id: &str) -> Result<(), ServiceError> {
         let mut users_map = ALL_USERS_MAP.write().await; // Acquire write lock
 
         match users_map.remove(user_id) {
-            Some(_) => Ok(ServiceResponse::new_generic_ok("")),
-            None => Err(ServiceResponse::new_bad_id("id does not exist", user_id)),
+            Some(_) => Ok(()),
+            None => Err(ServiceError::new_bad_id("id does not exist", user_id)),
         }
     }
     /// Sends a message to a list of users.
@@ -109,7 +106,7 @@ impl LongPoller {
     pub async fn send_message(
         to_users: Vec<String>,
         message: &CatanMessage,
-    ) -> Result<ServiceResponse, ServiceResponse> {
+    ) -> Result<(), ServiceError> {
         // log_thread_info!(
         //     "send_message",
         //     "enter [to:{:#?}] [message={:?}]",
@@ -119,13 +116,6 @@ impl LongPoller {
         // defer! {log_thread_info!("send_message","leave [to:{:#?}] [message={:?}]", to_users, message )};
 
         let users_map = ALL_USERS_MAP.read().await; // Acquire read lock
-
-        let service_response = ServiceResponse::new(
-            "",
-            StatusCode::OK,
-            ResponseType::ServiceMessage(message.clone()),
-            GameError::NoError(String::default()),
-        );
 
         // Collect the senders and check for missing users
         let mut senders = Vec::new();
@@ -145,14 +135,14 @@ impl LongPoller {
             }
         }
         drop(users_map); // Explicitly drop the read lock
-        // full_info!(
-        //     "sending message {} to {} users",
-        //     service_response.clone(),
-        //     senders.len()
-        // );
-        // Send the messages
+                         // full_info!(
+                         //     "sending message {} to {} users",
+                         //     service_error.clone(),
+                         //     senders.len()
+                         // );
+                         // Send the messages
         for (tx, to) in senders.into_iter().zip(to_users.iter()) {
-            if tx.send(service_response.clone()).await.is_err() {
+            if tx.send(message.clone()).await.is_err() {
                 errors.push((
                     to.clone(),
                     GameError::ChannelError(format!("error in tx.send for {}", to)),
@@ -161,14 +151,9 @@ impl LongPoller {
         }
 
         if errors.is_empty() {
-            Ok(ServiceResponse::new(
-                "",
-                StatusCode::OK,
-                ResponseType::NoData,
-                GameError::NoError(String::default()),
-            ))
+            Ok(())
         } else {
-            Err(ServiceResponse::new(
+            Err(ServiceError::new(
                 "",
                 StatusCode::INTERNAL_SERVER_ERROR,
                 ResponseType::SendMessageError(errors),
@@ -193,14 +178,14 @@ impl LongPoller {
     /// It is designed to be used with a model that allows only one reader at a time for the
     /// specified user ID.
 
-    pub async fn wait(user_id: &str) -> Result<ServiceResponse, ServiceResponse> {
+    pub async fn wait(user_id: &str) -> Result<CatanMessage, ServiceError> {
         full_info!("long_poller::wait.  [user_id={}]", user_id);
 
         let user_rx = {
             let users_map = ALL_USERS_MAP.read().await;
             match users_map.get(user_id) {
                 Some(lp) => lp.read().await.rx.clone(),
-                None => return Err(ServiceResponse::new_bad_id("in long poller", user_id)),
+                None => return Err(ServiceError::new_bad_id("in long poller", user_id)),
             }
         };
 
@@ -210,14 +195,10 @@ impl LongPoller {
         let mut rx = user_rx.lock().await;
         match rx.recv().await {
             Some(msg) => {
-
-                log::info!(
-                    "ResponseType: {}",
-                    msg.response_type
-                );
+                log::info!("ResponseType: {:#?}", msg);
                 Ok(msg)
             }
-            None => Err(ServiceResponse::new(
+            None => Err(ServiceError::new(
                 &format!("error writing channel. [user_id={}]", user_id),
                 reqwest::StatusCode::INTERNAL_SERVER_ERROR,
                 ResponseType::NoData,
@@ -296,8 +277,6 @@ mod tests {
         assert_eq!(
             LongPoller::wait("user5")
                 .await
-                .unwrap()
-                .get_service_message()
                 .unwrap(),
             message
         );
