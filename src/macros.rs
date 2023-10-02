@@ -15,21 +15,6 @@ macro_rules! api_call {
 
 
 #[macro_export]
-macro_rules! serialize_as_array2 {
-    ($key:ty, $value:ty) => {
-        fn serialize_as_array<S>(
-            data: &HashMap<$key, $value>,
-            serializer: S,
-        ) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
-        {
-            let values: Vec<$value> = data.values().cloned().collect();
-            values.serialize(serializer)
-        }
-    };
-}
-#[macro_export]
 macro_rules! deserialize_from_array {
     ($key:ty, $value:ty) => {
         fn deserialize_from_array<'de, D>(
@@ -50,65 +35,7 @@ macro_rules! deserialize_from_array {
     };
 }
 
-#[macro_export]
-macro_rules! log_return_err {
-    ( $e:expr ) => {{
-        log::error!("\t{}\n {:#?}", $e, $e);
-        return Err($e);
-    }};
-}
 
-#[macro_export]
-macro_rules! new_unexpected_server_error {
-    ( $e:expr, $msg:expr ) => {{
-        log::error!("\t{}\n {:#?}", $msg, $e);
-        Err(ServiceError::new(
-            $msg,
-            StatusCode::INTERNAL_SERVER_ERROR,
-            ResponseType::ErrorInfo(format!("Error: {}", $e)),
-            GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
-        ));
-    }};
-}
-
-#[macro_export]
-macro_rules! unexpected_server_error_from_string {
-    ($msg:expr ) => {{
-        ServiceError::new(
-            $msg,
-            StatusCode::INTERNAL_SERVER_ERROR,
-            ResponseType::NoData,
-            GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
-        )
-    }};
-}
-
-#[macro_export]
-macro_rules! new_ok_response {
-    ($msg:expr) => {{
-        use crate::shared::shared_models::GameError;
-        use crate::shared::shared_models::ResponseType;
-        use reqwest::StatusCode;
-        ServiceError::new(
-            $msg,
-            StatusCode::OK,
-            ResponseType::NoData,
-            GameError::NoError(String::default()),
-        )
-    }};
-}
-
-#[macro_export]
-macro_rules! new_unauthorized_response {
-    ($msg:expr) => {
-        Err(ServiceError::new(
-            $msg,
-            StatusCode::UNAUTHORIZED,
-            ResponseType::NoData,
-            GameError::HttpError(StatusCode::UNAUTHORIZED),
-        ))
-    };
-}
 
 #[macro_export]
 macro_rules! log_return_not_found {
@@ -120,100 +47,6 @@ macro_rules! log_return_not_found {
             ResponseType::ErrorInfo(format!("Error: {}", $e)),
             GameError::HttpError,
         ));
-    }};
-}
-
-#[macro_export]
-macro_rules! new_not_found_error {
-    ($msg:expr ) => {{
-        Err(ServiceError::new(
-            $msg,
-            StatusCode::NOT_FOUND,
-            ResponseType::NoData,
-            GameError::HttpError(StatusCode::NOT_FOUND),
-        ))
-    }};
-}
-
-#[macro_export]
-macro_rules! log_return_bad_id {
-    ( $id:expr,$msg:expr ) => {{
-        use reqwest::StatusCode;
-        log::error!("badid in {}", $msg);
-        return Err(ServiceError::new(
-            $msg,
-            StatusCode::NOT_FOUND,
-            ResponseType::NoData,
-            GameError::BadId($id.to_owned()),
-        ));
-    }};
-}
-
-#[macro_export]
-macro_rules! log_return_bad_request {
-    ( $e:expr, $msg:expr ) => {{
-        log::error!("\t{}\n {:#?}", $e, $e);
-        return Err(ServiceError::new(
-            $msg,
-            StatusCode::BAD_REQUEST,
-            ResponseType::ErrorInfo(format!("Error: {}", $e)),
-            GameError::HttpError,
-        ));
-    }};
-}
-
-#[macro_export]
-macro_rules! bad_request_from_string {
-    ($msg:expr ) => {{
-        use reqwest::StatusCode;
-        use crate::ServiceError;
-        use crate::shared::shared_models::ResponseType;
-        use crate::shared::shared_models::GameError;
-        ServiceError::new(
-            $msg,
-            StatusCode::BAD_REQUEST,
-            ResponseType::NoData,
-            GameError::HttpError(StatusCode::BAD_REQUEST),
-        )
-    }};
-}
-
-#[macro_export]
-macro_rules! az_error_to_service_response {
-    ( $cmd:expr, $stderr:expr ) => {{
-        use crate::shared::shared_models::{GameError, ServiceError};
-        use crate::shared::shared_models::ResponseType::AzError;
-        use reqwest::StatusCode;
-        
-
-        let msg = format!("command: {}\n Error: {:#?}", $cmd, $stderr);
-        log::error!("{}", &msg);
-
-        Err(ServiceError {
-            message: String::default(),
-            status: StatusCode::BAD_REQUEST,
-            response_type: AzError(msg.clone()),
-            game_error: GameError::AzError($stderr),
-        })
-    }};
-}
-
-#[macro_export]
-macro_rules! log_return_serde_error {
-    (  $e:expr, $hint:expr) => {{
-        use crate::shared::models::GameError;
-        use crate::shared::models::ResponseType::SerdeError;
-        use reqwest::StatusCode;
-
-        let msg = format!("serde_json error: {} Message: {:#?}", $e, $hint);
-        log::error!("{}", &msg);
-
-        return Err(ServiceError {
-            message: String::default(),
-            status: StatusCode::BAD_REQUEST,
-            response_type: SerdeError(msg.clone()),
-            game_error: GameError::SerdeError,
-        });
     }};
 }
 

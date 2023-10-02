@@ -2,6 +2,7 @@
 #![allow(unused_variables)]
 #![allow(unused_imports)]
 
+use actix_service::Service;
 use actix_web::dev::Server;
 use azure_core::request_options::User;
 use bcrypt::{hash, verify};
@@ -20,10 +21,7 @@ use crate::user_service::user_handlers::find_user_by_id_handler;
  * this module implements the WebApi to create the database/collection, list all the users, and to create/find/delete
  * a User document in CosmosDb
  */
-use crate::{
-    bad_request_from_string, new_not_found_error, new_ok_response, new_unauthorized_response,
-    new_unexpected_server_error, trace_function, unexpected_server_error_from_string,
-};
+use crate::trace_function;
 
 use crate::games_service::long_poller::long_poller::LongPoller;
 
@@ -45,7 +43,7 @@ pub async fn verify_cosmosdb(context: &RequestContext) -> Result<(), ServiceErro
     let use_cosmos_db = match &context.test_context {
         Some(tc) => tc.use_cosmos_db,
         None => {
-            return new_unauthorized_response!("Test Header must be set");
+            return Err(ServiceError::new_unauthorized("Test Header must be set"));
         }
     };
 
@@ -60,7 +58,7 @@ pub async fn verify_cosmosdb(context: &RequestContext) -> Result<(), ServiceErro
                 &format!("account {} does not exist", context.config.cosmos_account),
                 StatusCode::NOT_FOUND,
                 ResponseType::NoData,
-                GameError::HttpError(StatusCode::NOT_FOUND),
+                GameError::HttpError,
             ));
         }
 
@@ -78,7 +76,7 @@ pub async fn verify_cosmosdb(context: &RequestContext) -> Result<(), ServiceErro
                 ),
                 StatusCode::NOT_FOUND,
                 ResponseType::NoData,
-                GameError::HttpError(StatusCode::NOT_FOUND),
+                GameError::HttpError,
             ));
         }
 
@@ -104,7 +102,7 @@ pub async fn verify_cosmosdb(context: &RequestContext) -> Result<(), ServiceErro
                     &error_message,
                     StatusCode::NOT_FOUND,
                     ResponseType::NoData,
-                    GameError::HttpError(StatusCode::NOT_FOUND),
+                    GameError::HttpError,
                 ));
             }
         }
@@ -120,7 +118,7 @@ async fn internal_register_user(
 ) -> Result<UserProfile, ServiceError> {
     let email = match &profile_in.pii {
         Some(pii) => pii.email.clone(),
-        None => return Err(bad_request_from_string!("no email specified")),
+        None => return Err(ServiceError::new_bad_request("no email specified")),
     };
 
     if request_context
@@ -131,12 +129,9 @@ async fn internal_register_user(
         .is_ok()
     // you can't register twice!
     {
-        return Err(ServiceError::new(
+        return Err(ServiceError::new_conflict_error(
             "User already exists",
-            StatusCode::CONFLICT,
-            ResponseType::NoData,
-            GameError::HttpError(StatusCode::CONFLICT),
-        ));
+            ));
     }
     // this lets us bootstrap the system -- my assumption is that if you can set the environment variable, then you are
     // an admin.  You can have a test context so that you can create the admin in the mock database.
@@ -153,7 +148,7 @@ async fn internal_register_user(
                 "Error Hashing Password",
                 StatusCode::INTERNAL_SERVER_ERROR,
                 ResponseType::ErrorInfo(err_message.to_owned()),
-                GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
+                GameError::HttpError,
             ));
         }
     };
@@ -193,9 +188,9 @@ pub async fn register(
     request_context: &RequestContext,
 ) -> Result<UserProfile, ServiceError> {
     if request_context.is_test() {
-        return new_unauthorized_response!(
+        return Err(ServiceError::new_unauthorized(
             "can't create a test user through this api.  use register-test-user"
-        );
+        ));
     }
     internal_register_user(password, profile_in, &mut vec![Role::User], request_context).await
 }
@@ -230,7 +225,7 @@ pub async fn register_test_user(
     request_context: &RequestContext,
 ) -> Result<UserProfile, ServiceError> {
     if !request_context.is_caller_in_role(Role::Admin) {
-        return new_unauthorized_response!("");
+        return Err(ServiceError::new_unauthorized(""));
     }
 
     let mut profile = profile_in.clone();
@@ -271,7 +266,7 @@ pub async fn login(
                 "user document does not contain a password hash",
                 StatusCode::INTERNAL_SERVER_ERROR,
                 ResponseType::NoData,
-                GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
+                GameError::HttpError,
             ));
         }
     };
@@ -283,7 +278,7 @@ pub async fn login(
                 &format!("Error from bcrypt library: {:#?}", e),
                 StatusCode::INTERNAL_SERVER_ERROR,
                 ResponseType::NoData,
-                GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
+                GameError::HttpError,
             ));
         }
     };
@@ -307,12 +302,12 @@ pub async fn login(
                     "Error Hashing token",
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ResponseType::ErrorInfo(format!("{:#?}", e)),
-                    GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
+                    GameError::HttpError,
                 ));
             }
         }
     } else {
-        return new_unauthorized_response!("");
+        return Err(ServiceError::new_unauthorized(""));
     }
 }
 
@@ -338,7 +333,7 @@ pub async fn list_users(
                 "",
                 StatusCode::NOT_FOUND,
                 ResponseType::ErrorInfo(format!("Failed to retrieve user list: {}", err)),
-                GameError::HttpError(StatusCode::NOT_FOUND),
+                GameError::HttpError,
             ));
         }
     }
@@ -386,7 +381,7 @@ pub async fn get_profile(
         && !request_context.is_caller_in_role(Role::Admin)
     {
         // if you aren't the admin, you can only look up your own profile
-        return new_unauthorized_response!("");
+        return Err(ServiceError::new_unauthorized(""));
     }
 
     let user_email = request_context
@@ -425,7 +420,7 @@ pub async fn delete(id: &str, request_context: &RequestContext) -> Result<(), Se
         .clone();
 
     if user_id != id && !request_context.is_caller_in_role(Role::Admin) {
-        return new_unauthorized_response!("only an admin can delete another user");
+        return Err(ServiceError::new_unauthorized("only an admin can delete another user"));
     }
 
     let result = request_context.database.as_user_db().delete_user(id).await;
@@ -437,7 +432,7 @@ pub async fn delete(id: &str, request_context: &RequestContext) -> Result<(), Se
                 "failed to delete user",
                 StatusCode::BAD_REQUEST,
                 ResponseType::NoData,
-                GameError::HttpError(StatusCode::BAD_REQUEST),
+                GameError::HttpError,
             ))
         }
     }
@@ -461,7 +456,7 @@ pub async fn validate_email(token: &str) -> Result<(), ServiceError> {
         .validate_token(&decoded_token)
     {
         Some(c) => c,
-        None => return new_unauthorized_response!(""),
+        None => return Err(ServiceError::new_unauthorized("")),
     };
 
     //  we have to embed the TestContext in the claim because we come through a GET from a URL where
@@ -585,7 +580,7 @@ async fn internal_send_phone_code(
 
     let phone_number = match &persist_user.user_profile.pii {
         Some(pii) => pii.phone_number.clone(),
-        None => return Err(bad_request_from_string!("no phone number in profile")),
+        None => return Err(ServiceError::new_bad_request("no phone number in profile")),
     };
 
     persist_user.phone_code = Some(code.to_string());
@@ -652,7 +647,7 @@ pub async fn validate_phone(
             "incorrect code.  request a new one",
             reqwest::StatusCode::BAD_REQUEST,
             ResponseType::NoData,
-            GameError::HttpError(StatusCode::BAD_REQUEST),
+            GameError::HttpError,
         )),
     }
 }
@@ -664,7 +659,7 @@ pub async fn validate_phone(
 pub async fn rotate_login_keys(request_context: &RequestContext) -> Result<(), ServiceError> {
     panic!("update this to match the new SecurityContext naming convention");
     // if !request_context.is_caller_in_role(Role::Admin) {
-    //     return new_unauthorized_response!("");
+    //     return Err(ServiceError::new_unauthorized_error(""));
     // }
 
     // let kv_name = request_context.config.kv_name.to_owned();
@@ -703,7 +698,7 @@ pub async fn find_user_by_id(
             "you can't peak at somebody else's profile!",
             StatusCode::UNAUTHORIZED,
             ResponseType::NoData,
-            GameError::HttpError(StatusCode::UNAUTHORIZED),
+            GameError::HttpError,
         ));
     }
 
@@ -763,19 +758,19 @@ pub async fn update_local_user(
 ) -> Result<(), ServiceError> {
     // Check that PII is not filled in for local users
     if new_profile.pii.is_some() {
-        return Err(bad_request_from_string!("Local Users have no PII!"));
+        return Err(ServiceError::new_bad_request("Local Users have no PII!"));
     }
 
     // Check that UserType is 'Local'
     if new_profile.user_type != UserType::Local {
-        return Err(bad_request_from_string!("UserType must be 'Local'"));
+        return Err(ServiceError::new_bad_request("UserType must be 'Local'"));
     }
 
     // Ensure user_id is set in the profile
     let local_user_id = new_profile
         .user_id
         .as_ref()
-        .ok_or_else(|| bad_request_from_string!("user_id must be set in profile"))?;
+        .ok_or_else(|| ServiceError::new_bad_request("user_id must be set in profile"))?;
 
     // Get the authenticated user's ID from claims
     let id_in_claims = request_context
@@ -796,12 +791,12 @@ pub async fn update_local_user(
     let connection_id = local_user
         .connected_user_id
         .as_ref()
-        .ok_or_else(|| bad_request_from_string!("id does not correspond to a local user"))?
+        .ok_or_else(|| ServiceError::new_bad_request("id does not correspond to a local user"))?
         .clone();
 
     // Check if the local user isn't "connected" to the connected caller and the caller isn't an admin
     if connection_id != id_in_claims && !request_context.is_caller_in_role(Role::Admin) {
-        return new_unauthorized_response!("only an admin can delete another user");
+        return Err(ServiceError::new_unauthorized("only an admin can delete another user"));
     }
 
     // Update the profile
@@ -832,7 +827,7 @@ pub async fn delete_local_user(
         .await?;
 
     if local_user_profile.connected_user_id.is_none() {
-        return Err(ServiceError::new_bad_id("invalid local user id", local_user_primary_key));
+        return Err(ServiceError::new_not_found("invalid local user id", local_user_primary_key));
     }
 
     let id_in_claims = request_context
@@ -845,7 +840,7 @@ pub async fn delete_local_user(
     let connected_id = match local_user_profile.connected_user_id {
         Some(id) => id,
         None => {
-            return new_not_found_error!("no connected id");
+            return Err(ServiceError::new_not_found("no connected id for input", local_user_primary_key));
         }
     };
 
@@ -858,7 +853,7 @@ pub async fn delete_local_user(
         return Ok(());
     }
 
-    return new_unauthorized_response!("");
+    return Err(ServiceError::new_unauthorized(""));
 }
 
 pub async fn get_local_users(
@@ -890,7 +885,7 @@ pub async fn get_local_users(
         return Ok(user_profiles);
     };
 
-    return new_unauthorized_response!("");
+    return Err(ServiceError::new_unauthorized(""));
 }
 #[cfg(test)]
 mod tests {

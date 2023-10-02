@@ -1,6 +1,5 @@
 #![allow(unused_variables)]
 use crate::{
-    bad_request_from_string,
     games_service::{
         game_container::{
             game_container::GameContainer,
@@ -88,16 +87,16 @@ pub async fn add_local_user(
                     GameContainer::add_player(&game_id, &local_user.user_profile).await?;
                 return Ok(response);
             } else {
-                return Err(bad_request_from_string!("not your connected user!"));
+                return Err(ServiceError::new_bad_request("not your connected user!"));
             }
         }
         None => {
-            return Err(bad_request_from_string!("not a connected user"));
+            return Err(ServiceError::new_bad_request("not a connected user"));
         }
     };
 }
 
-pub async fn connect(
+pub async fn join_lobby(
     request_context: &RequestContext,
 ) -> Result<(), ServiceError> {
     let user_id = request_context
@@ -115,6 +114,6 @@ pub async fn connect(
     LongPoller::add_user(&user_id, &user.user_profile).await
 }
 
-pub async fn disconnect(request_context: &RequestContext) -> Result<(), ServiceError> {
+pub async fn leave_lobby(request_context: &RequestContext) -> Result<(), ServiceError> {
     todo!()
 }

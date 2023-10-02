@@ -3,7 +3,6 @@
 use crate::{
     full_info,
     middleware::service_config::ServiceConfig,
-    new_not_found_error,
     shared::service_models::{PersistGame, PersistUser},
     shared::shared_models::{GameError, ResponseType},
 };
@@ -159,7 +158,7 @@ impl GameDbTrait for CosmosDb {
             assert!(persist_games.len() == 1);
             Ok(persist_games.first().unwrap().game.clone()) // clone is necessary because `first()` returns a reference
         } else {
-            Err(ServiceError::new_not_found_error(game_id))
+            Err(ServiceError::new_not_found("load_game", game_id))
         }
     }
 
@@ -184,7 +183,7 @@ impl GameDbTrait for CosmosDb {
                     "unexpected serde serlialization error",
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ResponseType::ErrorInfo(format!("Error: {}", e)),
-                    GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
+                    GameError::HttpError,
                 ))
             }
         }
@@ -300,7 +299,7 @@ impl UserDbTrait for CosmosDb {
                         "unexpected serde serlialization error",
                         StatusCode::INTERNAL_SERVER_ERROR,
                         ResponseType::ErrorInfo(format!("Error: {}", e)),
-                        GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
+                        GameError::HttpError,
                     ))
                 }
             },
@@ -350,7 +349,7 @@ impl UserDbTrait for CosmosDb {
                     full_info!("user: {:#?}", user.id);
                     Ok(user.clone()) // clone is necessary because `first()` returns a reference
                 } else {
-                    new_not_found_error!("not found")
+                    Err(ServiceError::new_not_found("not found", val))
                 }
             }
             Err(e) => Err(ServiceError::new_database_error(
@@ -382,7 +381,7 @@ impl UserDbTrait for CosmosDb {
         if !users.is_empty() {
             Ok(users.first().unwrap().clone())
         } else {
-            new_not_found_error!("not found")
+             Err(ServiceError::new_not_found("not found", val))
         }
     }
 }

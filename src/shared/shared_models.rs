@@ -1,15 +1,15 @@
 #![allow(dead_code)]
+use super::service_models::PersistUser;
 /**
  * this is the module where I define the structures needed for the data in Cosmos
  */
 use actix_web::HttpResponse;
+use anyhow::Result;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
-use strum_macros::Display;
-use anyhow::Result;
 use std::{fmt, fmt::Display, fmt::Formatter};
-use super::service_models::PersistUser;
-
+use strum_macros::Display;
+use crate::shared::shared_models::ResponseType::AzError;
 //
 //  this also supports Eq, PartialEq, Clone, Serialize, and Deserialize via custom implementation
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Clone)]
@@ -24,9 +24,7 @@ pub enum GameError {
     TooManyPlayers(usize),
     ReqwestError(String),
     NoError(String),
-    #[serde(serialize_with = "serialize_status_code")]
-    #[serde(deserialize_with = "deserialize_status_code")]
-    HttpError(reqwest::StatusCode),
+    HttpError,
     AzError(String),
     JsonError(String),
     AzureCoreError(String),
@@ -75,7 +73,7 @@ impl fmt::Display for GameError {
             GameError::TooManyPlayers(c) => write!(f, "Max Players {}", c),
             GameError::ReqwestError(c) => write!(f, "ReqwestError error: {}", c),
             GameError::NoError(s) => write!(f, "Success!: {}", s),
-            GameError::HttpError(code) => write!(f, "HttpError. {:#?}", code),
+            GameError::HttpError => write!(f, "HttpError"),
             GameError::AzError(e) => write!(f, "AzError: {:#?}", e),
             GameError::JsonError(e) => write!(f, "Serde Error: {:#?}", e),
             GameError::AzureCoreError(e) => write!(f, "Azure Core error: {:#?}", e),
@@ -347,16 +345,50 @@ impl ServiceError {
             message: msg.to_owned(),
             status: StatusCode::INTERNAL_SERVER_ERROR,
             response_type: ResponseType::NoData,
-            game_error: GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
+            game_error: GameError::HttpError,
         }
     }
 
-    pub fn new_bad_id(msg: &str, id: &str) -> Self {
+    pub fn new_not_found(msg: &str, id: &str) -> Self {
+        ServiceError {
+            message: msg.to_owned(),
+            status: StatusCode::NOT_FOUND,
+            response_type: ResponseType::NoData,
+            game_error: GameError::BadId(id.to_owned()),
+        }
+    }
+    pub fn new_bad_request(msg: &str) -> Self {
         ServiceError {
             message: msg.to_owned(),
             status: StatusCode::BAD_REQUEST,
             response_type: ResponseType::NoData,
-            game_error: GameError::BadId(id.to_owned()),
+            game_error: GameError::HttpError,
+        }
+    }
+    pub fn new_unauthorized(msg: &str) -> Self {
+        ServiceError {
+            message: msg.to_owned(),
+            status: StatusCode::UNAUTHORIZED,
+            response_type: ResponseType::NoData,
+            game_error: GameError::HttpError,
+        }
+    }
+
+    pub fn new_az_error(msg: &str) -> Self {
+        ServiceError {
+        message: String::default(),
+            status: StatusCode::BAD_REQUEST,
+            response_type: AzError(msg.to_string()),
+            game_error: GameError::AzError(msg.to_string()),
+        }
+    }
+
+    pub fn new_conflict_error(msg: &str) -> Self {
+        ServiceError {
+            message: msg.to_string(),
+            status: StatusCode::CONFLICT,
+            response_type: ResponseType::NoData,
+            game_error: GameError::HttpError,
         }
     }
 
@@ -369,21 +401,12 @@ impl ServiceError {
         }
     }
 
-    pub fn new_not_found_error(id: &str) -> Self {
-        ServiceError {
-            message: format!("id {} not found", id),
-            status: StatusCode::NOT_FOUND,
-            response_type: ResponseType::NoData,
-            game_error: GameError::HttpError(StatusCode::NOT_FOUND),
-        }
-    }
-
     pub fn new_database_error(msg: &str, error: &str) -> Self {
         ServiceError {
             message: msg.to_string(),
             status: StatusCode::INTERNAL_SERVER_ERROR,
             response_type: ResponseType::ErrorInfo(error.to_string()),
-            game_error: GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
+            game_error: GameError::HttpError,
         }
     }
 

@@ -9,7 +9,6 @@ use crate::{
         shared::game_enums::GameAction,
     },
     shared::shared_models::{GameError, ResponseType, ServiceError},
-    user_service::user_handlers::create_http_response,
 };
 
 pub async fn next(game_id: &str) -> Result<Vec<GameAction>, ServiceError> {
@@ -20,7 +19,7 @@ pub async fn next(game_id: &str) -> Result<Vec<GameAction>, ServiceError> {
                 &format!("invalid game id: {}", game_id),
                 StatusCode::NOT_FOUND,
                 ResponseType::ErrorInfo(format!("{:#?}", e)),
-                GameError::HttpError(StatusCode::NOT_FOUND),
+                GameError::HttpError,
             ))
         }
     };
@@ -30,7 +29,7 @@ pub async fn next(game_id: &str) -> Result<Vec<GameAction>, ServiceError> {
             "failed to delete user",
             StatusCode::BAD_REQUEST,
             ResponseType::NoData,
-            GameError::HttpError(StatusCode::BAD_REQUEST),
+            GameError::HttpError,
         ));
     }
 
@@ -53,7 +52,7 @@ pub async fn valid_actions(game_id: &str) -> Result<Vec<GameAction>, ServiceErro
                 &format!("invalid game id: {}", game_id),
                 StatusCode::NOT_FOUND,
                 ResponseType::ErrorInfo(format!("{:#?}", e)),
-                GameError::HttpError(StatusCode::NOT_FOUND),
+                GameError::HttpError,
             ))
         }
     };

@@ -2,9 +2,8 @@
 use actix_web::{web, HttpRequest, HttpResponse};
 
 use crate::{
-    bad_request_from_string,
     games_service::game_container::game_messages::{Invitation, InvitationResponseData},
-    middleware::{header_extractor::HeadersExtractor, request_context_mw::RequestContext}, api_call,
+    middleware::{header_extractor::HeadersExtractor, request_context_mw::RequestContext}, api_call, shared::shared_models::ServiceError,
 };
 
 pub async fn get_lobby(_req: HttpRequest) -> HttpResponse {
@@ -50,15 +49,15 @@ pub async fn add_local_user_handler(
     let game_id = if let Some(id) = headers.game_id {
         id
     } else {
-        return bad_request_from_string!("missing gameid header").to_http_response();
+        return ServiceError::new_bad_request("missing gameid header").to_http_response();
     };
     api_call!(super::lobby::add_local_user(&game_id, &local_user_id, &request_context).await)
 }
 
-pub async fn connect_handler(request_context: RequestContext) -> HttpResponse {
-    api_call!(super::lobby::connect(&&request_context).await)
+pub async fn join_lobby_handler(request_context: RequestContext) -> HttpResponse {
+    api_call!(super::lobby::join_lobby(&&request_context).await)
 }
 
-pub async fn disconnect_handler(request_context: RequestContext) -> HttpResponse {
-    api_call!(super::lobby::disconnect(&&request_context).await)
+pub async fn leave_lobby_handler(request_context: RequestContext) -> HttpResponse {
+    api_call!(super::lobby::leave_lobby(&&request_context).await)
 }

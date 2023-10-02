@@ -233,7 +233,7 @@ impl GameContainer {
     ) -> Result<(), ServiceError> {
         let mut game_map = GAME_MAP.write().await; // Acquire write lock
         if game_map.contains_key(game_id) {
-            return Err(ServiceError::new_bad_id("GameId", game_id));
+            return Err(ServiceError::new_not_found("GameId", game_id));
         }
 
         let mut game_container = GameContainer::new(game_id, request_context);
@@ -257,7 +257,7 @@ impl GameContainer {
         let game_map = GAME_MAP.read().await; // Acquire read lock
         match game_map.get(game_id) {
             Some(container) => Ok(container.clone()),
-            None => Err(ServiceError::new_bad_id("GameId", game_id)),
+            None => Err(ServiceError::new_not_found("GameId", game_id)),
         }
     }
 

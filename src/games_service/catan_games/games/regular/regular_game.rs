@@ -131,7 +131,7 @@ impl RegularGame {
     pub fn add_user(&mut self, profile: &UserProfile) -> Result<(), ServiceError> {
         let user_id = profile.user_id.clone().unwrap();
         if self.players.contains_key(&user_id) {
-            return Err(ServiceError::new_bad_id("user_id already exists", &user_id));
+            return Err(ServiceError::new_not_found("user_id already exists", &user_id));
         }
 
 

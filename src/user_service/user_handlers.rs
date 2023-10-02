@@ -2,13 +2,13 @@
 use crate::{
     api_call, get_header_value,
     middleware::{header_extractor::HeadersExtractor, request_context_mw::RequestContext},
-    shared::shared_models::{GameError, ResponseType, ServiceError, UserProfile},
+    shared::shared_models::UserProfile,
 };
 use actix_web::{
     web::{self},
     HttpResponse, Responder,
 };
-use reqwest::StatusCode;
+
 
 /**
  * Handlers for the "user" service.
@@ -89,25 +89,6 @@ pub async fn delete_handler(
 
 pub async fn validate_email_handler(token: web::Path<String>) -> HttpResponse {
     api_call!(super::users::validate_email(&token).await)
-}
-
-pub fn create_http_response(status_code: StatusCode, message: &str, body: &str) -> HttpResponse {
-    let response = ServiceError::new(
-        message,
-        status_code,
-        ResponseType::Todo(body.to_string()),
-        GameError::HttpError(status_code),
-    );
-    match status_code {
-        StatusCode::OK => HttpResponse::Ok().json(response),
-        StatusCode::UNAUTHORIZED => HttpResponse::Unauthorized().json(response),
-        StatusCode::INTERNAL_SERVER_ERROR => HttpResponse::InternalServerError().json(response),
-        StatusCode::NOT_FOUND => HttpResponse::NotFound().json(response),
-        StatusCode::CONFLICT => HttpResponse::Conflict().json(response),
-        StatusCode::ACCEPTED => HttpResponse::Accepted().json(response),
-        StatusCode::CREATED => HttpResponse::Created().json(response),
-        _ => HttpResponse::BadGateway().json(response),
-    }
 }
 
 pub async fn validate_phone_handler(

@@ -2,16 +2,12 @@
 #![allow(unused_variables)]
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{
-    log_return_bad_id, new_not_found_error,
-    shared::{
-        service_models::{PersistGame, PersistUser},
-        shared_models::{GameError, ResponseType, ServiceError},
-    },
+use crate::shared::{
+    service_models::{PersistGame, PersistUser},
+    shared_models::ServiceError,
 };
 use async_trait::async_trait;
 use log::trace;
-use reqwest::StatusCode;
 use tokio::sync::RwLock;
 
 use crate::cosmos_db::database_abstractions::{GameDbTrait, UserDbTrait};
@@ -73,7 +69,10 @@ impl UserDbTrait for TestDb {
         match MOCKED_DB.users.write().await.remove(unique_id) {
             Some(_) => Ok(()),
             None => {
-                log_return_bad_id!(unique_id, "testdb::delete_user");
+                return Err(ServiceError::new_not_found(
+                    "testdb::delete_user",
+                    unique_id,
+                ));
             }
         }
     }
@@ -87,7 +86,7 @@ impl UserDbTrait for TestDb {
             .find(|(_key, user)| *user.id == *id)
         {
             Some(u) => Ok(u.1.clone()),
-            None => return new_not_found_error!("Not Found"),
+            None => return Err(ServiceError::new_not_found("not found", id)),
         }
     }
     async fn get_connected_users(
@@ -119,7 +118,7 @@ impl UserDbTrait for TestDb {
             }
         }) {
             Some(u) => Ok(u.1.clone()),
-            None => new_not_found_error!("Not Found"),
+            None => Err(ServiceError::new_not_found("Not Found", val)),
         }
     }
 }
@@ -134,6 +133,4 @@ pub mod tests {
         let context = RequestContext::test_default(false);
         crate::cosmos_db::cosmosdb::tests::test_db_e2e(&context).await;
     }
-
-  
 }

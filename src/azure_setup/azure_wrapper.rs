@@ -14,17 +14,9 @@ use std::env;
 use std::process::Command;
 use std::str;
 use std::sync::Mutex;
-use tracing::info;
-
 use lazy_static::lazy_static;
-
-use crate::az_error_to_service_response;
-use crate::bad_request_from_string;
 use crate::full_info;
 use crate::init_env_logger;
-
-use crate::log_return_bad_request;
-use crate::log_return_serde_error;
 use crate::middleware::request_context_mw::RequestContext;
 use crate::middleware::request_context_mw::TestContext;
 use crate::middleware::service_config::SERVICE_CONFIG;
@@ -33,8 +25,6 @@ use crate::shared::service_models::Role;
 use crate::shared::shared_models::GameError;
 use crate::shared::shared_models::ResponseType;
 use crate::shared::shared_models::ServiceError;
-use crate::trace_function;
-
 use super::azure_types::CosmosDatabaseInfo;
 
 static SUBSCRIPTION_ID: OnceCell<String> = OnceCell::new();
@@ -148,7 +138,7 @@ fn verify_login() -> Result<String, ServiceError> {
 pub fn get_azure_token() -> Result<String, ServiceError> {
     let _ = verify_login_or_panic();
     let args = ["account", "get-access-token"];
-    let cmd = print_cmd(&args);
+    let _cmd = print_cmd(&args);
 
     let output = exec_os(&args)?;
 
@@ -159,12 +149,9 @@ pub fn get_azure_token() -> Result<String, ServiceError> {
 
     match json["accessToken"].as_str() {
         Some(v) => Ok(v.to_string()),
-        None => {
-            az_error_to_service_response!(
-                cmd,
-                "Access token not found in Azure CLI response.".to_string()
-            )
-        }
+        None => Err(ServiceError::new_az_error(
+            "Access token not found in Azure CLI response.",
+        )),
     }
 }
 
@@ -214,17 +201,16 @@ pub fn create_resource_group(
 ///   - `ServiceResponse`: An error message describing the reason for the failure.
 pub fn resource_group_exists(resource_group_name: &str) -> Result<bool, ServiceError> {
     let cmd_args = ["group", "exists", "--name", resource_group_name];
-    let cmd = print_cmd(&cmd_args);
+    let _cmd = print_cmd(&cmd_args);
     let output = exec_os(&cmd_args)?;
 
     let result_str = output.trim().to_string();
     match result_str.as_str() {
         "true" => Ok(true),
         "false" => Ok(false),
-        _ => az_error_to_service_response!(
-            &cmd,
-            format!("Unexpected output from Azure CLI: {}", result_str)
-        ),
+        _ => Err(ServiceError::new_az_error(
+            &format!("Unexpected output from Azure CLI: {}", result_str)
+        )),
     }
 }
 
@@ -366,7 +352,7 @@ pub fn create_cosmos_account(
     location: &str,
 ) -> Result<(), ServiceError> {
     if !is_location_valid(location)? {
-        return Err(bad_request_from_string!(&format!(
+        return Err(ServiceError::new_bad_request(&format!(
             "Invalid location: {}",
             location
         )));
@@ -845,7 +831,7 @@ pub fn key_vault_get_secret(
     let answer: Result<String, ServiceError> = top_level["value"]
         .as_str()
         .map(|s| s.to_string())
-        .ok_or(bad_request_from_string!(&format!(
+        .ok_or(ServiceError::new_bad_request(&format!(
             "secret name not found: {}",
             secret_name
         )));
@@ -1003,7 +989,18 @@ mod tests {
 
     #![allow(dead_code)]
 
-
+    use crate::azure_setup::azure_wrapper::*;
+    use crate::init_env_logger;
+    use crate::middleware::request_context_mw::RequestContext;
+    use crate::middleware::request_context_mw::TestContext;
+    use crate::middleware::service_config::SERVICE_CONFIG;
+    use crate::shared::service_models::Claims;
+    use crate::shared::service_models::Role;
+    use crate::shared::shared_models::GameError;
+    use crate::shared::shared_models::ResponseType;
+    use crate::shared::shared_models::ServiceError;
+    use crate::trace_function;
+    use lazy_static::lazy_static;
     use once_cell::sync::Lazy;
     use once_cell::sync::OnceCell;
     use rand::Rng;
@@ -1018,23 +1015,6 @@ mod tests {
     use std::str;
     use std::sync::Mutex;
     use tracing::info;
-    use lazy_static::lazy_static;
-    use crate::az_error_to_service_response;
-    use crate::azure_setup::azure_wrapper::*;
-    use crate::bad_request_from_string;
-    use crate::init_env_logger;
-    use crate::log_return_bad_request;
-    use crate::log_return_serde_error;
-    use crate::middleware::request_context_mw::RequestContext;
-    use crate::middleware::request_context_mw::TestContext;
-    use crate::middleware::service_config::SERVICE_CONFIG;
-    use crate::shared::service_models::Claims;
-    use crate::shared::service_models::Role;
-    use crate::shared::shared_models::GameError;
-    use crate::shared::shared_models::ResponseType;
-    use crate::shared::shared_models::ServiceError;
-    use crate::trace_function;
-
 
     #[test]
     pub fn send_text_message_test() {

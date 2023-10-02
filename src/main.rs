@@ -138,7 +138,7 @@ fn setup_cosmos() -> Result<(), ServiceError> {
  * this is the simplest possible GET handler that can be run from a browser to test connectivity
  */
 async fn get_version() -> HttpResponse {
-    new_ok_response!("version 1.0").to_http_response()
+    HttpResponse::Ok().body("version 1.0")
 }
 
 /**
@@ -288,10 +288,10 @@ fn lobby_service() -> Scope {
             "/add-local-user/{local_user_id}",
             web::post().to(lobby_handlers::add_local_user_handler),
         )
-        .route("/connect", web::post().to(lobby_handlers::connect_handler))
+        .route("/join", web::post().to(lobby_handlers::join_lobby_handler))
         .route(
-            "/disconnet",
-            web::post().to(lobby_handlers::disconnect_handler),
+            "/leave",
+            web::post().to(lobby_handlers::leave_lobby_handler),
         )
 }
 

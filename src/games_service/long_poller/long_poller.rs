@@ -86,7 +86,7 @@ impl LongPoller {
 
         match users_map.remove(user_id) {
             Some(_) => Ok(()),
-            None => Err(ServiceError::new_bad_id("id does not exist", user_id)),
+            None => Err(ServiceError::new_not_found("id does not exist", user_id)),
         }
     }
     /// Sends a message to a list of users.
@@ -185,7 +185,7 @@ impl LongPoller {
             let users_map = ALL_USERS_MAP.read().await;
             match users_map.get(user_id) {
                 Some(lp) => lp.read().await.rx.clone(),
-                None => return Err(ServiceError::new_bad_id("in long poller", user_id)),
+                None => return Err(ServiceError::new_not_found("in long poller", user_id)),
             }
         };
 

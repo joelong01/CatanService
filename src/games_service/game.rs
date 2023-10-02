@@ -43,7 +43,7 @@ pub async fn shuffle_game(
                 "Error Hashing Password",
                 StatusCode::INTERNAL_SERVER_ERROR,
                 ResponseType::ErrorInfo(err_message.to_owned()),
-                GameError::HttpError(StatusCode::INTERNAL_SERVER_ERROR),
+                GameError::HttpError,
             ));
         }
     }
@@ -142,8 +142,10 @@ pub async fn reload_game(
     game_id: &str,
     _request_context: &RequestContext,
 ) -> Result<RegularGame, ServiceError> {
-  //  let response = GameContainer::current_game(&game_id.to_owned()).await;
-
+    let response = GameContainer::current_game(&game_id.to_owned()).await;
+    if response.is_ok() {
+        return Err(ServiceError::new_bad_request("Game already loaded"));
+    }
     let game: (RegularGame, _) = GameContainer::current_game(game_id).await?;
     Ok(game.0)
 }

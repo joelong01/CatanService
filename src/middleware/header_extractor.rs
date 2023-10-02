@@ -43,22 +43,21 @@ impl FromRequest for HeadersExtractor {
         })
     }
 }
+
+///
+/// this macro is designed to be run from the *handlers APIs to get the underlying data. if the header isn't set
+/// it will return a bad request HTTP error
 #[macro_export]
 macro_rules! get_header_value {
     ($header:ident, $headers:expr) => {{
-        use crate::shared::shared_models::{GameError, ResponseType, ServiceError};
-        use reqwest::StatusCode;
+        use crate::shared::shared_models::{ServiceError};
+
         match $headers.$header {
             Some(v) => v,
             None => {
                 let msg = format!("{} header not found", stringify!($header));
-                let response = ServiceError::new(
-                    &msg,
-                    reqwest::StatusCode::BAD_REQUEST,
-                    ResponseType::NoData,
-                    GameError::HttpError(StatusCode::BAD_REQUEST),
-                );
-                return HttpResponse::BadRequest().json(response);
+                let response = ServiceError::new_bad_request(&msg);
+                return response.to_http_response();
             }
         }
     }};
