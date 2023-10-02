@@ -205,13 +205,31 @@ pub struct PersistGame {
     pub id: String, // not set by client
     #[serde(rename = "partitionKey")]
     pub partition_key: u64, // the cosmos client seems to care about the spelling of both id and partitionKey
+    pub game_index: u32,
+    pub undo_len: usize,
+    pub redo_len: usize,
+    pub compressed_size: usize,
+    pub decompressed_size: usize,
     pub game: Vec<u8>,
 }
 
 impl PersistGame {
-    pub fn new(game_id: &str, game: &Vec<u8>) -> Self {
+    pub fn new(
+        game_id: &str,
+        game_index: u32,
+        undo_len: usize,
+        redo_len: usize,
+        compressed_size: usize,
+        decompressed_size: usize,
+        game: &Vec<u8>,
+    ) -> Self {
         Self {
             id: game_id.to_string(),
+            game_index,
+            undo_len,
+            redo_len,
+            compressed_size,
+            decompressed_size,
             partition_key: 1,
             game: game.clone(),
         }

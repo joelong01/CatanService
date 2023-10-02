@@ -42,20 +42,25 @@ pub struct GameStacks {
     undo_stack: Vec<RegularGame>,
     redo_stack: Vec<RegularGame>,
     #[serde(skip_serializing, with = "stack_sender")]
-    db_update_sender: mpsc::Sender<Vec<u8>>, // This will send compressed data
+    db_update_sender: mpsc::Sender<PersistGame>, // This will send compressed data
 }
 
 mod stack_sender {
     use tokio::sync::mpsc;
 
-    pub fn serialize<S>(_sender: &mpsc::Sender<Vec<u8>>, _serializer: S) -> Result<S::Ok, S::Error>
+    use crate::shared::service_models::PersistGame;
+
+    pub fn serialize<S>(
+        _sender: &mpsc::Sender<PersistGame>,
+        _serializer: S,
+    ) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
         panic!("Should not serialize this field");
     }
 
-    pub fn deserialize<'de, D>(_deserializer: D) -> Result<mpsc::Sender<Vec<u8>>, D::Error>
+    pub fn deserialize<'de, D>(_deserializer: D) -> Result<mpsc::Sender<PersistGame>, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
@@ -94,14 +99,13 @@ impl GameStacks {
     }
     async fn db_update_task(
         game_id: String,
-        mut rx: mpsc::Receiver<Vec<u8>>,
+        mut rx: mpsc::Receiver<PersistGame>,
         test_context: Option<TestContext>,
     ) {
         let game_id = game_id.to_string();
         let database = DatabaseWrapper::new(&test_context, &SERVICE_CONFIG);
 
-        while let Some(compressed_data) = rx.recv().await {
-            let persisted_game = PersistGame::new(&game_id, &compressed_data);
+        while let Some(persisted_game) = rx.recv().await {
             let result = database
                 .as_game_db()
                 .update_game_data(&game_id, &persisted_game)
@@ -115,22 +119,34 @@ impl GameStacks {
     async fn update_db(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let serialized_data = serde_json::to_vec(self)?;
 
-        let serialized_size = serialized_data.len(); // Get the size of serialized data
+        let decompressed_size = serialized_data.len() >> 10; // Get the size of serialized data in KB
 
         let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
         encoder.write_all(&serialized_data)?;
         let compressed_data = encoder.finish()?;
 
-        let compressed_size = compressed_data.len(); // Get the size of compressed data
+        let compressed_size = compressed_data.len() >> 10; // Get the size of compressed data in KB
 
         // Log the sizes
         full_info!(
-            "Serialized size: {} bytes Compressed size: {} bytes",
-            serialized_size,
+            "Decompressed size: {}KB Compressed size: {}KB",
+            decompressed_size,
             compressed_size
         );
-
-        self.db_update_sender.send(compressed_data).await?;
+        let current_game = self
+            .current()
+            .await
+            .expect("current must exist if we are trying to save current");
+        let persisted_game = PersistGame::new(
+            &current_game.game_id,
+            current_game.game_index,
+            self.undo_stack.len(),
+            self.redo_stack.len(),
+            compressed_size,
+            decompressed_size,
+            &compressed_data,
+        );
+        self.db_update_sender.send(persisted_game).await?;
         Ok(())
     }
 
@@ -266,10 +282,7 @@ impl GameContainer {
      *  game we could return (which has the players), at this point, I think the UI would be a "Create Game" UI where invites
      *  have been sent out and the UI reflects updates based on Accept/Reject
      */
-    pub async fn add_player(
-        game_id: &str,
-        client_user: &UserProfile,
-    ) -> Result<(), ServiceError> {
+    pub async fn add_player(game_id: &str, client_user: &UserProfile) -> Result<(), ServiceError> {
         let game_container = Self::get_locked_container(&game_id).await?;
         let mut game_container = game_container.write().await; // drop read lock
 
