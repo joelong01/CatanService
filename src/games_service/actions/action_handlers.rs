@@ -7,7 +7,7 @@ use crate::{
     games_service::{
         catan_games::traits::game_trait::GameTrait, game_container::game_container::GameContainer,
         shared::game_enums::GameAction,
-    }, api_call,
+    }, api_call, middleware::request_context_mw::RequestContext,
 
    
 };
@@ -23,6 +23,7 @@ pub async fn next_handler(game_id: web::Path<String>) ->  HttpResponse {
 /**
  * look at the state of the game and answer the question "what are the valid actions"
  */
-pub async fn valid_actions(game_id: web::Path<String>, _req: HttpRequest) ->  HttpResponse {
+pub async fn valid_actions_handler(game_id: web::Path<String>, _req: HttpRequest) ->  HttpResponse {
     api_call!(super::actions::valid_actions(&game_id).await)
 }
+

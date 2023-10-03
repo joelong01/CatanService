@@ -210,7 +210,7 @@ pub struct PersistGame {
     pub redo_len: usize,
     pub compressed_size: usize,
     pub decompressed_size: usize,
-    pub game: Vec<u8>,
+    pub game_state: Vec<u8>,
 }
 
 impl PersistGame {
@@ -231,7 +231,7 @@ impl PersistGame {
             compressed_size,
             decompressed_size,
             partition_key: 1,
-            game: game.clone(),
+            game_state: game.clone(),
         }
     }
 }

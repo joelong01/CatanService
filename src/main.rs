@@ -340,7 +340,7 @@ fn action_service() -> Scope {
         )
         .route(
             "/actions/{game_id}",
-            web::get().to(action_handlers::valid_actions),
+            web::get().to(action_handlers::valid_actions_handler),
         )
         .route(
             "/next/{game_id}",
@@ -559,4 +559,6 @@ mod tests {
         init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Trace).await;
         setup_cosmos().expect("can't continue if setup fails!");
     }
+
+    
 }

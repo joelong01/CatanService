@@ -150,13 +150,13 @@ fn public_client(account: &str, token: &str) -> CosmosClient {
 
 #[async_trait]
 impl GameDbTrait for CosmosDb {
-    async fn load_game(&self, game_id: &str) -> Result<Vec<u8>, ServiceError> {
+    async fn load_game(&self, game_id: &str) -> Result<PersistGame, ServiceError> {
         let query = format!(r#"SELECT * FROM c WHERE c.id = '{}'"#, game_id);
         let persist_games: Vec<PersistGame> =
             self.execute_query(CosmosDocType::Game, &query).await?;
         if !persist_games.is_empty() {
             assert!(persist_games.len() == 1);
-            Ok(persist_games.first().unwrap().game.clone()) // clone is necessary because `first()` returns a reference
+            Ok(persist_games.first().unwrap().clone()) // clone is necessary because `first()` returns a reference
         } else {
             Err(ServiceError::new_not_found("load_game", game_id))
         }

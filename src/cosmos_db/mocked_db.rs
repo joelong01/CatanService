@@ -30,7 +30,7 @@ impl TestDb {
 }
 #[async_trait]
 impl GameDbTrait for TestDb {
-    async fn load_game(&self, game_id: &str) -> Result<Vec<u8>, ServiceError> {
+    async fn load_game(&self, game_id: &str) -> Result<PersistGame, ServiceError> {
         todo!();
     }
     async fn delete_games(&self, game_id: &str) -> Result<(), ServiceError> {

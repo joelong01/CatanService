@@ -1,12 +1,12 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
+use super::cosmosdb::CosmosDb;
+use super::mocked_db::TestDb;
 use crate::middleware::request_context_mw::TestContext;
 use crate::middleware::service_config::ServiceConfig;
 use crate::shared::service_models::{PersistGame, PersistUser};
 use crate::shared::shared_models::ServiceError;
 use async_trait::async_trait;
-use super::cosmosdb::CosmosDb;
-use super::mocked_db::TestDb;
 
 /**
  *  we have 3 cosmos collections that we are currently using:  User, Profile, and (eventually) Game.
@@ -40,7 +40,7 @@ pub static COLLECTION_NAME_VALUES: [CosmosCollectionNameValues; 3] = [
 ];
 #[async_trait]
 pub trait GameDbTrait: Send + Sync {
-    async fn load_game(&self, game_id: &str) -> Result<Vec<u8>, ServiceError>;
+    async fn load_game(&self, game_id: &str) -> Result<PersistGame, ServiceError>;
     async fn delete_games(&self, game_id: &str) -> Result<(), ServiceError>;
     async fn update_game_data(
         &self,
@@ -51,12 +51,9 @@ pub trait GameDbTrait: Send + Sync {
 
 #[async_trait]
 pub trait UserDbTrait: Send + Sync {
-     async fn setupdb(&self) -> Result<(), ServiceError>;
+    async fn setupdb(&self) -> Result<(), ServiceError>;
     async fn list(&self) -> Result<Vec<PersistUser>, ServiceError>;
-    async fn update_or_create_user(
-        &self,
-        user: &PersistUser,
-    ) -> Result<(), ServiceError>;
+    async fn update_or_create_user(&self, user: &PersistUser) -> Result<(), ServiceError>;
     async fn delete_user(&self, unique_id: &str) -> Result<(), ServiceError>;
     async fn find_user_by_id(&self, val: &str) -> Result<PersistUser, ServiceError>;
     async fn find_user_by_email(&self, val: &str) -> Result<PersistUser, ServiceError>;
@@ -99,10 +96,7 @@ impl UserDbTrait for Database {
         }
     }
 
-    async fn update_or_create_user(
-        &self,
-        user: &PersistUser,
-    ) -> Result<(), ServiceError> {
+    async fn update_or_create_user(&self, user: &PersistUser) -> Result<(), ServiceError> {
         match self {
             Database::Cosmos(db) => db.update_or_create_user(user).await,
             Database::Test(db) => db.update_or_create_user(user).await,
@@ -148,10 +142,9 @@ impl UserDbTrait for Database {
     }
 }
 
-
 #[async_trait]
 impl GameDbTrait for Database {
-    async fn load_game(&self, game_id: &str) -> Result<Vec<u8>, ServiceError> {
+    async fn load_game(&self, game_id: &str) -> Result<PersistGame, ServiceError> {
         match self {
             Database::Cosmos(db) => db.load_game(game_id).await,
             Database::Test(db) => db.load_game(game_id).await,
@@ -184,7 +177,7 @@ pub struct DatabaseWrapper {
 impl DatabaseWrapper {
     pub fn new_cosmos(is_test: bool, service_config: &'static ServiceConfig) -> Self {
         DatabaseWrapper {
-            db:  Box::new(Database::Cosmos(CosmosDb::new(is_test, service_config))),
+            db: Box::new(Database::Cosmos(CosmosDb::new(is_test, service_config))),
         }
     }
 
@@ -202,11 +195,10 @@ impl DatabaseWrapper {
                 } else {
                     DatabaseWrapper::new_test()
                 }
-            },
+            }
             None => DatabaseWrapper::new_cosmos(false, service_config),
         }
     }
-    
 
     pub fn as_user_db(&self) -> &dyn UserDbTrait {
         &*self.db
