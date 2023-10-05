@@ -1,18 +1,13 @@
 #[macro_export]
 macro_rules! api_call {
-    ($api_call:expr) => {
-        {
-            let result = $api_call;
-            match result {
-                Ok(val) => HttpResponse::Ok().json(val),
-                Err(service_error) => service_error.to_http_response(),
-            }
+    ($api_call:expr) => {{
+        let result = $api_call;
+        match result {
+            Ok(val) => HttpResponse::Ok().json(val),
+            Err(service_error) => service_error.to_http_response(),
         }
-    };
+    }};
 }
-
-
-
 
 #[macro_export]
 macro_rules! deserialize_from_array {
@@ -34,8 +29,6 @@ macro_rules! deserialize_from_array {
         }
     };
 }
-
-
 
 #[macro_export]
 macro_rules! log_return_not_found {
@@ -149,9 +142,9 @@ macro_rules! full_info {
 
 pub fn format_log_message(s: &str) -> String {
     s.replace('\n', " ") // Replace newline with space
-     .split_whitespace() // Split the string by whitespace
-     .collect::<Vec<&str>>() // Collect into a Vec<&str>
-     .join(" ") // Join with a space
+        .split_whitespace() // Split the string by whitespace
+        .collect::<Vec<&str>>() // Collect into a Vec<&str>
+        .join(" ") // Join with a space
 }
 
 #[macro_export]
@@ -180,6 +173,30 @@ macro_rules! trace_function {
             let elapsed = enter_time.elapsed();
             let duration_in_nanos = elapsed.as_secs() * 1_000_000_000 + elapsed.subsec_nanos() as u64;
             println!("Leaving {} after duration: {} nanoseconds", $function, duration_in_nanos);
+        }
+    }};
+}
+#[macro_export]
+macro_rules! info_object_size {
+    ($name:expr, $print_object:expr, $obj:expr) => {{
+        use crate::full_info;
+        match serde_json::to_string($obj) {
+            Ok(serialized_data) => {
+                let size_in_bytes = serialized_data.as_bytes().len();
+                if $print_object {
+                    full_info!(
+                        "name: {} size: {}, object: {}",
+                        $name,
+                        size_in_bytes,
+                        serialized_data
+                    );
+                } else {
+                    full_info!("name: {} size: {}", $name, size_in_bytes);
+                }
+            }
+            Err(e) => {
+                full_info!("unable to serialize {}.  {:#?}", $name, e);
+            }
         }
     }};
 }
