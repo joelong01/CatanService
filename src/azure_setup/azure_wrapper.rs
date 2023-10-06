@@ -18,7 +18,7 @@ use lazy_static::lazy_static;
 use crate::full_info;
 use crate::init_env_logger;
 use crate::middleware::request_context_mw::RequestContext;
-use crate::middleware::request_context_mw::TestContext;
+use crate::middleware::request_context_mw::TestCallContext;
 use crate::middleware::service_config::SERVICE_CONFIG;
 use crate::shared::service_models::Claims;
 use crate::shared::service_models::Role;
@@ -992,7 +992,6 @@ mod tests {
     use crate::azure_setup::azure_wrapper::*;
     use crate::init_env_logger;
     use crate::middleware::request_context_mw::RequestContext;
-    use crate::middleware::request_context_mw::TestContext;
     use crate::middleware::service_config::SERVICE_CONFIG;
     use crate::shared::service_models::Claims;
     use crate::shared::service_models::Role;

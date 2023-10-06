@@ -26,9 +26,11 @@ impl GameHeader {
     pub const USER_ID: &'static str = "x-user-id";
     pub const PASSWORD: &'static str = "x-password";
     pub const TEST: &'static str = "x-test";
+    pub const LOGIN_DATA: &'static str = "x-login-data";
     pub const EMAIL: &'static str = "x-email";
     pub const ROLES: &'static str = "x-roles";
-    pub const CLAIMS: &'static str= "x-claims";
+    pub const CLAIMS: &'static str = "x-claims";
+    pub const PROFILE_LOCATION: &'static str = "x-profile-location";
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
@@ -124,7 +126,7 @@ impl fmt::Debug for CatanMessage {
 pub enum GameStatus {
     PlayingGame,
     Available,
-    Hidden
+    Hidden,
 }
 
 #[macro_export]
@@ -156,4 +158,3 @@ macro_rules! error_message {
         })
     };
 }
-

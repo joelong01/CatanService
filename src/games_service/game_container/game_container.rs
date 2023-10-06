@@ -1,24 +1,20 @@
 #![allow(dead_code)]
-#![allow(unused_imports)]
+
 
 use super::game_messages::CatanMessage;
 use crate::{
-    cosmos_db::{
-        cosmosdb::CosmosDb,
-        database_abstractions::{DatabaseWrapper, GameDbTrait},
-        mocked_db::TestDb,
-    },
+    cosmos_db::database_abstractions::DatabaseWrapper,
     full_info,
     games_service::{
         catan_games::games::regular::regular_game::RegularGame,
         long_poller::long_poller::LongPoller,
     },
     middleware::{
-        request_context_mw::{RequestContext, TestContext},
+        request_context_mw::RequestContext,
         service_config::SERVICE_CONFIG,
     },
     shared::{
-        service_models::PersistGame,
+        service_models::{PersistGame, Claims},
         shared_models::{ServiceError, UserProfile, UserType},
     },
 };
@@ -81,11 +77,11 @@ impl GameStacks {
     /// Creates a new `Stacks` instance.
     pub fn new(game_id: &str, request_context: &RequestContext) -> Self {
         let (tx, rx) = mpsc::channel(32);
-        let test_context = request_context.test_context.clone();
         let game_id = game_id.to_string();
+        let claims = request_context.claims.as_ref().unwrap().clone();
         // Spawn the database update task
         tokio::spawn(async move {
-            GameStacks::db_update_task(game_id, rx, test_context).await;
+            GameStacks::db_update_task(game_id, rx, &claims).await;
         });
         Self {
             stacks: StateStacks::new(),
@@ -102,10 +98,10 @@ impl GameStacks {
     async fn db_update_task(
         game_id: String,
         mut rx: mpsc::Receiver<PersistGame>,
-        test_context: Option<TestContext>,
+        claims: &Claims,
     ) {
         let game_id = game_id.to_string();
-        let database = DatabaseWrapper::new(&test_context, &SERVICE_CONFIG);
+        let database = DatabaseWrapper::new(Some(claims), &SERVICE_CONFIG);
 
         while let Some(persisted_game) = rx.recv().await {
             let result = database

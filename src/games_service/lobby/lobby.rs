@@ -33,7 +33,6 @@ pub async fn post_invite(
  *     loop and end up waiting on the right thing
  */
 pub async fn respond_to_invite(
-    is_test: bool,
     invite_response: &InvitationResponseData,
     request_context: &RequestContext,
 ) -> Result<(), ServiceError> {

@@ -10,7 +10,7 @@ use crate::{
 
 use reqwest::StatusCode;
 
-use crate::games_service::shared::game_enums::CatanGames;
+use crate::games_service::shared::game_enums::CatanGameType;
 
 use super::{
     catan_games::{games::regular::regular_game::RegularGame, traits::game_trait::GameTrait},
@@ -55,64 +55,33 @@ pub async fn shuffle_game(
 /// passed in.  this creates a game and stores it in a global HashMap so that multiple
 /// cames can be run at the same time.
 pub async fn new_game(
-    game_type: CatanGames,
+    game_type: CatanGameType,
     user_id: &str,
-    is_test: bool,
     test_game: Option<RegularGame>,
     request_context: &RequestContext,
 ) -> Result<RegularGame, ServiceError> {
-    if game_type != CatanGames::Regular {
-        return Err(ServiceError::new(
-            &format!("Game not supported: {:#?}", game_type),
-            StatusCode::BAD_REQUEST,
-            ResponseType::NoData,
-            GameError::MissingData(String::default()),
-        ));
+    if game_type != CatanGameType::Regular {
+        return Err(ServiceError::new_unsupported_game(game_type));
     }
+
     let user = request_context
         .database
         .as_user_db()
         .find_user_by_id(user_id)
         .await?;
 
-    //
-    //  "if it is a test game and the game has been passed in, use it.  otherwise create a new game and shuffle"
-    let game = if is_test {
-        match test_game {
-            Some(g) => g.clone(),
-            None => {
-                let mut game = RegularGame::new(&UserProfile::from_persist_user(&user));
-                game.shuffle();
-                game
-            }
+    let game = match test_game {
+        Some(game) => game,
+        None => {
+            let mut new_game = RegularGame::new(&UserProfile::from_persist_user(&user));
+            new_game.shuffle();
+            new_game
         }
-    } else {
-        let mut game = RegularGame::new(&UserProfile::from_persist_user(&user));
-        game.shuffle();
-        game
     };
 
-    //
-    //  the sequence is
-    //  1. create_and_add_container
-    //  2. push_game
-    //  3. add_player
-    //  4. send notification
-    if GameContainer::create_and_add_container(&game.game_id, &game, &request_context)
-        .await
-        .is_err()
-    {
-        return Err(ServiceError::new(
-            "",
-            reqwest::StatusCode::NOT_FOUND,
-            ResponseType::NoData,
-            GameError::BadId(game.game_id.to_owned()),
-        ));
-    }
+    GameContainer::create_and_add_container(&game.game_id, &game, &request_context).await?;
 
-    //
-    //  send a message to the user that the game was created
-
+    // Send a message to the user that the game was created
     let _ = LongPoller::send_message(
         vec![user_id.to_string()],
         &CatanMessage::GameCreated(GameCreatedData {
@@ -122,16 +91,11 @@ pub async fn new_game(
     )
     .await;
 
-    //
-    //  return the game - perhaps this shouldn't be done to force parity between the caller and the other clients
-    //  - make them all get the game from the long poller.  as it is the client will set the context - forcing an update
-    //  and then get the update from the long_polller, which will do the same thing.  we might just ignore the return
-    //  value on the client, in which case we are wasting bytes on the wire.
     Ok(game)
 }
 
-pub async fn supported_games() -> Result<Vec<CatanGames>, ServiceError> {
-    Ok(vec![CatanGames::Regular])
+pub async fn supported_games() -> Result<Vec<CatanGameType>, ServiceError> {
+    Ok(vec![CatanGameType::Regular])
 }
 
 ///

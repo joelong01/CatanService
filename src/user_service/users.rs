@@ -13,20 +13,23 @@ use crate::azure_setup::azure_wrapper::{
     cosmos_account_exists, cosmos_collection_exists, cosmos_database_exists, key_vault_get_secret,
     key_vault_save_secret, keyvault_exists, send_email, send_text_message, verify_login_or_panic,
 };
+use crate::cosmos_db::database_abstractions::DatabaseWrapper;
 use crate::middleware::security_context::{KeyKind, SecurityContext};
 use crate::middleware::service_config::SERVICE_CONFIG;
-use crate::shared::service_models::{Claims, PersistUser, Role};
-use crate::user_service::user_handlers::find_user_by_id_handler;
+use crate::shared::service_models::{Claims, LoginHeaderData, PersistUser, Role};
 /**
  * this module implements the WebApi to create the database/collection, list all the users, and to create/find/delete
  * a User document in CosmosDb
  */
 use crate::trace_function;
+use crate::user_service::user_handlers::find_user_by_id_handler;
 
 use crate::games_service::long_poller::long_poller::LongPoller;
 
 use crate::middleware::request_context_mw::RequestContext;
-use crate::shared::shared_models::{GameError, ResponseType, ServiceError, UserProfile, UserType};
+use crate::shared::shared_models::{
+    GameError, ProfileStorage, ResponseType, ServiceError, UserProfile, UserType,
+};
 
 use reqwest::StatusCode;
 
@@ -39,11 +42,14 @@ use reqwest::StatusCode;
  */
 
 pub async fn verify_cosmosdb(context: &RequestContext) -> Result<(), ServiceError> {
-    trace_function!("setup");
-    let use_cosmos_db = match &context.test_context {
-        Some(tc) => tc.use_cosmos_db,
+    trace_function!("verify_cosmosdb");
+    let use_cosmos_db = match &context.claims {
+        Some(claims) => {
+            claims.profile_storage == ProfileStorage::CosmosDb
+                || claims.profile_storage == ProfileStorage::CosmosDbTest
+        }
         None => {
-            return Err(ServiceError::new_unauthorized("Test Header must be set"));
+            return Err(ServiceError::new_unauthorized("Claims must be set"));
         }
     };
 
@@ -114,28 +120,26 @@ async fn internal_register_user(
     password: &str,
     profile_in: &UserProfile,
     roles: &mut Vec<Role>,
-    request_context: &RequestContext,
+    database: &Box<DatabaseWrapper>,
 ) -> Result<UserProfile, ServiceError> {
-    let email = match &profile_in.pii {
-        Some(pii) => pii.email.clone(),
-        None => return Err(ServiceError::new_bad_request("no email specified")),
-    };
+    let email = profile_in
+        .pii
+        .as_ref()
+        .map(|pii| pii.email.clone())
+        .ok_or_else(|| ServiceError::new_bad_request("no email specified"))?;
 
-    if request_context
-        .database
+    if database
         .as_user_db()
         .find_user_by_email(&email)
         .await
         .is_ok()
     // you can't register twice!
     {
-        return Err(ServiceError::new_conflict_error(
-            "User already exists",
-            ));
+        return Err(ServiceError::new_conflict_error("User already exists"));
     }
     // this lets us bootstrap the system -- my assumption is that if you can set the environment variable, then you are
     // an admin.  You can have a test context so that you can create the admin in the mock database.
-    if email == request_context.config.admin_email {
+    if email == SERVICE_CONFIG.admin_email {
         roles.push(Role::Admin);
     }
 
@@ -161,8 +165,7 @@ async fn internal_register_user(
     persist_user.user_profile.games_played = Some(0);
     persist_user.user_profile.games_won = Some(0);
     persist_user.roles = roles.clone();
-    request_context
-        .database
+    database
         .as_user_db()
         .update_or_create_user(&persist_user)
         .await?;
@@ -170,29 +173,26 @@ async fn internal_register_user(
     Ok(persist_user.user_profile)
 }
 
-/// Registers a new user by hashing the provided password and creating a `PersistUser` record in the database.
 ///
-/// # Arguments
-///
-/// * `profile_in` - UserProfile object
-/// * `data` - `ServiceEnvironmentContext` data.
-/// * `is_test` - test header set?
-/// & `pwd_header_val` - the Option<> for the HTTP header containing the passwrod
-///
-/// # Returns
-/// Body contains a ClientUser (an id + profile)
-/// Returns an ServiceResponse indicating the success or failure of the registration process.
-pub async fn register(
+/// this is the non-authenticated user.  Anybody can register, they just need to give us a password.  if they
+/// are being registered it is *not* a test and goes to cosmosdb -- because if it is a test we user register_test_user
+/// which must be authenticated and must be in the Admin role.
+pub async fn register_user(
     password: &str,
     profile_in: &UserProfile,
     request_context: &RequestContext,
 ) -> Result<UserProfile, ServiceError> {
-    if request_context.is_test() {
-        return Err(ServiceError::new_unauthorized(
-            "can't create a test user through this api.  use register-test-user"
-        ));
+    if !request_context.is_caller_in_role(Role::Admin) {
+        return Err(ServiceError::new_unauthorized(""));
     }
-    internal_register_user(password, profile_in, &mut vec![Role::User], request_context).await
+
+    internal_register_user(
+        password,
+        profile_in,
+        &mut vec![Role::User],
+        &request_context.database,
+    )
+    .await
 }
 
 pub async fn update_profile(
@@ -220,6 +220,7 @@ pub async fn update_profile(
 /// the big difference between register_user and register_test_user is that the latter is authenticated and only
 /// somebody in the admin group can add a test user.
 pub async fn register_test_user(
+    profile_storage: ProfileStorage,
     password: &str,
     profile_in: &UserProfile,
     request_context: &RequestContext,
@@ -228,6 +229,14 @@ pub async fn register_test_user(
         return Err(ServiceError::new_unauthorized(""));
     }
 
+    //
+    //  request context is going to say that the storage location is wherever the admin is...we might want it elsewhere
+
+    let database = Box::new(DatabaseWrapper::from_location(
+        profile_storage,
+        &SERVICE_CONFIG,
+    ));
+
     let mut profile = profile_in.clone();
     profile.display_name = format!("{}: [Test]", profile.display_name);
 
@@ -235,7 +244,7 @@ pub async fn register_test_user(
         password,
         &profile,
         &mut vec![Role::User, Role::TestUser],
-        request_context,
+        &database,
     )
     .await
 }
@@ -249,14 +258,18 @@ pub async fn register_test_user(
  * add the user to the ALL_USERS_MAP
  */
 pub async fn login(
-    username: &str,
-    password: &str,
+    login_data: &LoginHeaderData,
     request_context: &RequestContext,
 ) -> Result<String, ServiceError> {
-    let user = request_context
-        .database
+    //
+    //  because this call is non-authenticated, the database will always be cosmos db because the db choice is set
+    // in the claims, which are created in this function.
+    let database =
+        DatabaseWrapper::from_location(login_data.profile_location.clone(), &SERVICE_CONFIG);
+
+    let user = database
         .as_user_db()
-        .find_user_by_email(username)
+        .find_user_by_email(&login_data.user_name)
         .await?;
 
     let password_hash: String = match user.password_hash {
@@ -270,7 +283,7 @@ pub async fn login(
             ));
         }
     };
-    let result = verify(password, &password_hash);
+    let result = verify(&login_data.password, &password_hash);
     let is_password_match = match result {
         Ok(m) => m,
         Err(e) => {
@@ -286,10 +299,10 @@ pub async fn login(
     if is_password_match {
         let claims = Claims::new(
             &user.id,
-            username,
+            &login_data.user_name,
             24 * 60 * 60,
             &user.roles,
-            &request_context.test_context,
+            login_data.profile_location.clone(),
         );
         let token_result = request_context
             .security_context
@@ -384,12 +397,6 @@ pub async fn get_profile(
         return Err(ServiceError::new_unauthorized(""));
     }
 
-    let user_email = request_context
-        .claims
-        .as_ref()
-        .expect("auth_mw should have added this or rejected the call")
-        .sub
-        .clone();
 
     let user = match lookup_value.contains("@") {
         true => {
@@ -420,7 +427,9 @@ pub async fn delete(id: &str, request_context: &RequestContext) -> Result<(), Se
         .clone();
 
     if user_id != id && !request_context.is_caller_in_role(Role::Admin) {
-        return Err(ServiceError::new_unauthorized("only an admin can delete another user"));
+        return Err(ServiceError::new_unauthorized(
+            "only an admin can delete another user",
+        ));
     }
 
     let result = request_context.database.as_user_db().delete_user(id).await;
@@ -459,14 +468,8 @@ pub async fn validate_email(token: &str) -> Result<(), ServiceError> {
         None => return Err(ServiceError::new_unauthorized("")),
     };
 
-    //  we have to embed the TestContext in the claim because we come through a GET from a URL where
-    //  we can't add headers.
-    let request_context = RequestContext::new(
-        &Some(claims.clone()),
-        &claims.test_context,
-        &SERVICE_CONFIG,
-        &security_context,
-    );
+    let request_context =
+        RequestContext::new(Some(&claims), &None, &SERVICE_CONFIG, &security_context);
 
     let id = &claims.id; // Borrowing here.
     let mut user = request_context
@@ -486,23 +489,12 @@ pub async fn validate_email(token: &str) -> Result<(), ServiceError> {
 
 //
 //  url is in the form of host://api/v1/users/validate-email/<token>
-pub fn get_validation_url(
-    host: &str,
-    id: &str,
-    email: &str,
-    request_context: &RequestContext,
-) -> String {
-    let claims = Claims::new(
-        id,
-        email,
-        60 * 10,
-        &vec![Role::Validation],
-        &request_context.test_context,
-    ); // 10 minutes
+pub fn get_validation_url(host: &str, claims: &Claims, request_context: &RequestContext) -> String {
+    let validation_claims = claims.into_validation_claims();
     let token = request_context
         .security_context
         .validation_keys
-        .sign_claims(&claims)
+        .sign_claims(&validation_claims)
         .expect("Token creation should not fail");
 
     let encoded_token = form_urlencoded::byte_serialize(token.as_bytes()).collect::<String>();
@@ -523,7 +515,7 @@ pub fn send_validation_email(request_context: &RequestContext) -> Result<(), Ser
         .claims
         .clone()
         .expect("claims are set by auth middleware, or the call is rejected");
-    let url = get_validation_url(&host_name, &claims.id, &claims.sub, &request_context);
+    let url = get_validation_url(&host_name, &claims, &request_context);
     let msg = format!(
         "Thank you for registering with our Service.\n\n\
          Click on this link to validate your email: {}\n\n\
@@ -796,7 +788,9 @@ pub async fn update_local_user(
 
     // Check if the local user isn't "connected" to the connected caller and the caller isn't an admin
     if connection_id != id_in_claims && !request_context.is_caller_in_role(Role::Admin) {
-        return Err(ServiceError::new_unauthorized("only an admin can delete another user"));
+        return Err(ServiceError::new_unauthorized(
+            "only an admin can delete another user",
+        ));
     }
 
     // Update the profile
@@ -827,7 +821,10 @@ pub async fn delete_local_user(
         .await?;
 
     if local_user_profile.connected_user_id.is_none() {
-        return Err(ServiceError::new_not_found("invalid local user id", local_user_primary_key));
+        return Err(ServiceError::new_not_found(
+            "invalid local user id",
+            local_user_primary_key,
+        ));
     }
 
     let id_in_claims = request_context
@@ -840,7 +837,10 @@ pub async fn delete_local_user(
     let connected_id = match local_user_profile.connected_user_id {
         Some(id) => id,
         None => {
-            return Err(ServiceError::new_not_found("no connected id for input", local_user_primary_key));
+            return Err(ServiceError::new_not_found(
+                "no connected id for input",
+                local_user_primary_key,
+            ));
         }
     };
 
@@ -894,7 +894,7 @@ mod tests {
 
     use crate::{
         create_test_service, full_info, init_env_logger,
-        middleware::request_context_mw::TestContext,
+        middleware::request_context_mw::TestCallContext,
         test::{test_helpers::test::*, test_proxy::TestProxy},
     };
 
@@ -912,7 +912,7 @@ mod tests {
         init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
         let app = create_test_service!();
         let code = 569342;
-        let mut proxy = TestProxy::new(&app, Some(TestContext::new(false, Some(code), None)));
+        let mut proxy = TestProxy::new(&app);
 
         let auth_token = TestHelpers::delete_all_test_users(&mut proxy).await;
         let users = TestHelpers::register_test_users(&mut proxy, Some(auth_token)).await;
@@ -930,10 +930,9 @@ mod tests {
         full_info!("logging in as test user");
         // login as the test user that is going to create the local user and set the auth token in the proxy
         let first_user = users.first().unwrap().clone();
-        let test_token = proxy
-            .login(&first_user.get_email_or_panic(), "password")
-            .await
-            .expect("success");
+        let login_data =
+            LoginHeaderData::test_default(&first_user.get_email_or_panic(), "password");
+        let test_token = proxy.login(&login_data).await.expect("success");
 
         proxy.set_auth_token(Some(test_token));
 
@@ -999,32 +998,48 @@ mod tests {
     }
 
     async fn test_login(use_cosmos: bool) {
+        let profile_location = if use_cosmos {
+            ProfileStorage::CosmosDbTest
+        } else {
+            ProfileStorage::MockDb
+        };
         let token = TestHelpers::admin_login().await;
         let profile = UserProfile::new_test_user(None);
-        let request_context = RequestContext::admin_default(use_cosmos, &profile);
-        let user_profile = register_test_user("password", &profile, &request_context)
-            .await
-            .expect("success");
+        let request_context = RequestContext::admin_default(&profile);
+        let user_profile = register_test_user(
+            profile_location.clone(),
+            "password",
+            &profile,
+            &request_context,
+        )
+        .await
+        .expect("success");
 
-        request_context
-            .database
+        let database = DatabaseWrapper::from_location(profile_location.clone(), &SERVICE_CONFIG);
+            database
             .as_user_db()
             .find_user_by_email(&user_profile.pii.unwrap().email)
             .await
             .expect("we just put this here!");
 
+        let login_header = LoginHeaderData::new(
+            &profile.get_email_or_panic(),
+            "password",
+            profile_location.clone(),
+        );
+
         // Test login with correct credentials
-        let response = login(&profile.get_email_or_panic(), "password", &request_context)
+        let response = login(&login_header, &request_context)
             .await
             .expect("login should succeed");
 
         // Test login with incorrect credentials
-        let response = login(
+        let login_header = LoginHeaderData::new(
             &profile.get_email_or_panic(),
-            "wrong_password",
-            &request_context,
-        )
-        .await;
+            "bad_password",
+            profile_location.clone(),
+        );
+        let response = login(&login_header, &request_context).await;
         match response {
             Ok(_) => panic!("this should be an error!"),
             Err(e) => {
@@ -1047,7 +1062,7 @@ mod tests {
             "user_email@email.com",
             10 * 60,
             &vec![Role::Validation],
-            &None,
+            ProfileStorage::CosmosDb,
         );
         let request_context = RequestContext::test_default(false);
         let token = request_context

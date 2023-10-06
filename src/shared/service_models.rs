@@ -9,11 +9,10 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, RwLock};
 
 use crate::{
-    games_service::game_container::game_messages::CatanMessage,
-    middleware::request_context_mw::TestContext, shared::shared_models::UserType,
+    games_service::game_container::game_messages::CatanMessage, shared::shared_models::UserType,
 };
 
-use super::shared_models::UserProfile;
+use super::shared_models::{UserProfile, ProfileStorage};
 use uuid::Uuid;
 
 /**
@@ -125,6 +124,7 @@ pub enum Role {
     Validation,
 }
 
+
 // DO NOT ADD A #[serde(rename_all = "PascalCase")] macro to this struct!
 // it will throw an error and you'll spend hours figuring out why it doesn't work - the rust bcrypt library cares about
 // capitalization and enforces standard claim names
@@ -134,7 +134,8 @@ pub struct Claims {
     pub sub: String,
     pub exp: usize,
     pub roles: Vec<Role>,
-    pub test_context: Option<TestContext>,
+    pub profile_storage: ProfileStorage, // where do I look to find the profile? 
+
 }
 
 impl Claims {
@@ -142,8 +143,8 @@ impl Claims {
         id: &str,
         email: &str,
         duration_secs: u64,
-        roles: &Vec<Role>,
-        test_context: &Option<TestContext>,
+        roles: &[Role],
+        profile_storage: ProfileStorage
     ) -> Self {
         let exp = ((SystemTime::now() + Duration::from_secs(duration_secs))
             .duration_since(UNIX_EPOCH)
@@ -153,8 +154,43 @@ impl Claims {
             id: id.to_owned(),
             sub: email.to_owned(),
             exp,
-            roles: roles.clone(),
-            test_context: test_context.clone(),
+            roles: roles.to_vec(),
+            profile_storage: profile_storage
+        }
+    }
+
+    pub fn into_validation_claims(&self) -> Self {
+        let mut claims = self.clone();
+        claims.roles = vec![Role::Validation];
+        claims.exp =   ((SystemTime::now() + Duration::from_secs(10*60))
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs()) as usize;
+        claims
+    }
+}
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Clone)]
+pub struct LoginHeaderData {
+   pub profile_location: ProfileStorage,
+   pub user_name: String, 
+   pub password: String
+}
+
+impl LoginHeaderData {
+    pub fn new ( user_name: &str, password: &str, profile_location: ProfileStorage) -> Self{
+        Self {
+
+            user_name: user_name.to_owned(),
+            password: password.to_owned(),
+            profile_location
+        }
+    }
+
+    pub fn test_default(user_name: &str, password: &str) -> Self{
+        Self {
+            profile_location: ProfileStorage::CosmosDbTest,
+            user_name: user_name.to_owned(),
+            password: password.to_owned()
         }
     }
 }
@@ -221,7 +257,7 @@ impl PersistGame {
         redo_len: usize,
         compressed_size: usize,
         decompressed_size: usize,
-        game: &Vec<u8>,
+        game: &[u8],
     ) -> Self {
         Self {
             id: game_id.to_string(),
@@ -231,7 +267,7 @@ impl PersistGame {
             compressed_size,
             decompressed_size,
             partition_key: 1,
-            game_state: game.clone(),
+            game_state: game.to_vec(),
         }
     }
 }

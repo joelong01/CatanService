@@ -29,7 +29,7 @@ pub async fn register_handler(
     headers: HeadersExtractor,
 ) -> impl Responder {
     let password = get_header_value!(password, headers);
-    api_call!(super::users::register(&password, &profile_in, &request_context).await)
+    api_call!(super::users::register_user(&password, &profile_in, &request_context).await)
 }
 
 pub async fn register_test_user_handler(
@@ -38,7 +38,8 @@ pub async fn register_test_user_handler(
     headers: HeadersExtractor,
 ) -> impl Responder {
     let password = get_header_value!(password, headers);
-    api_call!(super::users::register_test_user(&password, &profile_in, &request_context).await)
+    let storage_location = get_header_value!(profile_storage, headers);
+    api_call!(super::users::register_test_user(storage_location, &password, &profile_in, &request_context).await)
 }
 
 // User login
@@ -46,9 +47,8 @@ pub async fn login_handler(
     request_context: RequestContext,
     headers: HeadersExtractor,
 ) -> HttpResponse {
-    let password = get_header_value!(password, headers);
-    let username = get_header_value!(email, headers);
-    api_call!(super::users::login(&username, &password, &request_context).await)
+    let login_data = get_header_value!(login_data, headers);
+    api_call!(super::users::login(&login_data, &request_context).await)
 }
 
 // List users

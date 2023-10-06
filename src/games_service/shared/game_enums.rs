@@ -4,7 +4,7 @@ use crate::shared::shared_models::UserProfile;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::{fmt, str::FromStr};
-use strum_macros::EnumIter;
+use strum_macros::{EnumIter, Display};
 /**
  *  Information about a game - expect this to grow as we write code
  */
@@ -15,11 +15,11 @@ pub struct GameData {
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SupportedGames {
-    pub catan_games: Vec<CatanGames>,
+    pub catan_games: Vec<CatanGameType>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy, Eq)]
-pub enum CatanGames {
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy, Eq, Display)]
+pub enum CatanGameType {
     Regular,
     Expansion,
     Seafarers,

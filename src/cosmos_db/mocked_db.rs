@@ -16,6 +16,7 @@ lazy_static::lazy_static! {
     static ref MOCKED_DB: Arc<TestDb> = Arc::new(TestDb::new());
 }
 
+#[derive(Clone)]
 pub struct TestDb {
     pub users: Arc<RwLock<HashMap<String, PersistUser>>>,
     pub games: Arc<RwLock<HashMap<String, PersistGame>>>,

@@ -8,7 +8,7 @@ use crate::games_service::catan_games::traits::game_state_machine_trait::{
 use crate::games_service::harbors::harbor_enums::HarborType;
 use crate::games_service::player::calculated_state::{CalculatedState, ResourceCount};
 use crate::games_service::shared::game_enums::{
-    CatanGames, Direction, GameAction, GamePhase, GameState, GameType,
+    CatanGameType, Direction, GameAction, GamePhase, GameState, GameType,
 };
 use crate::games_service::{
     buildings::{building::Building, building_enums::BuildingPosition, building_key::BuildingKey},
@@ -58,7 +58,7 @@ pub struct RegularGame {
     pub can_undo: bool,
     pub shuffle_count: u32,
     pub game_index: u32,
-    pub game_type: CatanGames,
+    pub game_type: CatanGameType,
 }
 
 impl RegularGame {
@@ -119,7 +119,7 @@ impl RegularGame {
             can_undo: true,
             shuffle_count: 1,
             game_index: 1,
-            game_type: CatanGames::Regular,
+            game_type: CatanGameType::Regular,
         }
     }
 

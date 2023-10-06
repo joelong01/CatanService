@@ -9,7 +9,7 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::{fmt, fmt::Display, fmt::Formatter};
 use strum_macros::Display;
-use crate::shared::shared_models::ResponseType::AzError;
+use crate::{shared::shared_models::ResponseType::AzError, games_service::shared::game_enums::CatanGameType};
 //
 //  this also supports Eq, PartialEq, Clone, Serialize, and Deserialize via custom implementation
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Clone)]
@@ -29,6 +29,7 @@ pub enum GameError {
     JsonError(String),
     AzureCoreError(String),
     ContainerError(String),
+    UnsupportedGame(String)
 }
 
 // we need a From<> for each error type we add to use the error propagation ?
@@ -78,6 +79,7 @@ impl fmt::Display for GameError {
             GameError::JsonError(e) => write!(f, "Serde Error: {:#?}", e),
             GameError::AzureCoreError(e) => write!(f, "Azure Core error: {:#?}", e),
             GameError::ContainerError(e) => write!(f, "GameContainer Error: {:#?}", e),
+             GameError::UnsupportedGame(e) => write!(f, "Game Not Supported: {:#?}", e),
         }
     }
 }
@@ -426,6 +428,14 @@ impl ServiceError {
             game_error: GameError::AzureCoreError(format!("{:#?}", error)),
         }
     }
+    pub fn new_unsupported_game(game_type: CatanGameType) -> Self {
+        ServiceError::new(
+            &format!("Game not supported: {:#?}", game_type),
+            StatusCode::BAD_REQUEST,
+            ResponseType::NoData,
+            GameError::UnsupportedGame(serde_json::to_string(&game_type).unwrap()),
+        )
+    }
 
     pub fn to_http_response(&self) -> HttpResponse {
         let serialized = serde_json::to_string(&self).expect("Failed to serialize Response Type");
@@ -457,4 +467,13 @@ where
 {
     let code = u16::deserialize(deserializer)?;
     Ok(StatusCode::from_u16(code).map_err(serde::de::Error::custom)?)
+}
+///
+/// Client can pick where they want the profile to be stored in register User
+/// and must set where the profile is in login
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Clone, Display)]
+pub enum ProfileStorage {
+    CosmosDb,
+    CosmosDbTest,
+    MockDb
 }

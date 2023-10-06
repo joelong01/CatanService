@@ -2,10 +2,9 @@
 #![allow(unused_variables)]
 use super::cosmosdb::CosmosDb;
 use super::mocked_db::TestDb;
-use crate::middleware::request_context_mw::TestContext;
 use crate::middleware::service_config::ServiceConfig;
-use crate::shared::service_models::{PersistGame, PersistUser};
-use crate::shared::shared_models::ServiceError;
+use crate::shared::service_models::{Claims, PersistGame, PersistUser};
+use crate::shared::shared_models::{ProfileStorage, ServiceError};
 use async_trait::async_trait;
 
 /**
@@ -75,6 +74,8 @@ pub trait UserDbTrait: Send + Sync {
             .collect()
     }
 }
+
+#[derive(Clone)]
 pub enum Database {
     Cosmos(CosmosDb),
     Test(TestDb),
@@ -170,14 +171,18 @@ impl GameDbTrait for Database {
     }
 }
 
+#[derive(Clone)]
 pub struct DatabaseWrapper {
     db: Box<Database>,
 }
 
 impl DatabaseWrapper {
-    pub fn new_cosmos(is_test: bool, service_config: &'static ServiceConfig) -> Self {
+    pub fn new_cosmos(use_test_collection: bool, service_config: &'static ServiceConfig) -> Self {
         DatabaseWrapper {
-            db: Box::new(Database::Cosmos(CosmosDb::new(is_test, service_config))),
+            db: Box::new(Database::Cosmos(CosmosDb::new(
+                use_test_collection,
+                service_config,
+            ))),
         }
     }
 
@@ -187,17 +192,41 @@ impl DatabaseWrapper {
         }
     }
 
-    pub fn new(test_context: &Option<TestContext>, service_config: &'static ServiceConfig) -> Self {
-        match test_context {
-            Some(context) => {
-                if context.use_cosmos_db {
-                    DatabaseWrapper::new_cosmos(true, service_config)
-                } else {
-                    DatabaseWrapper::new_test()
-                }
-            }
-            None => DatabaseWrapper::new_cosmos(false, service_config),
+    pub fn from_location(location: ProfileStorage, service_config: &'static ServiceConfig) -> Self {
+        match location {
+            ProfileStorage::CosmosDb => {
+                DatabaseWrapper::new_cosmos(
+                                false,
+                                service_config,
+                            )
+            },
+            ProfileStorage::CosmosDbTest => {
+                DatabaseWrapper::new_cosmos(
+                    true,
+                    service_config,
+                )
+            },
+            ProfileStorage::MockDb => DatabaseWrapper::new_test()
         }
+    }
+
+    /// Creates a new `DatabaseWrapper` based on the provided claims and service configuration.
+    ///
+    /// # Parameters
+    ///
+    /// - `claims`: An optional reference to `Claims` that may determine the type and configuration of the database.
+    /// - `service_config`: A static reference to the service configuration.
+    ///
+    /// # Returns
+    ///
+    /// - A `DatabaseWrapper` instance based on the given parameters
+    pub fn new(claims: Option<&Claims>, service_config: &'static ServiceConfig) -> Self {
+        if let Some(claims) = claims {
+           return DatabaseWrapper::from_location(claims.profile_storage.clone(), service_config);
+        }
+        //
+        //  if no claims, default to storing in production cosmos
+        DatabaseWrapper::new_cosmos(false, service_config)
     }
 
     pub fn as_user_db(&self) -> &dyn UserDbTrait {

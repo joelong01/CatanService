@@ -16,9 +16,9 @@ use crate::{
     games_service::{
         catan_games::games::regular::regular_game::RegularGame,
         game_container::game_messages::{GameHeader, Invitation, InvitationResponseData, CatanMessage},
-        shared::game_enums::{CatanGames, GameAction},
+        shared::game_enums::{CatanGameType, GameAction},
     },
-    middleware::request_context_mw::TestContext,
+    middleware::request_context_mw::TestCallContext,
     shared::shared_models::GameError,
 };
 
@@ -27,7 +27,7 @@ use super::shared_models::{ResponseType, ServiceError, UserProfile};
 /// Proxy to the service to make it easier to write tests (or call the service for other reasons)
 /// works against the running service -- *not* "test::call_service"
 pub struct ServiceProxy {
-    test_context: Option<TestContext>,
+    test_context: Option<TestCallContext>,
     service: Client,
     auth_token: Option<String>,
 }
@@ -35,12 +35,12 @@ pub struct ServiceProxy {
 impl ServiceProxy {
     /// Creates a new Proxy with the specified host
     pub async fn new(
-       service: Client, test_context: Option<TestContext>
+       service: Client, test_context: Option<TestCallContext>
     ) -> Result<Self, ServiceError> {
         todo!()
     }
 
-    pub fn new_non_auth(test_context: Option<TestContext>, host: &str) -> Self {
+    pub fn new_non_auth(test_context: Option<TestCallContext>, host: &str) -> Self {
         todo!()
     }
     pub async fn send_request<B, T>(
@@ -166,7 +166,7 @@ impl ServiceProxy {
 
     pub async fn new_game(
         &self,
-        game_type: CatanGames,
+        game_type: CatanGameType,
         game: Option<&RegularGame>,
     ) -> Result<RegularGame, ServiceError> {
         let url = format!("/auth/api/v1/games/{:?}", game_type);

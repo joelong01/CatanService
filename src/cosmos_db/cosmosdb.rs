@@ -29,6 +29,8 @@ use crate::cosmos_db::database_abstractions::{
  *  this is a convinient way to pass around meta data about CosmosDb.  UserDb will also expose methods for calling
  *  cosmos (see below)
  */
+
+#[derive(Clone)]
 pub struct CosmosDb {
     client: Option<CosmosClient>,
     database: Option<DatabaseClient>,
@@ -37,10 +39,10 @@ pub struct CosmosDb {
 }
 
 impl CosmosDb {
-    pub fn new(is_test: bool, service_config: &'static ServiceConfig) -> Self {
+    pub fn new(use_test_collection: bool, service_config: &'static ServiceConfig) -> Self {
         let client = public_client(&service_config.cosmos_account, &service_config.cosmos_token);
         let database_name;
-        if is_test {
+        if use_test_collection {
             database_name = service_config.cosmos_database_name.clone() + "-test";
         } else {
             database_name = service_config.cosmos_database_name.clone();
@@ -58,7 +60,7 @@ impl CosmosDb {
         let mut collection_clients: HashMap<CosmosDocType, CollectionClient> = HashMap::new();
         for item in &COLLECTION_NAME_VALUES {
             let collection_name: String;
-            if is_test {
+            if use_test_collection {
                 collection_name = format!("{}-test", item.value);
             } else {
                 collection_name = item.value.to_owned();

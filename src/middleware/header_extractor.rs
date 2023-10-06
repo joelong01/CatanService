@@ -1,15 +1,23 @@
 use actix_web::{dev::Payload, error::Error, FromRequest, HttpRequest, Result};
 use futures::future::{ok, Ready};
+use serde::Serialize;
 
-use crate::games_service::game_container::game_messages::GameHeader;
+use crate::{
+    full_info,
+    games_service::game_container::game_messages::GameHeader,
+    shared::{service_models::LoginHeaderData, shared_models::ProfileStorage},
+};
+
+use super::request_context_mw::TestCallContext;
 
 // Custom extractor for multiple headers
+#[derive(Serialize)]
 pub struct HeadersExtractor {
     pub game_id: Option<String>,
-    pub user_id: Option<String>,
-    pub password: Option<String>,
-    pub is_test: bool,
-    pub email: Option<String>,
+    pub login_data: Option<LoginHeaderData>,
+    pub password: Option<String>, // needed for register_user
+    pub profile_storage: Option<ProfileStorage>,
+    pub test_call_context: Option<TestCallContext>,
 }
 
 impl FromRequest for HeadersExtractor {
@@ -22,25 +30,40 @@ impl FromRequest for HeadersExtractor {
         let game_id = headers
             .get(GameHeader::GAME_ID)
             .and_then(|v| v.to_str().ok().map(String::from));
-        let user_id = headers
-            .get(GameHeader::USER_ID)
-            .and_then(|v| v.to_str().ok().map(String::from));
+
         let password = headers
             .get(GameHeader::PASSWORD)
             .and_then(|v| v.to_str().ok().map(String::from));
-        let is_test = headers.contains_key(GameHeader::TEST);
-        let email = headers
-            .get(GameHeader::EMAIL)
-            .and_then(|v| v.to_str().ok().map(String::from));
+
+        let login_data = headers
+            .get(GameHeader::LOGIN_DATA)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| serde_json::from_str::<LoginHeaderData>(s).ok());
+
+        let test_call_context = headers
+            .get(GameHeader::TEST)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| serde_json::from_str::<TestCallContext>(s).ok());
+
+        let profile_storage = headers
+            .get(GameHeader::PROFILE_LOCATION)
+            .and_then(|v| v.to_str().ok()) // Converts HeaderValue to Option<&str>
+            .and_then(|s| serde_json::from_str::<ProfileStorage>(s).ok()) // Converts &str to Option<ProfileStorage>
+            .unwrap_or(ProfileStorage::CosmosDb); // If None at any step, use default
 
         // Return the extracted values
-        ok(HeadersExtractor {
+        let header_extractor = HeadersExtractor {
             game_id,
-            user_id,
+            test_call_context,
+            login_data,
             password,
-            is_test,
-            email,
-        })
+            profile_storage: Some(profile_storage),
+        };
+        //
+        //  be careful logging this information as it has clear text passwords...
+        // let json = serde_json::to_string(&header_extractor).unwrap_or_else(|_| "error serializing headers?".to_string());
+        // full_info!("headers: {}", json);
+        ok(header_extractor)
     }
 }
 
@@ -50,7 +73,7 @@ impl FromRequest for HeadersExtractor {
 #[macro_export]
 macro_rules! get_header_value {
     ($header:ident, $headers:expr) => {{
-        use crate::shared::shared_models::{ServiceError};
+        use crate::shared::shared_models::ServiceError;
 
         match $headers.$header {
             Some(v) => v,

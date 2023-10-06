@@ -64,10 +64,10 @@ macro_rules! serialize_as_array {
 #[macro_export]
 macro_rules! setup_test {
     ($app:expr, $use_cosmos_db:expr) => {{
-        use crate::middleware::request_context_mw::TestContext;
+        use crate::middleware::request_context_mw::TestCallContext;
         use actix_web::http::header;
         use actix_web::test;
-        let test_context = TestContext::new($use_cosmos_db, None, None);
+        let test_context = TestCallContext::new(None, None);
         let request = test::TestRequest::post()
             .uri("/api/v1/test/verify-service")
             .append_header((header::CONTENT_TYPE, "application/json"))

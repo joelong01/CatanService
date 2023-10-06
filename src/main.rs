@@ -282,7 +282,7 @@ fn lobby_service() -> Scope {
         .route("/invite", web::post().to(lobby_handlers::post_invite))
         .route(
             "/acceptinvite",
-            web::post().to(lobby_handlers::respond_to_invite),
+            web::post().to(lobby_handlers::respond_to_invite_handler),
         )
         .route(
             "/add-local-user/{local_user_id}",
@@ -403,9 +403,9 @@ mod tests {
         create_service, create_test_service,
         games_service::game_container::game_messages::GameHeader,
         init_env_logger,
-        middleware::{request_context_mw::TestContext, service_config::SERVICE_CONFIG},
+        middleware::service_config::SERVICE_CONFIG,
         setup_cosmos, setup_test,
-        test::{test_proxy::TestProxy, test_helpers::test::TestHelpers},
+        test::{test_helpers::test::TestHelpers, test_proxy::TestProxy},
     };
 
     use actix_web::test;
@@ -432,17 +432,13 @@ mod tests {
 
         let app = create_test_service!();
         setup_test!(&app, false);
-        let use_cosmos = true;
-        let mut proxy = TestProxy::new(&app, Some(TestContext::new(use_cosmos, None, None)));
+
+        let mut proxy = TestProxy::new(&app);
 
         let test_users = TestHelpers::register_test_users(&mut proxy, None).await;
-        let auth_token = proxy
-            .login(
-                &test_users[0].clone().pii.expect("pii should exist").email,
-                "password",
-            )
-            .await
-            .expect("success");
+      
+        let auth_token = proxy.test_login(&test_users[0].clone().pii.expect("pii should exist").email,
+            "password",).await.expect("success");
 
         proxy.set_auth_token(Some(auth_token));
         let profile = proxy.get_profile("Self").await.expect("success");
@@ -478,7 +474,7 @@ mod tests {
         init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
         let app = create_test_service!();
         let code = 569342;
-        let mut proxy = TestProxy::new(&app, Some(TestContext::new(true, Some(code), None)));
+        let mut proxy = TestProxy::new(&app);
         let admin_auth_token = TestHelpers::delete_all_test_users(&mut proxy).await;
         let users = TestHelpers::register_test_users(&mut proxy, Some(admin_auth_token)).await;
 
@@ -486,10 +482,8 @@ mod tests {
         assert!(profile.pii.is_some());
         assert!(profile.user_id.is_some());
 
-        // login as the first test user
-
-        let auth_token = proxy
-            .login(&profile.pii.as_ref().unwrap().email, "password")
+         let auth_token = proxy
+            .test_login(&profile.pii.as_ref().unwrap().email, "password")
             .await
             .expect("login should work and it should return the token");
 
@@ -502,11 +496,11 @@ mod tests {
         // update the profile
         proxy.update_profile(&profile).await.expect("success");
 
-        //
+
         // we've change the email, which is encoded in the token and used as truth by the service -
         // so login again and get a new token
         let auth_token = proxy
-            .login(&profile.pii.as_ref().unwrap().email, "password")
+            .test_login(&profile.pii.as_ref().unwrap().email, "password")
             .await
             .expect("login should work and it should return the token");
         assert!(auth_token.len() > 0);
@@ -524,7 +518,7 @@ mod tests {
 
         // send the phone code.  somebody is going to get a text...
         // the actual code is defined above and set in the test context, so that we can verify it
-        proxy.send_phone_code().await.expect("success");
+        proxy.send_phone_code(Some(code)).await.expect("success");
 
         //
         //  validate with the phone
@@ -559,6 +553,4 @@ mod tests {
         init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Trace).await;
         setup_cosmos().expect("can't continue if setup fails!");
     }
-
-    
 }

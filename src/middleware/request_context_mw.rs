@@ -5,7 +5,7 @@ use crate::games_service::catan_games::games::regular::regular_game::RegularGame
 use crate::games_service::game_container::game_messages::GameHeader;
 use crate::middleware::service_config::{ServiceConfig, SERVICE_CONFIG};
 use crate::shared::service_models::{Claims, Role};
-use crate::shared::shared_models::UserProfile;
+use crate::shared::shared_models::{ProfileStorage, UserProfile};
 /**
  *  this file contains the middleware that injects ServiceContext into the Request.  The data in RequestContext is the
  *  configuration data necessary for the Service to run -- the secrets loaded from the environment, hard coded strings,
@@ -22,137 +22,151 @@ use std::task::{Context, Poll};
 
 use super::security_context::SecurityContext;
 
+///
+/// TestCallContext
+/// This struct contains information that is used by tests that apply only to the particular call
+/// In order to use this the claims must have is_call_in_role("Test")
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 #[serde(rename_all = "PascalCase")]
-pub struct TestContext {
-    pub use_cosmos_db: bool,
+pub struct TestCallContext {
     pub phone_code: Option<i32>, // send the code to verify phone number so we can test from the client
     pub game: Option<RegularGame>, // send a game from the client so we can test the apis, but know what we get back
 }
 
-impl TestContext {
-    pub fn new(use_cosmos_db: bool, phone_code: Option<i32>, game: Option<RegularGame>) -> Self {
+impl TestCallContext {
+    pub fn new(phone_code: Option<i32>, game: Option<RegularGame>) -> Self {
         Self {
-            use_cosmos_db,
             phone_code: phone_code,
             game: game,
         }
     }
-    pub fn as_json(use_cosmos: bool) -> String {
-        let tc = TestContext::new(use_cosmos, None, None);
-        serde_json::to_string(&tc).unwrap()
-    }
+
     pub fn set_phone_code(&mut self, code: Option<i32>) {
         self.phone_code = code.clone();
     }
-    pub fn set_galme(&mut self, game: Option<RegularGame>) {
+    pub fn set_game(&mut self, game: Option<RegularGame>) {
         self.game = game;
     }
 }
 
+#[derive(Clone)]
 pub struct RequestContext {
     pub config: ServiceConfig,
-    pub test_context: Option<TestContext>,
+    pub test_context: Option<TestCallContext>,
     pub database: Box<DatabaseWrapper>,
     pub claims: Option<Claims>,
     pub security_context: SecurityContext,
 }
 
-impl Clone for RequestContext {
-    fn clone(&self) -> Self {
-        log::trace!("Cloning Request Context");
-        RequestContext::new(
-            &self.claims,
-            &self.test_context,
-            &SERVICE_CONFIG,
-            &self.security_context,
-        )
-    }
-}
-
 impl RequestContext {
     pub fn new(
-        claims: &Option<Claims>,
-        test_context: &Option<TestContext>,
+        claims: Option<&Claims>,
+        test_call_context: &Option<TestCallContext>,
         service_config: &'static ServiceConfig,
         security_context: &SecurityContext,
     ) -> Self {
-        let database_wrapper = DatabaseWrapper::new(test_context, service_config);
+        let database_wrapper = DatabaseWrapper::new(claims, service_config);
 
         RequestContext {
             config: service_config.clone(), // Clone the read-only environment data
-            test_context: test_context.clone(),
-
+            test_context: test_call_context.clone(),
             database: Box::new(database_wrapper),
-            claims: claims.clone(),
+            claims: claims.cloned(),
             security_context: security_context.clone(),
         }
     }
-
-    pub fn admin_default(use_cosmos: bool, profile: &UserProfile) -> Self {
-        let test_context = TestContext::new(use_cosmos, None, None);
+    pub fn admin_default(profile: &UserProfile) -> Self {
+        let test_context = TestCallContext::new(None, None);
         let claims = Claims::new(
-            &profile.user_id.as_ref().unwrap(),
+            &profile
+                .user_id
+                .as_ref()
+                .map_or(String::default(), String::clone),
             &profile.pii.as_ref().unwrap().email,
             30,
             &vec![Role::TestUser, Role::Admin],
-            &Some(test_context.clone()),
+            ProfileStorage::CosmosDb,
         );
-        let database_wrapper = DatabaseWrapper::new(&Some(test_context.clone()), &SERVICE_CONFIG);
+        let database_wrapper = DatabaseWrapper::new(Some(&claims), &SERVICE_CONFIG);
 
         let security_context = SecurityContext::cached_secrets().clone();
         Self {
             config: SERVICE_CONFIG.clone(), // Clone the read-only environment data
-            test_context: Some(test_context.clone()),
-
+            test_context: Some(test_context),
             database: Box::new(database_wrapper),
-            claims: Some(claims.clone()),
+            claims: Some(claims),
             security_context: security_context,
         }
     }
 
     pub fn set_claims(&mut self, claims: &Claims) {
         self.claims = Some(claims.clone());
+        self.database = Box::new(DatabaseWrapper::from_location(claims.profile_storage.clone(), &SERVICE_CONFIG));
     }
     pub fn test_default(use_cosmos: bool) -> Self {
+        let profile_location = if use_cosmos {
+            ProfileStorage::CosmosDbTest
+        } else {
+            ProfileStorage::MockDb
+        };
         RequestContext::new(
-            &None,
-            &Some(TestContext::new(use_cosmos, None, None)),
+            Some(&Claims::new(
+                "",
+                "",
+                60000,
+                &vec![Role::TestUser],
+                profile_location,
+            )),
+            &Some(TestCallContext::new(None, None)),
             &SERVICE_CONFIG,
             &SecurityContext::cached_secrets(),
         )
     }
 
     pub fn is_test(&self) -> bool {
-        self.test_context.is_some()
+        self.claims
+            .as_ref()
+            .map_or(false, |claims| claims.roles.contains(&Role::TestUser))
     }
 
     pub fn use_mock_db(&self) -> bool {
-        match self.test_context.clone() {
-            Some(ctx) => !ctx.use_cosmos_db,
-            None => false,
-        }
+        !self.use_cosmos_db()
     }
 
     pub fn use_cosmos_db(&self) -> bool {
-        match self.test_context.clone() {
-            Some(b) => b.use_cosmos_db,
-            None => true,
-        }
+        self.claims.as_ref().map_or(true, |claims| {
+            claims.profile_storage == ProfileStorage::CosmosDb
+        })
     }
 
+    /// Returns the name of the database based on the current context.
+    ///
+    /// if the profile location is supposed to be the the CosmosDbTest, add -test to the end of the name
+    ///
+    /// # Returns
+    ///
+    /// - A `String` representing the name of the database to be used.
     pub fn database_name(&self) -> String {
-        match self.test_context.clone() {
-            Some(_) => format!("{}-test", self.config.cosmos_database_name),
-            None => self.config.cosmos_database_name.clone(),
+        if self
+            .claims
+            .as_ref()
+            .map_or(false, |c| c.profile_storage == ProfileStorage::CosmosDbTest)
+        {
+            format!("{}-test", self.config.cosmos_database_name)
+        } else {
+            self.config.cosmos_database_name.clone()
         }
     }
-
+    /// Determines if the caller is in the specified role by looking in the claims
+    ///
+    ///
+    /// # Returns
+    ///
+    /// - A `bool` to indicate if the user is in the role
     pub fn is_caller_in_role(&self, role: Role) -> bool {
-        match self.claims.clone() {
-            Some(c) => c.roles.contains(&role),
-            None => false,
-        }
+        self.claims
+            .as_ref()
+            .map_or(false, |c| c.roles.contains(&role))
     }
 }
 impl FromRequest for RequestContext {
@@ -168,7 +182,7 @@ impl FromRequest for RequestContext {
             ok(RequestContext {
                 config: SERVICE_CONFIG.clone(), // Clone the environment variables
                 test_context: None,
-                database: Box::new(DatabaseWrapper::new(&None, &SERVICE_CONFIG)),
+                database: Box::new(DatabaseWrapper::new(None, &SERVICE_CONFIG)),
                 claims: None,
                 security_context: SecurityContext::cached_secrets(),
             })
@@ -220,12 +234,12 @@ where
             test_header
                 .to_str()
                 .ok()
-                .and_then(|value| serde_json::from_str::<TestContext>(value).ok())
+                .and_then(|value| serde_json::from_str::<TestCallContext>(value).ok())
         });
 
         // Create RequestContext  - RequestContext runs *before* auth_mw, so claims are always None here
         let request_context = RequestContext::new(
-            &None,
+            None,
             &test_context,
             &SERVICE_CONFIG,
             &SecurityContext::cached_secrets(),

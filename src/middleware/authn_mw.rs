@@ -114,6 +114,7 @@ where
                 let claims = claims.unwrap();
 
                 request_context.set_claims(&claims);
+                
                 req.extensions_mut().insert(request_context);
             }
             None => {

@@ -5,12 +5,13 @@ pub mod test {
     use actix_web::test;
     use tracing::info;
 
-    use crate::middleware::request_context_mw::{RequestContext, TestContext};
-    use crate::middleware::security_context::SecurityContext;
-    use crate::middleware::service_config::SERVICE_CONFIG;
-    use crate::shared::shared_models::{GameError, ResponseType, ServiceError, UserProfile};
+    use crate::middleware::request_context_mw::RequestContext;
+    use crate::shared::service_models::LoginHeaderData;
+    use crate::shared::shared_models::{
+        GameError, ProfileStorage, ResponseType, ServiceError, UserProfile,
+    };
     use crate::test::test_proxy::TestProxy;
-    use crate::user_service::users::{login, register};
+    use crate::user_service::users::{login, register_user};
     use crate::{create_service, create_test_service, full_info, init_env_logger};
     use actix_http::Request;
     use actix_service::Service;
@@ -26,16 +27,9 @@ pub mod test {
     async fn test_new_proxy() {
         crate::init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
         let test_service = test::init_service(create_service!()).await;
-        let mut test_proxy = TestProxy::new(&test_service, None);
+        let mut test_proxy = TestProxy::new(&test_service);
 
-        let admin_profile = TestHelpers::load_admin_profile_from_config();
-        let admin_pwd = env::var("ADMIN_PASSWORD")
-            .expect("ADMIN_PASSWORD not found in environment - unable to continue");
-
-        let admin_auth_token = test_proxy
-            .login(&admin_profile.get_email_or_panic(), &admin_pwd)
-            .await
-            .expect("login should work");
+        let admin_auth_token = TestHelpers::admin_login().await;
 
         assert!(admin_auth_token.len() > 0);
 
@@ -47,32 +41,28 @@ pub mod test {
             .expect("this should be a client_user");
 
         assert!(client_user_profile.user_id.unwrap().len() > 0);
-        assert_eq!(
-            client_user_profile.pii.unwrap().email,
-            admin_profile.get_email_or_panic()
-        );
-        let test_context = TestContext::new(true, None, None);
-        //
-        // clean up test user in production system by trying to login as the test users.  normal behavior is that
-        // the login fails.
-        test_proxy.set_test_context(Some(test_context.clone()));
+
         let count = TestHelpers::delete_all_test_users_from_config(&mut test_proxy).await;
         full_info!("deleted {} test users", count);
         test_proxy.set_auth_token(Some(admin_auth_token.clone()));
-        test_proxy.set_test_context(None);
+
         let users = test_proxy
             .get_all_users()
             .await
             .expect("there should be at least one user always (the admin)");
 
         assert!(users.len() > 0);
-        test_proxy.set_test_context(Some(test_context.clone()));
+
         let test_users =
             TestHelpers::register_test_users(&mut test_proxy, Some(admin_auth_token)).await;
         for user in &test_users {
             test_proxy.set_auth_token(None);
             let auth_token = test_proxy
-                .login(&user.get_email_or_panic(), "password")
+                .login(&LoginHeaderData::new(
+                    &user.get_email_or_panic(),
+                    "password",
+                    ProfileStorage::CosmosDbTest,
+                ))
                 .await
                 .expect("just registered accounts should be able to login");
             test_proxy.set_auth_token(Some(auth_token));
@@ -93,9 +83,6 @@ pub mod test {
         let _admin_token = TestHelpers::admin_login().await;
         let test_users = TestHelpers::load_test_users_from_config();
         log::trace!("{}", serde_json::to_string(&test_users).unwrap());
-        let _test_context = TestContext::new(false, None, None);
-
-        print!("ok");
     }
     #[tokio::test]
     async fn test_service_response_serialization() {
@@ -122,13 +109,27 @@ pub mod test {
     async fn register_test_users_test() {
         init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
         let app = create_test_service!();
-        let mut proxy = TestProxy::new(&app, Some(TestContext::new(false, None, None)));
+        let mut proxy = TestProxy::new(&app);
         //  setup_test!(&app, true);
 
         let users = TestHelpers::register_test_users(&mut proxy, None).await;
         for user in users {
             assert!(user.pii.is_some());
             assert!(user.user_id.is_some());
+            let auth_token = proxy
+                .login(&LoginHeaderData::new(
+                    &user.pii.unwrap().email,
+                    "password",
+                    ProfileStorage::CosmosDbTest,
+                ))
+                .await
+                .expect("Login to succeed");
+            assert!(auth_token.len() > 0);
+            let profile = proxy
+                .get_profile("Self")
+                .await
+                .expect("to get my own profile");
+            assert!(profile.user_id.expect("a user_id").len() > 0);
         }
     }
     /**
@@ -141,11 +142,34 @@ pub mod test {
     async fn delete_test_users() {
         init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
         let app = create_test_service!();
-        let mut proxy = TestProxy::new(&app, Some(TestContext::new(false, None, None)));
+        let mut proxy = TestProxy::new(&app);
         TestHelpers::delete_all_test_users(&mut proxy).await;
         //
         //  make sure that deleting empty works
         TestHelpers::delete_all_test_users(&mut proxy).await;
+    }
+
+    #[tokio::test]
+    async fn profile_test() {
+        init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
+        let app = create_test_service!();
+        let mut test_proxy = TestProxy::new(&app);
+        let admin_auth_token = TestHelpers::admin_login().await;
+
+        assert!(admin_auth_token.len() > 0);
+
+        test_proxy.set_auth_token(Some(admin_auth_token.clone()));
+
+        let client_user_profile = test_proxy
+            .get_profile("Self")
+            .await
+            .expect("this should be a client_user");
+        full_info!(
+            "admin id: {}",
+            client_user_profile
+                .user_id
+                .expect("id to be Some in profile")
+        );
     }
 
     pub struct TestHelpers {}
@@ -157,25 +181,23 @@ pub mod test {
             let admin_pwd = env::var("ADMIN_PASSWORD")
                 .expect("ADMIN_PASSWORD not found in environment - unable to continue");
 
-            let request_context = RequestContext::new(
-                &None,
-                &None,
-                &SERVICE_CONFIG,
-                &SecurityContext::cached_secrets(),
-            );
-
-            let auth_token =
-                match login(&profile.get_email_or_panic(), &admin_pwd, &request_context).await {
-                    Ok(token) => token,
-                    Err(_) => {
-                        register(&admin_pwd, &profile, &request_context)
-                            .await
-                            .expect("registering a new user should work");
-                        login(&profile.get_email_or_panic(), &admin_pwd, &request_context)
-                            .await
-                            .expect("login after register should work")
-                    }
-                };
+            let request_context = RequestContext::admin_default(&profile);
+            let login_data = LoginHeaderData {
+                user_name: profile.get_email_or_panic().clone(),
+                password: admin_pwd.clone(),
+                profile_location: ProfileStorage::CosmosDb, // our admin is in the production collection
+            };
+            let auth_token = match login(&login_data, &request_context).await {
+                Ok(token) => token,
+                Err(_) => {
+                    register_user(&admin_pwd, &profile, &request_context)
+                        .await
+                        .expect("registering a new user should work");
+                    login(&login_data, &request_context)
+                        .await
+                        .expect("login after register should work")
+                }
+            };
 
             assert!(auth_token.len() > 0);
             auth_token
@@ -234,7 +256,6 @@ pub mod test {
                 > + 'static,
         {
             full_info!("registering test users");
-            assert!(proxy.test_context().is_some());
             // Use the provided admin_token if it's Some, otherwise generate a new one
             let admin_token = if let Some(token) = admin_token {
                 token
@@ -247,7 +268,9 @@ pub mod test {
             let mut profiles = Vec::new();
 
             for user in test_users.iter() {
-                let result = proxy.register_test_user(user, "password").await;
+                let result = proxy
+                    .register_test_user(ProfileStorage::CosmosDbTest, user, "password")
+                    .await;
                 match result {
                     Ok(profile) => {
                         profiles.push(profile.clone());
@@ -285,7 +308,6 @@ pub mod test {
                 > + 'static,
         {
             info!("deleting all test users");
-            assert!(proxy.test_context().is_some());
             let admin_token = TestHelpers::admin_login().await;
             proxy.set_auth_token(Some(admin_token.clone()));
             let profiles = proxy
@@ -319,7 +341,6 @@ pub mod test {
                 > + 'static,
         {
             let mut count = 0;
-            assert!(test_proxy.test_context().is_some());
             let test_users = TestHelpers::load_test_users_from_config();
             assert!(test_users.len() > 0);
             for user in test_users {
@@ -327,7 +348,11 @@ pub mod test {
                 // production database, this will delete all of them.
                 test_proxy.set_auth_token(None);
                 let response = test_proxy
-                    .login(&user.get_email_or_panic(), "password")
+                    .login(&LoginHeaderData::new(
+                        &user.get_email_or_panic(),
+                        "password",
+                        ProfileStorage::CosmosDbTest,
+                    ))
                     .await;
 
                 match response {
@@ -336,7 +361,7 @@ pub mod test {
                         let profile = test_proxy
                             .get_profile("Self")
                             .await
-                            .expect("this shoudl be there since login worked");
+                            .expect("this should be there since login worked");
                         let user_id = profile.user_id.expect("a logged in user must have an id!");
                         test_proxy.delete_user(&user_id).await.expect("success");
                         count = count + 1;

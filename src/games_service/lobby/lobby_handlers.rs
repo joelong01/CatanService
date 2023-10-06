@@ -31,14 +31,14 @@ pub async fn post_invite(
  *  3. notify the sender (e.g. the reciever of the original invite) that a response has occured so that it will
  *     loop and end up waiting on the right thing
  */
-pub async fn respond_to_invite(
+pub async fn respond_to_invite_handler(
     headers: HeadersExtractor,
     invite_response: web::Json<InvitationResponseData>,
     request_context: RequestContext,
 ) -> HttpResponse {
     let invite_response = invite_response.into_inner();
-    let is_test = headers.is_test;
-    api_call!(super::lobby::respond_to_invite(is_test, &invite_response, &request_context).await)
+
+    api_call!(super::lobby::respond_to_invite(&invite_response, &request_context).await)
 }
 
 pub async fn add_local_user_handler(
