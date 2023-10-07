@@ -176,7 +176,7 @@ where
         self.send_request::<(), T>(Method::DELETE, url, headers, None)
             .await
     }
-    pub async fn register(
+    pub async fn register_user(
         &self,
         profile: &UserProfile,
         password: &str,
@@ -195,7 +195,6 @@ where
 
     pub async fn register_test_user(
         &self,
-        location: ProfileStorage,
         profile: &UserProfile,
         password: &str,
     ) -> Result<UserProfile, ServiceError> {
@@ -204,15 +203,6 @@ where
         headers.insert(
             HeaderName::from_static(GameHeader::PASSWORD),
             HeaderValue::from_str(password).expect("Invalid header value"),
-        );
-
-        headers.insert(
-            HeaderName::from_static(GameHeader::PROFILE_LOCATION),
-            HeaderValue::from_str(
-                &serde_json::to_string(&location)
-                    .expect("serde serialization of an enum to not fail"),
-            )
-            .expect("Invalid header value"),
         );
 
         let url = "/auth/api/v1/users/register-test-user";

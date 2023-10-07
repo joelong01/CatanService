@@ -87,7 +87,7 @@ pub async fn verify_cosmosdb(context: &RequestContext) -> Result<(), ServiceErro
         }
 
         for collection in &context
-            .database
+            .database()?
             .as_user_db()
             .get_collection_names(context.is_test())
         {
@@ -120,7 +120,7 @@ async fn internal_register_user(
     password: &str,
     profile_in: &UserProfile,
     roles: &mut Vec<Role>,
-    database: &Box<DatabaseWrapper>,
+    database: &DatabaseWrapper,
 ) -> Result<UserProfile, ServiceError> {
     let email = profile_in
         .pii
@@ -182,17 +182,10 @@ pub async fn register_user(
     profile_in: &UserProfile,
     request_context: &RequestContext,
 ) -> Result<UserProfile, ServiceError> {
-    if !request_context.is_caller_in_role(Role::Admin) {
-        return Err(ServiceError::new_unauthorized(""));
-    }
-
-    internal_register_user(
-        password,
-        profile_in,
-        &mut vec![Role::User],
-        &request_context.database,
-    )
-    .await
+    //
+    //  regular users are always in the "normal" cosmos collection
+    let database = DatabaseWrapper::from_location(ProfileStorage::CosmosDb, &SERVICE_CONFIG);
+    internal_register_user(password, profile_in, &mut vec![Role::User], &database).await
 }
 
 pub async fn update_profile(
@@ -200,16 +193,11 @@ pub async fn update_profile(
     request_context: &RequestContext,
 ) -> Result<(), ServiceError> {
     let claims = request_context.claims.as_ref().unwrap();
-
-    let mut persist_user = request_context
-        .database
-        .as_user_db()
-        .find_user_by_id(&claims.id)
-        .await?;
+    let database = request_context.database()?;
+    let mut persist_user = database.as_user_db().find_user_by_id(&claims.id).await?;
     persist_user.update_profile(&profile_in);
 
-    request_context
-        .database
+    database
         .as_user_db()
         .update_or_create_user(&persist_user)
         .await?;
@@ -220,7 +208,6 @@ pub async fn update_profile(
 /// the big difference between register_user and register_test_user is that the latter is authenticated and only
 /// somebody in the admin group can add a test user.
 pub async fn register_test_user(
-    profile_storage: ProfileStorage,
     password: &str,
     profile_in: &UserProfile,
     request_context: &RequestContext,
@@ -230,12 +217,8 @@ pub async fn register_test_user(
     }
 
     //
-    //  request context is going to say that the storage location is wherever the admin is...we might want it elsewhere
-
-    let database = Box::new(DatabaseWrapper::from_location(
-        profile_storage,
-        &SERVICE_CONFIG,
-    ));
+    //  always put test users in the test db
+    let database = DatabaseWrapper::from_location(ProfileStorage::CosmosDbTest, &SERVICE_CONFIG);
 
     let mut profile = profile_in.clone();
     profile.display_name = format!("{}: [Test]", profile.display_name);
@@ -332,7 +315,7 @@ pub async fn list_users(
     request_context: &RequestContext,
 ) -> Result<Vec<UserProfile>, ServiceError> {
     // Get list of users
-    match request_context.database.as_user_db().list().await {
+    match request_context.database()?.as_user_db().list().await {
         Ok(users) => {
             let user_profiles: Vec<UserProfile> = users
                 .iter()
@@ -397,18 +380,17 @@ pub async fn get_profile(
         return Err(ServiceError::new_unauthorized(""));
     }
 
-
     let user = match lookup_value.contains("@") {
         true => {
             request_context
-                .database
+                .database()?
                 .as_user_db()
                 .find_user_by_email(&lookup_value)
                 .await?
         }
         false => {
             request_context
-                .database
+                .database()?
                 .as_user_db()
                 .find_user_by_id(&lookup_value)
                 .await?
@@ -432,7 +414,11 @@ pub async fn delete(id: &str, request_context: &RequestContext) -> Result<(), Se
         ));
     }
 
-    let result = request_context.database.as_user_db().delete_user(id).await;
+    let result = request_context
+        .database()?
+        .as_user_db()
+        .delete_user(id)
+        .await;
 
     match result {
         Ok(..) => Ok(()),
@@ -471,19 +457,12 @@ pub async fn validate_email(token: &str) -> Result<(), ServiceError> {
     let request_context =
         RequestContext::new(Some(&claims), &None, &SERVICE_CONFIG, &security_context);
 
-    let id = &claims.id; // Borrowing here.
-    let mut user = request_context
-        .database
-        .as_user_db()
-        .find_user_by_id(id)
-        .await?;
-
+    let id = claims.id.clone(); // Borrowing here.
+    let database = request_context.database()?; //rust requires us to declare this with a let
+    let user_db = database.as_user_db(); // so that database defines the lifetime of user_db
+    let mut user = user_db.find_user_by_id(&id).await?;
     user.user_profile.validated_email = true;
-    request_context
-        .database
-        .as_user_db()
-        .update_or_create_user(&user)
-        .await?;
+    user_db.update_or_create_user(&user).await?;
     Ok(())
 }
 
@@ -564,11 +543,9 @@ async fn internal_send_phone_code(
     code: i32,
     request_context: &RequestContext,
 ) -> Result<(), ServiceError> {
-    let mut persist_user = request_context
-        .database
-        .as_user_db()
-        .find_user_by_id(user_id)
-        .await?;
+    let database = request_context.database()?; //rust requires us to declare this with a let
+    let user_db = database.as_user_db(); // so that database defines the lifetime of user_db
+    let mut persist_user = user_db.find_user_by_id(user_id).await?;
 
     let phone_number = match &persist_user.user_profile.pii {
         Some(pii) => pii.phone_number.clone(),
@@ -576,11 +553,7 @@ async fn internal_send_phone_code(
     };
 
     persist_user.phone_code = Some(code.to_string());
-    request_context
-        .database
-        .as_user_db()
-        .update_or_create_user(&persist_user)
-        .await?;
+    user_db.update_or_create_user(&persist_user).await?;
     let msg = format!(
         "This is your 6 digit code for the Catan Service. \
                    If You did not request this code, ignore this message. \
@@ -609,6 +582,8 @@ pub async fn validate_phone(
     code: &str,
     request_context: &RequestContext,
 ) -> Result<(), ServiceError> {
+    let database = request_context.database()?; //rust requires us to declare this with a let
+    let user_db = database.as_user_db(); // so that database defines the lifetime of user_db
     let user_id = request_context
         .claims
         .as_ref()
@@ -616,22 +591,14 @@ pub async fn validate_phone(
         .id
         .clone();
 
-    let mut persist_user = request_context
-        .database
-        .as_user_db()
-        .find_user_by_id(&user_id)
-        .await?;
+    let mut persist_user = user_db.find_user_by_id(&user_id).await?;
 
     match &persist_user.phone_code {
         // If the stored code matches the provided code, validate the phone.
         Some(c) if c.to_string() == code => {
             persist_user.user_profile.validated_phone = true;
             persist_user.phone_code = None;
-            request_context
-                .database
-                .as_user_db()
-                .update_or_create_user(&persist_user)
-                .await?;
+            user_db.update_or_create_user(&persist_user).await?;
             Ok(())
         }
         // Handle all other cases (mismatch or missing code) as errors.
@@ -695,7 +662,7 @@ pub async fn find_user_by_id(
     }
 
     let persist_user = request_context
-        .database
+        .database()?
         .as_user_db()
         .find_user_by_id(&id)
         .await?;
@@ -735,7 +702,7 @@ pub async fn create_local_user(
     let persist_user = PersistUser::from_local_user(&user_id, &profile);
 
     request_context
-        .database
+        .database()?
         .as_user_db()
         .update_or_create_user(&persist_user)
         .await?;
@@ -748,7 +715,10 @@ pub async fn update_local_user(
     new_profile: &UserProfile,
     request_context: &RequestContext,
 ) -> Result<(), ServiceError> {
-    // Check that PII is not filled in for local users
+    // get the user_db connection
+    let database = request_context.database()?; //rust requires us to declare this with a let
+    let user_db = database.as_user_db(); // so that database defines the lifetime of user_db
+                                         // Check that PII is not filled in for local users
     if new_profile.pii.is_some() {
         return Err(ServiceError::new_bad_request("Local Users have no PII!"));
     }
@@ -773,11 +743,7 @@ pub async fn update_local_user(
         .clone();
 
     // Find the local user by ID
-    let mut local_user = request_context
-        .database
-        .as_user_db()
-        .find_user_by_id(local_user_id)
-        .await?;
+    let mut local_user = user_db.find_user_by_id(local_user_id).await?;
 
     // Ensure the local user is connected to a connected user
     let connection_id = local_user
@@ -797,11 +763,7 @@ pub async fn update_local_user(
     local_user.update_profile(new_profile);
 
     // Save the updated user
-    request_context
-        .database
-        .as_user_db()
-        .update_or_create_user(&local_user)
-        .await?;
+    user_db.update_or_create_user(&local_user).await?;
     Ok(())
 }
 
@@ -814,11 +776,10 @@ pub async fn delete_local_user(
     local_user_primary_key: &str,
     request_context: &RequestContext,
 ) -> Result<(), ServiceError> {
-    let local_user_profile = request_context
-        .database
-        .as_user_db()
-        .find_user_by_id(&local_user_primary_key)
-        .await?;
+    let database = request_context.database()?; //rust requires us to declare this with a let
+    let user_db = database.as_user_db(); // so that database defines the lifetime of user_db
+
+    let local_user_profile = user_db.find_user_by_id(&local_user_primary_key).await?;
 
     if local_user_profile.connected_user_id.is_none() {
         return Err(ServiceError::new_not_found(
@@ -845,11 +806,7 @@ pub async fn delete_local_user(
     };
 
     if id_in_claims == connected_id || request_context.is_caller_in_role(Role::Admin) {
-        request_context
-            .database
-            .as_user_db()
-            .delete_user(&local_user_primary_key)
-            .await?;
+        user_db.delete_user(&local_user_primary_key).await?;
         return Ok(());
     }
 
@@ -874,7 +831,7 @@ pub async fn get_local_users(
     };
     if id_in_claims == connected_id || request_context.is_caller_in_role(Role::Admin) {
         let users = request_context
-            .database
+            .database()?
             .as_user_db()
             .get_connected_users(&connected_id)
             .await?;
@@ -1006,17 +963,12 @@ mod tests {
         let token = TestHelpers::admin_login().await;
         let profile = UserProfile::new_test_user(None);
         let request_context = RequestContext::admin_default(&profile);
-        let user_profile = register_test_user(
-            profile_location.clone(),
-            "password",
-            &profile,
-            &request_context,
-        )
-        .await
-        .expect("success");
+        let user_profile = register_test_user("password", &profile, &request_context)
+            .await
+            .expect("success");
 
         let database = DatabaseWrapper::from_location(profile_location.clone(), &SERVICE_CONFIG);
-            database
+        database
             .as_user_db()
             .find_user_by_email(&user_profile.pii.unwrap().email)
             .await

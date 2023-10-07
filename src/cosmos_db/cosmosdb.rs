@@ -282,10 +282,7 @@ impl UserDbTrait for CosmosDb {
      *  an api that creates a user in the cosmosdb users collection. in this sample, we return
      *  the full User object in the body, giving the client the partitionKey and user id
      */
-    async fn update_or_create_user(
-        &self,
-        user: &PersistUser,
-    ) -> Result<(), ServiceError> {
+    async fn update_or_create_user(&self, user: &PersistUser) -> Result<(), ServiceError> {
         let collection = self.collection_clients.get(&CosmosDocType::User).unwrap();
 
         log::trace!("{}", serde_json::to_string(&user).unwrap());
@@ -383,7 +380,7 @@ impl UserDbTrait for CosmosDb {
         if !users.is_empty() {
             Ok(users.first().unwrap().clone())
         } else {
-             Err(ServiceError::new_not_found("not found", val))
+            Err(ServiceError::new_not_found("not found", val))
         }
     }
 }
@@ -411,7 +408,9 @@ pub mod tests {
         test_db_e2e(&context).await;
     }
     pub async fn test_db_e2e(request_context: &RequestContext) {
-        let user_db = request_context.database.as_user_db();
+        let database = request_context.database().unwrap(); //rust requires us to declare this with a let
+        let user_db = database.as_user_db(); // so that database defines the lifetime of user_db
+
         init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Error).await;
         verify_cosmosdb(&request_context)
             .await

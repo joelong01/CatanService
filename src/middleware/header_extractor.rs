@@ -3,7 +3,6 @@ use futures::future::{ok, Ready};
 use serde::Serialize;
 
 use crate::{
-    full_info,
     games_service::game_container::game_messages::GameHeader,
     shared::{service_models::LoginHeaderData, shared_models::ProfileStorage},
 };

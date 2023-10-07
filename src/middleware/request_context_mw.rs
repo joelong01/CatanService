@@ -5,7 +5,7 @@ use crate::games_service::catan_games::games::regular::regular_game::RegularGame
 use crate::games_service::game_container::game_messages::GameHeader;
 use crate::middleware::service_config::{ServiceConfig, SERVICE_CONFIG};
 use crate::shared::service_models::{Claims, Role};
-use crate::shared::shared_models::{ProfileStorage, UserProfile};
+use crate::shared::shared_models::{ProfileStorage, ServiceError, UserProfile};
 /**
  *  this file contains the middleware that injects ServiceContext into the Request.  The data in RequestContext is the
  *  configuration data necessary for the Service to run -- the secrets loaded from the environment, hard coded strings,
@@ -53,7 +53,6 @@ impl TestCallContext {
 pub struct RequestContext {
     pub config: ServiceConfig,
     pub test_context: Option<TestCallContext>,
-    pub database: Box<DatabaseWrapper>,
     pub claims: Option<Claims>,
     pub security_context: SecurityContext,
 }
@@ -65,12 +64,9 @@ impl RequestContext {
         service_config: &'static ServiceConfig,
         security_context: &SecurityContext,
     ) -> Self {
-        let database_wrapper = DatabaseWrapper::new(claims, service_config);
-
-        RequestContext {
+       RequestContext {
             config: service_config.clone(), // Clone the read-only environment data
             test_context: test_call_context.clone(),
-            database: Box::new(database_wrapper),
             claims: claims.cloned(),
             security_context: security_context.clone(),
         }
@@ -87,13 +83,11 @@ impl RequestContext {
             &vec![Role::TestUser, Role::Admin],
             ProfileStorage::CosmosDb,
         );
-        let database_wrapper = DatabaseWrapper::new(Some(&claims), &SERVICE_CONFIG);
-
+     
         let security_context = SecurityContext::cached_secrets().clone();
         Self {
             config: SERVICE_CONFIG.clone(), // Clone the read-only environment data
             test_context: Some(test_context),
-            database: Box::new(database_wrapper),
             claims: Some(claims),
             security_context: security_context,
         }
@@ -101,7 +95,6 @@ impl RequestContext {
 
     pub fn set_claims(&mut self, claims: &Claims) {
         self.claims = Some(claims.clone());
-        self.database = Box::new(DatabaseWrapper::from_location(claims.profile_storage.clone(), &SERVICE_CONFIG));
     }
     pub fn test_default(use_cosmos: bool) -> Self {
         let profile_location = if use_cosmos {
@@ -129,14 +122,22 @@ impl RequestContext {
             .map_or(false, |claims| claims.roles.contains(&Role::TestUser))
     }
 
-    pub fn use_mock_db(&self) -> bool {
-        !self.use_cosmos_db()
-    }
 
-    pub fn use_cosmos_db(&self) -> bool {
-        self.claims.as_ref().map_or(true, |claims| {
-            claims.profile_storage == ProfileStorage::CosmosDb
-        })
+
+    pub fn database(&self) -> Result<DatabaseWrapper, ServiceError> {
+        let location = self
+            .claims
+            .as_ref()
+            .ok_or_else(|| {
+                ServiceError::new_bad_request(
+                    "need claims to create a db connection from a request context",
+                )
+            })?
+            .profile_storage
+            .clone();
+
+        let db = DatabaseWrapper::from_location(location, &SERVICE_CONFIG);
+        Ok(db)
     }
 
     /// Returns the name of the database based on the current context.
@@ -182,8 +183,7 @@ impl FromRequest for RequestContext {
             ok(RequestContext {
                 config: SERVICE_CONFIG.clone(), // Clone the environment variables
                 test_context: None,
-                database: Box::new(DatabaseWrapper::new(None, &SERVICE_CONFIG)),
-                claims: None,
+                claims: None, // updated if there are any claims in the auth_mw
                 security_context: SecurityContext::cached_secrets(),
             })
         }

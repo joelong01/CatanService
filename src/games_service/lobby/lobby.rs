@@ -1,5 +1,6 @@
 #![allow(unused_variables)]
 use crate::{
+    full_info,
     games_service::{
         game_container::{
             game_container::GameContainer,
@@ -8,16 +9,13 @@ use crate::{
         long_poller::long_poller::LongPoller,
     },
     middleware::request_context_mw::RequestContext,
-    shared::shared_models::{ServiceError, UserProfile}, full_info,
+    shared::shared_models::{ServiceError, UserProfile},
 };
 
 pub async fn get_lobby() -> Result<Vec<UserProfile>, ServiceError> {
-   Ok(LongPoller::get_available().await)
+    Ok(LongPoller::get_available().await)
 }
-pub async fn post_invite(
-    from_id: &str,
-    invite: &Invitation,
-) -> Result<(), ServiceError> {
+pub async fn post_invite(from_id: &str, invite: &Invitation) -> Result<(), ServiceError> {
     LongPoller::send_message(
         vec![invite.to_id.clone()],
         &CatanMessage::Invite(invite.clone()),
@@ -40,7 +38,8 @@ pub async fn respond_to_invite(
         // add the user to the Container -- now they are in both the lobby and the game
         // this will release any threads waiting for updates on the game
         let persist_user = request_context
-            .database.as_user_db()
+            .database()?
+            .as_user_db()
             .find_user_by_id(&invite_response.from_id)
             .await?;
         GameContainer::add_player(
@@ -75,7 +74,8 @@ pub async fn add_local_user(
         .clone();
 
     let local_user = request_context
-        .database.as_user_db()
+        .database()?
+        .as_user_db()
         .find_user_by_id(&local_user_id)
         .await?;
 
@@ -95,9 +95,7 @@ pub async fn add_local_user(
     };
 }
 
-pub async fn join_lobby(
-    request_context: &RequestContext,
-) -> Result<(), ServiceError> {
+pub async fn join_lobby(request_context: &RequestContext) -> Result<(), ServiceError> {
     let user_id = request_context
         .claims
         .as_ref()
@@ -106,7 +104,8 @@ pub async fn join_lobby(
         .clone();
 
     let user = request_context
-        .database.as_user_db()
+        .database()?
+        .as_user_db()
         .find_user_by_id(&user_id)
         .await?;
     full_info!("connecting {}", user.user_profile.display_name);

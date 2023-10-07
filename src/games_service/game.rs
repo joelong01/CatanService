@@ -65,7 +65,7 @@ pub async fn new_game(
     }
 
     let user = request_context
-        .database
+        .database()?
         .as_user_db()
         .find_user_by_id(user_id)
         .await?;

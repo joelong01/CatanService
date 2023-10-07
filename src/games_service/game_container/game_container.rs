@@ -370,7 +370,7 @@ impl GameContainer {
         }
 
         let game = request_context
-            .database
+            .database()?
             .as_game_db()
             .load_game(game_id)
             .await?;

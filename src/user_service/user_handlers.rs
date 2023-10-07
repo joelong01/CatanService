@@ -38,8 +38,7 @@ pub async fn register_test_user_handler(
     headers: HeadersExtractor,
 ) -> impl Responder {
     let password = get_header_value!(password, headers);
-    let storage_location = get_header_value!(profile_storage, headers);
-    api_call!(super::users::register_test_user(storage_location, &password, &profile_in, &request_context).await)
+    api_call!(super::users::register_test_user( &password, &profile_in, &request_context).await)
 }
 
 // User login

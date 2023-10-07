@@ -267,9 +267,9 @@ pub mod test {
             let test_users = TestHelpers::load_test_users_from_config();
             let mut profiles = Vec::new();
 
-            for user in test_users.iter() {
+            for user_profile in test_users.iter() {
                 let result = proxy
-                    .register_test_user(ProfileStorage::CosmosDbTest, user, "password")
+                    .register_test_user(user_profile, "password")
                     .await;
                 match result {
                     Ok(profile) => {
@@ -287,9 +287,9 @@ pub mod test {
                         log::trace!("registered client_user: {:#?}", pretty_json);
                     }
                     Err(service_error) => {
-                        log::trace!("{} already registered", user.display_name.clone());
+                        log::trace!("{} already registered", user_profile.display_name.clone());
                         assert_eq!(service_error.status, StatusCode::CONFLICT);
-                        let email = user.pii.clone().unwrap().email;
+                        let email = user_profile.pii.clone().unwrap().email;
                         let profile = proxy.get_profile(&email).await.expect("should be there");
                         profiles.push(profile.clone());
                     }
