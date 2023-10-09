@@ -6,9 +6,8 @@ pub mod test {
     use tracing::info;
 
     use crate::middleware::request_context_mw::RequestContext;
-    use crate::shared::service_models::LoginHeaderData;
     use crate::shared::shared_models::{
-        GameError, ProfileStorage, ResponseType, ServiceError, UserProfile,
+        GameError, ProfileStorage, ResponseType, ServiceError, UserProfile, LoginHeaderData
     };
     use crate::test::test_proxy::TestProxy;
     use crate::user_service::users::{login, register_user};

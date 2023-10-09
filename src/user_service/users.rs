@@ -16,7 +16,7 @@ use crate::azure_setup::azure_wrapper::{
 use crate::cosmos_db::database_abstractions::DatabaseWrapper;
 use crate::middleware::security_context::{KeyKind, SecurityContext};
 use crate::middleware::service_config::SERVICE_CONFIG;
-use crate::shared::service_models::{Claims, LoginHeaderData, PersistUser, Role};
+use crate::shared::service_models::{Claims, PersistUser, Role};
 /**
  * this module implements the WebApi to create the database/collection, list all the users, and to create/find/delete
  * a User document in CosmosDb
@@ -28,7 +28,7 @@ use crate::games_service::long_poller::long_poller::LongPoller;
 
 use crate::middleware::request_context_mw::RequestContext;
 use crate::shared::shared_models::{
-    GameError, ProfileStorage, ResponseType, ServiceError, UserProfile, UserType,
+    GameError, ProfileStorage, ResponseType, ServiceError, UserProfile, UserType, LoginHeaderData,
 };
 
 use reqwest::StatusCode;

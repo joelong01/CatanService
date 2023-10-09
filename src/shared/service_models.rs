@@ -168,33 +168,8 @@ impl Claims {
             .as_secs()) as usize;
         claims
     }
+
 }
-#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Clone)]
-pub struct LoginHeaderData {
-   pub profile_location: ProfileStorage,
-   pub user_name: String, 
-   pub password: String
-}
-
-impl LoginHeaderData {
-    pub fn new ( user_name: &str, password: &str, profile_location: ProfileStorage) -> Self{
-        Self {
-
-            user_name: user_name.to_owned(),
-            password: password.to_owned(),
-            profile_location
-        }
-    }
-
-    pub fn test_default(user_name: &str, password: &str) -> Self{
-        Self {
-            profile_location: ProfileStorage::CosmosDbTest,
-            user_name: user_name.to_owned(),
-            password: password.to_owned()
-        }
-    }
-}
-
 /**
  * hold the data that both the Lobby and the GameContainer use to keep track of the waiting clients
  */

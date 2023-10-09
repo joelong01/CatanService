@@ -11,9 +11,8 @@ use crate::games_service::game_container::game_messages::{
 };
 use crate::games_service::shared::game_enums::{CatanGameType, GameAction};
 use crate::middleware::request_context_mw::TestCallContext;
-use crate::shared::service_models::LoginHeaderData;
 use crate::shared::shared_models::UserProfile;
-use crate::shared::shared_models::{ProfileStorage, ServiceError};
+use crate::shared::shared_models::{ProfileStorage, ServiceError, LoginHeaderData};
 use actix_web::test::{self, TestRequest};
 use serde::Serialize;
 
@@ -27,7 +26,10 @@ use actix_web::{
 };
 
 use std::collections::HashMap;
-
+///
+/// the proxy used for internal tests -- the service needs to be created outside the proxy and passed in because the type
+/// of the service is too complicated to specify in the code.
+/// the auth token is passed in so that we don't have to pass the auth token to each of the APIs
 pub struct TestProxy<'a, S> {
     service: &'a S,
     auth_token: Option<String>,

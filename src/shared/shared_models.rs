@@ -477,3 +477,33 @@ pub enum ProfileStorage {
     CosmosDbTest,
     MockDb
 }
+
+
+///
+/// when you login, you give a "hint" on where the profile is stored. if the client sends in the wrong
+/// profile location, the login will fail.
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Clone)]
+pub struct LoginHeaderData {
+   pub profile_location: ProfileStorage,
+   pub user_name: String, 
+   pub password: String
+}
+
+impl LoginHeaderData {
+    pub fn new ( user_name: &str, password: &str, profile_location: ProfileStorage) -> Self{
+        Self {
+
+            user_name: user_name.to_owned(),
+            password: password.to_owned(),
+            profile_location
+        }
+    }
+
+    pub fn test_default(user_name: &str, password: &str) -> Self{
+        Self {
+            profile_location: ProfileStorage::CosmosDbTest,
+            user_name: user_name.to_owned(),
+            password: password.to_owned()
+        }
+    }
+}

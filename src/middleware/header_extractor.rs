@@ -4,7 +4,7 @@ use serde::Serialize;
 
 use crate::{
     games_service::game_container::game_messages::GameHeader,
-    shared::{service_models::LoginHeaderData, shared_models::ProfileStorage},
+    shared::shared_models::{LoginHeaderData, ProfileStorage},
 };
 
 use super::request_context_mw::TestCallContext;
