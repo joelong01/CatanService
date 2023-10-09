@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::games_service::catan_games::games::regular::regular_game::RegularGame;
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "camelCase")]
 pub struct Invitation {
     pub from_id: String,
     pub to_id: String,
@@ -18,7 +18,7 @@ pub struct Invitation {
     pub game_id: String,
 }
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "camelCase")]
 pub struct GameHeader;
 
 impl GameHeader {
@@ -34,7 +34,7 @@ impl GameHeader {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "camelCase")]
 pub struct InvitationResponseData {
     pub from_id: String,
     pub to_id: String,
@@ -74,21 +74,21 @@ impl InvitationResponseData {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "camelCase")]
 pub struct GameCreatedData {
     pub user_id: String,
     pub game_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "camelCase")]
 pub struct ErrorData {
     pub status_code: i32,
     pub message: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "camelCase")]
 pub enum CatanMessage {
     GameUpdate(RegularGame),
     Invite(Invitation),

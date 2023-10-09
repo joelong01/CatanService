@@ -6,7 +6,7 @@ use std::fmt;
 
 // RoadKey struct
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "camelCase")]
 pub struct RoadKey {
     tile_key: TileKey,    // the tile coordinates that Direction is relative to
     direction: Direction, // the direction that represents the side of the tile that the road is on

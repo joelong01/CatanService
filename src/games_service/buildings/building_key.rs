@@ -11,7 +11,7 @@ use super::building_enums::BuildingPosition;
 
 // Struct representing a building alias containing position, coordinates and index of a building
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "camelCase")]
 pub struct BuildingKey {
     pub building_position: BuildingPosition,
     pub tile_key: TileKey,

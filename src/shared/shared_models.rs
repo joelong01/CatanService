@@ -96,7 +96,7 @@ pub enum UserType {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "camelCase")]
 pub struct PersonalInformation {
     pub phone_number: String,
     pub email: String,
@@ -122,7 +122,7 @@ impl PersonalInformation {
 /// UserProfile is just information about the client.  this can be as much or little information as the app needs
 /// to run
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "camelCase")]
 pub struct UserProfile {
     pub user_id: Option<String>,
     pub user_type: UserType,
@@ -299,7 +299,7 @@ pub enum ResponseType {
  *  We want every response to be in JSON format so that it is easier to script calling the service.
  */
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "camelCase")]
 pub struct ServiceError {
     pub message: String,
     #[serde(serialize_with = "serialize_status_code")]
@@ -483,6 +483,7 @@ pub enum ProfileStorage {
 /// when you login, you give a "hint" on where the profile is stored. if the client sends in the wrong
 /// profile location, the login will fail.
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct LoginHeaderData {
    pub profile_location: ProfileStorage,
    pub user_name: String, 

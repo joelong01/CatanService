@@ -4,7 +4,7 @@ use serde::Serialize;
 
 use crate::{
     games_service::game_container::game_messages::GameHeader,
-    shared::shared_models::{LoginHeaderData, ProfileStorage},
+    shared::shared_models::{LoginHeaderData, ProfileStorage}, full_info,
 };
 
 use super::request_context_mw::TestCallContext;
@@ -33,6 +33,9 @@ impl FromRequest for HeadersExtractor {
         let password = headers
             .get(GameHeader::PASSWORD)
             .and_then(|v| v.to_str().ok().map(String::from));
+
+        let ld = headers.get(GameHeader::LOGIN_DATA).and_then(|v| v.to_str().ok());
+        full_info!("ld: {:#?}", ld);
 
         let login_data = headers
             .get(GameHeader::LOGIN_DATA)

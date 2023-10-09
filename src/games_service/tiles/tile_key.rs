@@ -20,7 +20,7 @@ static DIRECTIONS: Lazy<HashMap<Direction, TileKey>> = Lazy::new(|| {
     directions
 });
 #[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Copy, Clone)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "camelCase")]
 pub struct TileKey {
     pub q: i32,
     pub r: i32,

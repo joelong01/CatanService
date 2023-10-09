@@ -216,7 +216,7 @@ pub mod test {
 
             // Deserialize the JSON string into UserProfile
             let profile = serde_json::from_str::<UserProfile>(&contents).expect(
-                &format!("This should deserialize.  if it fails, make sure the Admin Profile at {} JSON is in PascalCase", &admin_json_path)
+                &format!("This should deserialize.  if it fails, make sure the Admin Profile at {} JSON is in camelCase", &admin_json_path)
             );
 
             profile

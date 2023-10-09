@@ -15,7 +15,7 @@ use super::player_enums::Target;
 //  this contains all the "concrete" data the result from a players actions.  we separetely define the calculated
 //  data.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "camelCase")]
 pub struct Player {
     pub profile: UserProfile,
     pub roads: Vec<Road>,

@@ -5,7 +5,7 @@ use crate::games_service::tiles::tile_key::TileKey;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "camelCase")]
 pub struct Building {
     pub building_key: BuildingKey,
     pub connected_tiles: Vec<TileKey>,

@@ -27,7 +27,7 @@ use super::security_context::SecurityContext;
 /// This struct contains information that is used by tests that apply only to the particular call
 /// In order to use this the claims must have is_call_in_role("Test")
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "camelCase")]
 pub struct TestCallContext {
     pub phone_code: Option<i32>, // send the code to verify phone number so we can test from the client
     pub game: Option<RegularGame>, // send a game from the client so we can test the apis, but know what we get back

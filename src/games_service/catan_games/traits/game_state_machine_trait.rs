@@ -15,7 +15,7 @@ pub(crate) trait StateMachineTrait {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "camelCase")]
 pub struct StateData {
     game_state: GameState,
 }

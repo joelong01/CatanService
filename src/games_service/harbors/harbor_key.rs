@@ -3,7 +3,7 @@ use crate::games_service::tiles::tile_key::TileKey;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Copy)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "camelCase")]
 pub struct HarborKey {
     tile_key: TileKey,
     position: Direction,

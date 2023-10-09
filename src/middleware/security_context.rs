@@ -103,7 +103,7 @@ impl KeySet {
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "camelCase")]
 pub struct SecurityContext {
     pub login_keys: KeySet,
     pub validation_keys: KeySet,
