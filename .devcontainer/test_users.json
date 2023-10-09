@@ -1,93 +1,92 @@
 [
     {
-        "UserType": "Connected",
-        "Pii": {
-            "Email": "john.doe@example.com",
-            "FirstName": "John",
-            "LastName": "Doe",
-            "PhoneNumber": "+12065551234"
+        "userType": "Connected",
+        "pii": {
+            "email": "john.doe@example.com",
+            "firstName": "John",
+            "lastName": "Doe",
+            "phoneNumber": "+12065551234"
         },
-        "DisplayName": "John",
-        "PictureUrl": "https://example.com/images/john.jpg",
-        "ForegroundColor": "#00000000",
-        "BackgroundColor": "#FFFFFF",
-        "TextColor": "#00000000",
-        "GamesPlayed": 5,
-        "GamesWon": 2, 
-        "ValidatedEmail": false,
-        "ValidatedPhone": false
+        "displayName": "John",
+        "pictureUrl": "https://example.com/images/john.jpg",
+        "foregroundColor": "#00000000",
+        "backgroundColor": "#FFFFFF",
+        "textColor": "#00000000",
+        "gamesPlayed": 5,
+        "gamesWon": 2,
+        "validatedEmail": false,
+        "validatedPhone": false
     },
     {
-        "UserType": "Connected",
-        "Pii": {
-            "Email": "jane.smith@example.com",
-            "FirstName": "Jane",
-            "LastName": "Smith",
-            "PhoneNumber": "+12065556789"
+        "userType": "Connected",
+        "pii": {
+            "email": "jane.smith@example.com",
+            "firstName": "Jane",
+            "lastName": "Smith",
+            "phoneNumber": "+12065556789"
         },
-        "DisplayName": "Jane",
-        "PictureUrl": "https://example.com/images/jane.jpg",
-        "ForegroundColor": "#00000000",
-        "BackgroundColor": "#FFFFFF",
-        "TextColor": "#00000000",
-        "GamesPlayed": 7,
-        "GamesWon": 5,
-        "ValidatedEmail": false,
-        "ValidatedPhone": false
+        "displayName": "Jane",
+        "pictureUrl": "https://example.com/images/jane.jpg",
+        "foregroundColor": "#00000000",
+        "backgroundColor": "#FFFFFF",
+        "textColor": "#00000000",
+        "gamesPlayed": 7,
+        "gamesWon": 5,
+        "validatedEmail": false,
+        "validatedPhone": false
     },
     {
-        "UserType": "Connected",
-        "Pii": {
-            "Email": "alice.jones@example.com",
-            "FirstName": "Alice",
-            "LastName": "Jones",
-            "PhoneNumber": "+12065551235"
+        "userType": "Connected",
+        "pii": {
+            "email": "alice.jones@example.com",
+            "firstName": "Alice",
+            "lastName": "Jones",
+            "phoneNumber": "+12065551235"
         },
-      
-        "DisplayName": "Alice",
-        "PictureUrl": "https://example.com/images/alice.jpg",
-        "ForegroundColor": "#00000000",
-        "BackgroundColor": "#FFFFFF",
-        "TextColor": "#00000000",
-        "GamesPlayed": 3,
-        "GamesWon": 2,
-        "ValidatedEmail": false,
-        "ValidatedPhone": false
+        "displayName": "Alice",
+        "pictureUrl": "https://example.com/images/alice.jpg",
+        "foregroundColor": "#00000000",
+        "backgroundColor": "#FFFFFF",
+        "textColor": "#00000000",
+        "gamesPlayed": 3,
+        "gamesWon": 2,
+        "validatedEmail": false,
+        "validatedPhone": false
     },
     {
-        "UserType": "Connected",
-        "Pii": {
-            "Email": "bob.brown@example.com",
-            "FirstName": "Bob",
-            "LastName": "Brown",
-            "PhoneNumber": "+12065554321"
+        "userType": "Connected",
+        "pii": {
+            "email": "bob.brown@example.com",
+            "firstName": "Bob",
+            "lastName": "Brown",
+            "phoneNumber": "+12065554321"
         },
-        "DisplayName": "Bob",
-        "PictureUrl": "https://example.com/images/bob.jpg",
-        "ForegroundColor": "#00000000",
-        "BackgroundColor": "#FFFFFF",
-        "TextColor": "#00000000",
-        "GamesPlayed": 6,
-        "GamesWon": 4,
-        "ValidatedEmail": false,
-        "ValidatedPhone": false
+        "displayName": "Bob",
+        "pictureUrl": "https://example.com/images/bob.jpg",
+        "foregroundColor": "#00000000",
+        "backgroundColor": "#FFFFFF",
+        "textColor": "#00000000",
+        "gamesPlayed": 6,
+        "gamesWon": 4,
+        "validatedEmail": false,
+        "validatedPhone": false
     },
     {
-        "UserType": "Connected",
-        "Pii": {
-            "Email": "charlie.green@example.com",
-            "FirstName": "Charlie",
-            "LastName": "Green",
-            "PhoneNumber": "+12065553210"
+        "userType": "Connected",
+        "pii": {
+            "email": "charlie.green@example.com",
+            "firstName": "Charlie",
+            "lastName": "Green",
+            "phoneNumber": "+12065553210"
         },
-        "DisplayName": "Charlie",
-        "PictureUrl": "https://example.com/images/charlie.jpg",
-        "ForegroundColor": "#00000000",
-        "BackgroundColor": "#FFFFFF",
-        "TextColor": "#00000000",
-        "GamesPlayed": 4,
-        "GamesWon": 3,
-        "ValidatedEmail": false,
-        "ValidatedPhone": false
+        "displayName": "Charlie",
+        "pictureUrl": "https://example.com/images/charlie.jpg",
+        "foregroundColor": "#00000000",
+        "backgroundColor": "#FFFFFF",
+        "textColor": "#00000000",
+        "gamesPlayed": 4,
+        "gamesWon": 3,
+        "validatedEmail": false,
+        "validatedPhone": false
     }
 ]

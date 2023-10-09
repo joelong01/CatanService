@@ -370,7 +370,7 @@ impl UserDbTrait for CosmosDb {
     }
     async fn find_user_by_email(&self, val: &str) -> Result<PersistUser, ServiceError> {
         let query = format!(
-            r#"SELECT * FROM c WHERE c.user_profile.Pii.Email = '{}'"#,
+            r#"SELECT * FROM c WHERE c.user_profile.pii.email = '{}'"#,
             val
         );
         let users = self
