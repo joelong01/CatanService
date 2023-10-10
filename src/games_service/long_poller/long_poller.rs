@@ -114,7 +114,9 @@ impl LongPoller {
         //     message
         // );
         // defer! {log_thread_info!("send_message","leave [to:{:#?}] [message={:?}]", to_users, message )};
-
+        if let CatanMessage::Error(error_data) = message {
+            full_info!("The message is an error with data: {:?}", error_data);
+        }
         let users_map = ALL_USERS_MAP.read().await; // Acquire read lock
 
         // Collect the senders and check for missing users
@@ -264,12 +266,12 @@ mod tests {
     async fn test_wait() {
         init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
         let test_user_id = "Test_User_1";
-        
+
         let res = LongPoller::add_user(test_user_id, &UserProfile::default()).await;
-        
+
         assert!(res.is_ok());
-         let  users_map = ALL_USERS_MAP.read().await; // Acquire write lock
-       assert!(users_map.contains_key(test_user_id)) ;
+        let users_map = ALL_USERS_MAP.read().await; // Acquire write lock
+        assert!(users_map.contains_key(test_user_id));
         let message = CatanMessage::Started("".to_string());
         // Clone the message outside of the spawned task
         let cloned_message = message.clone();

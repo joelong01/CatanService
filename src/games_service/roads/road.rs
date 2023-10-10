@@ -15,16 +15,16 @@ use super::{road_enums::RoadState, road_key::RoadKey};
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Road {
-    primary_key: RoadKey,      // ids[0]
+    road_key: RoadKey,      // ids[0]
     aliases: Vec<RoadKey>,     // all the various ways to describe this road
     adjacent_roads: Vec<Road>, // the roads that are connected to this road
     owner: Option<UserProfile>, // who owns this road?
     state: RoadState,
 }
 impl Road {
-    pub fn new(primary_key: RoadKey) -> Self {
+    pub fn new(road_key: RoadKey) -> Self {
         Self {
-            primary_key,
+            road_key,
             aliases: vec![],
             adjacent_roads: vec![],
             owner: None,

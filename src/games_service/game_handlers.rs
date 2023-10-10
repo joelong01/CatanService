@@ -1,5 +1,5 @@
 use crate::{
-    api_call,
+    api_call, full_info,
     middleware::{header_extractor::HeadersExtractor, request_context_mw::RequestContext},
 };
 use actix_web::{
@@ -19,7 +19,29 @@ pub async fn shuffle_game(
     request_context: RequestContext,
 ) -> HttpResponse {
     let test_game = headers.test_call_context.and_then(|ctx| ctx.game.clone());
-    api_call!(super::game::shuffle_game(&game_id, &request_context, test_game).await)
+    if let Some(g) = &test_game {
+        full_info!("baron_tile: {:#?}", g.baron_tile);
+    }
+    let result = super::game::shuffle_game(&game_id, &request_context, test_game.clone()).await;
+    match result {
+        Ok(val) => {
+            if let Some(game_clone) = &test_game {
+                let json1 = serde_json::to_string(&game_clone).unwrap();
+                let json2 = serde_json::to_string(&val).unwrap();
+
+                if json1 != json2 {
+                    full_info!("games are different");
+                } else {
+                    full_info!("games are the same");
+                }
+            } else {
+                full_info!("No test_game provided");
+            }
+
+            HttpResponse::Ok().json(&val)
+        }
+        Err(service_error) => service_error.to_http_response(),
+    }
 }
 
 ///

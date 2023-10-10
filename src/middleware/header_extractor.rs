@@ -1,10 +1,12 @@
+#![allow(unused_imports)]
 use actix_web::{dev::Payload, error::Error, FromRequest, HttpRequest, Result};
 use futures::future::{ok, Ready};
 use serde::Serialize;
 
 use crate::{
+    full_info,
     games_service::game_container::game_messages::GameHeader,
-    shared::shared_models::{LoginHeaderData, ProfileStorage}, full_info,
+    shared::shared_models::{LoginHeaderData, ProfileStorage},
 };
 
 use super::request_context_mw::TestCallContext;
@@ -34,14 +36,22 @@ impl FromRequest for HeadersExtractor {
             .get(GameHeader::PASSWORD)
             .and_then(|v| v.to_str().ok().map(String::from));
 
-        let ld = headers.get(GameHeader::LOGIN_DATA).and_then(|v| v.to_str().ok());
-        full_info!("ld: {:#?}", ld);
-
         let login_data = headers
             .get(GameHeader::LOGIN_DATA)
             .and_then(|v| v.to_str().ok())
             .and_then(|s| serde_json::from_str::<LoginHeaderData>(s).ok());
 
+        // let tcc_json = headers.get(GameHeader::TEST);
+        // if let Some(header) = tcc_json {
+        //     let json = header.to_str().unwrap();
+        //     let result = serde_json::from_str::<TestCallContext>(json);
+        //     match result {
+        //         Ok(tcc) => full_info!("{:#?}", tcc), 
+        //         Err(e) => {
+        //             full_info!("serde error: {:#?}", e)
+        //         }
+        //     };
+        // }
         let test_call_context = headers
             .get(GameHeader::TEST)
             .and_then(|v| v.to_str().ok())
