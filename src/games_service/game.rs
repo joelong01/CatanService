@@ -1,14 +1,14 @@
 use crate::{
-    full_info,
     games_service::{
         game_container::game_messages::{CatanMessage, GameCreatedData},
         long_poller::long_poller::LongPoller,
     },
     middleware::request_context_mw::RequestContext,
-    shared::shared_models::{GameError, ResponseType, ServiceError, UserProfile},
+    shared::{
+        service_models::Role,
+        shared_models::{ServiceError, UserProfile},
+    },
 };
-
-use reqwest::StatusCode;
 
 use crate::games_service::shared::game_enums::CatanGameType;
 
@@ -24,29 +24,32 @@ use super::{
 pub async fn shuffle_game(
     game_id: &str,
     request_context: &RequestContext,
+    test_game: Option<RegularGame>,
 ) -> Result<RegularGame, ServiceError> {
-    if request_context.is_test() {
-        full_info!("test shuffle");
+    if let Some(game) = test_game {
+        if !request_context.is_caller_in_role(Role::TestUser) {
+            return Err(ServiceError::new_unauthorized(
+                "you must be a test user to use test call context",
+            ));
+        }
+
+        if game.game_id != game_id {
+            return Err(ServiceError::new_bad_request("game ids have to match"));
+        }
+
+        GameContainer::push_game(&game_id.to_owned(), &game).await?;
+        return Ok(game);
     }
 
     let (game, _) = GameContainer::current_game(&game_id.to_owned()).await?;
+    let mut game = game.clone();
+    game.shuffle_count = game.shuffle_count + 1;
+    game.shuffle();
+    GameContainer::push_game(&game_id.to_owned(), &game).await?;
+    Ok(game)
 
-    let mut new_game = game.clone();
-    new_game.shuffle_count = new_game.shuffle_count + 1;
-    new_game.shuffle();
-    let result = GameContainer::push_game(&game_id.to_owned(), &new_game).await;
-    match result {
-        Ok(_) => Ok(new_game),
-        Err(e) => {
-            let err_message = format!("GameContainer::push_game error: {:#?}", e);
-            return Err(ServiceError::new(
-                "Error Hashing Password",
-                StatusCode::INTERNAL_SERVER_ERROR,
-                ResponseType::ErrorInfo(err_message.to_owned()),
-                GameError::HttpError,
-            ));
-        }
-    }
+    //
+    //  push the game even if it is a test game so that the clients get the update
 }
 
 ///

@@ -9,16 +9,17 @@ use actix_web::{
 
 use crate::games_service::shared::game_enums::CatanGameType;
 
-
 ///
 /// check the state to make sure the request is valid
 /// randomize the board and the harbors
 /// post the response to websocket
 pub async fn shuffle_game(
     game_id: web::Path<String>,
+    headers: HeadersExtractor,
     request_context: RequestContext,
 ) -> HttpResponse {
-    api_call!(super::game::shuffle_game(&game_id, &request_context).await)
+    let test_game = headers.test_call_context.and_then(|ctx| ctx.game.clone());
+    api_call!(super::game::shuffle_game(&game_id, &request_context, test_game).await)
 }
 
 ///
