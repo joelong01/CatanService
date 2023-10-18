@@ -397,8 +397,14 @@ impl GameContainer {
         game_map.insert(game_id.to_owned(), Arc::new(RwLock::new(container)));
         drop(game_map);
 
-        // Fetch and return the current game
+        // Fetch the current game
         let current = GameContainer::current_game(game_id).await?;
+
+        // let everybody know you loaded the game
+        GameContainer::broadcast_message(game_id, &CatanMessage::GameUpdate(current.0.clone())).await?;
+
+        // return it -- arguably should not be returned, but usefor for tests. clients should get the game 
+        // from the message
         Ok(current.0)
     }
 }
