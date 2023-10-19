@@ -4,7 +4,6 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
-    
         {
             "type": "lldb",
             "request": "launch",
@@ -24,13 +23,14 @@
             "cargo": {
                 "args": [
                     "test",
-                    "--no-run", 
+                    "--no-run",
                     "--bin=catan_service"
-
                 ]
             },
             "program": "${cargo:program}",
-            "args": ["full_game_test"],
+            "args": [
+                "full_game_test"
+            ],
             "cwd": "${workspaceFolder}"
         },
         {
@@ -68,6 +68,8 @@
                 }
             },
             "args": [],
+            "preLaunchTask": "update env",
+            "envFile": "/Users/joelong/.catanService.env",
             "cwd": "${workspaceFolder}"
         },
         {
@@ -87,6 +89,7 @@
                 }
             },
             "args": [],
+            "envFile": "$HOME/.localDevEnv.sh",
             "cwd": "${workspaceFolder}"
         }
     ]

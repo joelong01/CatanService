@@ -1,0 +1,134 @@
+{
+    "hostName": {
+        "description": "the DNS name for the application",
+        "shellscript": "",
+        "default": "localhost:8080",
+        "tempEnvironmentVariableName": ""
+    },
+    "azureResourceGroup": {
+        "description": "the Azure Resource Group for the app",
+        "shellscript": "",
+        "default": "",
+        "tempEnvironmentVariableName": ""
+    },
+    "azureLocation": {
+        "description": "the location for your Azure Datacenter",
+        "shellscript": "",
+        "default": "uswest3",
+        "tempEnvironmentVariableName": ""
+    },
+    "kevVaultName": {
+        "description": "the name of the keyvault used by the app",
+        "shellscript": "",
+        "default": "",
+        "tempEnvironmentVariableName": ""
+    },
+    "cosmosAccountName": {
+        "description": "the Cosmosdb account name",
+        "shellscript": "",
+        "default": "user-cosmos-account",
+        "tempEnvironmentVariableName": ""
+    },
+    "cosmosDatabaseName": {
+        "description": "the name of the User database",
+        "shellscript": "",
+        "default": "Users-db",
+        "tempEnvironmentVariableName": ""
+    },
+    "adminEmail": {
+        "description": "the email of the admin",
+        "shellscript": "",
+        "default": "",
+        "tempEnvironmentVariableName": ""
+    },
+    "adminProfileJson": {
+        "description": "the location of a JSON doc that has the admin profile",
+        "shellscript": "",
+        "default": "",
+        "tempEnvironmentVariableName": ""
+    },
+    "testCredCacheLocation": {
+        "description": "the location to store the cached creds when running tests",
+        "shellscript": "",
+        "default": "",
+        "tempEnvironmentVariableName": ""
+    },
+    "adminPassword": {
+        "description": "the password for the admin account",
+        "shellscript": "",
+        "default": "",
+        "tempEnvironmentVariableName": ""
+    },
+    "testUsersJson": {
+        "description": "the location of a JSON doc that has test users",
+        "shellscript": "",
+        "default": "./test_users.json",
+        "tempEnvironmentVariableName": ""
+    },
+    "rustLog": {
+        "description": "the settings for rust logger",
+        "shellscript": "",
+        "default": "actix_web=trace,actix_server=trace,rust=trace",
+        "tempEnvironmentVariableName": ""
+    },
+    "testPhoneNumber": {
+        "description": "the phone number to use in tests (*to*)",
+        "shellscript": "",
+        "default": "",
+        "tempEnvironmentVariableName": ""
+    },
+    "servicePhoneNumber": {
+        "description": "the phone number that the service uses (*from*)",
+        "shellscript": "./get_azure_info.sh --phone-number",
+        "default": "",
+        "tempEnvironmentVariableName": "SERVICE_PHONE_NUMBER"
+    },
+    "testEmail": {
+        "description": "the *to* email to use in tests",
+        "shellscript": "",
+        "default": "",
+        "tempEnvironmentVariableName": ""
+    },
+    "serviceFromEmail": {
+        "description": "the Service *from* email",
+        "shellscript": "",
+        "default": "",
+        "tempEnvironmentVariableName": ""
+    },
+    "cosmosAuthToken": {
+        "description": "the Cosmosdb authentication token (look for 'Keys' in the Azure Portal)",
+        "shellscript": "./get_azure_info.sh --cosmos-token",
+        "default": "",
+        "tempEnvironmentVariableName": "COSMOS_AUTH_TOKEN"
+    },
+    "sslKeyFile": {
+        "description": "the file containing the SSL key",
+        "shellscript": "./generate_ssl_cert.sh",
+        "default": "$HOME/catan_ssl_key.pem",
+        "tempEnvironmentVariableName": "SSL_KEY_FILE"
+    },
+    "sslCertFile": {
+        "description": "the file containing the SSL certificate",
+        "shellscript": "./generate_ssl_cert.sh",
+        "default": "$HOME/catan_ssl_cert.pem",
+        "tempEnvironmentVariableName": "SSL_CERT_FILE"
+    },
+    "loginSecretKey": {
+        "description": "the secret key used for login",
+        "shellscript": "./get_azure_info.sh --login-secret-key",
+        "default": "",
+        "tempEnvironmentVariableName": "LOGIN_SECRET_KEY"
+    },
+    "validationSecretKey": {
+        "description": "the secret key used for email validation",
+        "shellscript": "./get_azure_info.sh --validation-secret-key",
+        "default": "",
+        "tempEnvironmentVariableName": "VALIDATION_SECRET_KEY"
+    },
+    "azureCommunicationConnectionString": {
+        "description": "the azure communication connection string",
+        "shellscript": "./get_azure_info.sh --comm-string",
+        "default": "",
+        "tempEnvironmentVariableName": "AZURE_COMMUNICATION_CONNECTION_STRING"
+    }
+}

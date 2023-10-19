@@ -41,7 +41,7 @@ fn get_host_ip_and_port() -> (String, String) {
     let parts: Vec<&str> = host_name.split(':').collect();
 
     let hostname = parts[0];
-    let port: u16 = parts.get(1).unwrap_or(&"8080").parse().unwrap_or(8080);
+    let port: u16 = parts.get(1).unwrap_or(&"8082").parse().unwrap_or(8082);
 
     // Resolve the server name to an IP address
     let mut addrs = format!("{}:{}", hostname, port)
