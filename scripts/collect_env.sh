@@ -1,11 +1,12 @@
 #!/bin/bash
 # This script is run every time a terminal is started. It does the following:
-# it looks at .devcontainer/required_settings.json and updates a config file with the name/value pairs where the config
+# it looks at scripts/required_settings.json and updates a config file with the name/value pairs where the config
 # filename is stored in $HOME with the name ".<project directory name>"  This file can then be used however the app
 # needs -- typically passed into main via launch.json args[]
 
 # in case $0 is modified somehow, store it in a local
 SCRIPT_FQN="$0"
+TRACE=
 #colors for nice output
 RED=$(tput setaf 1)
 GREEN=$(tput setaf 2)
@@ -21,6 +22,13 @@ function echo_warning() {
 function echo_info() {
     printf "${GREEN}%s${NORMAL}\n" "${*}"
 }
+
+function trace() {
+    if [[ $TRACE == "true" ]]; then
+        echo "${*}"
+    fi
+}
+
 #
 #   it is an easy mistake to run ./collect_env.sh setup from the devcontainer directory instead of the project
 #   directory.  to make this work, we have to get the real paths to the required_settings.json and the actual
@@ -33,7 +41,7 @@ function get_real_path() {
         return 0
     fi
 
-    file=".devcontainer/$file"
+    file="scripts/$file"
     if [[ -f $file ]]; then
         realpath "$file"
         return 0
@@ -69,11 +77,10 @@ function get_config_file_name() {
 
 # a this is a config file in json format where we use jq to find/store settings
 # we pushd to the directory that has the script -- so it needs to be in the same directory as $0 (collect_env.sh)
-DEVCONTAINER_DIR="$(dirname "${0}")"
-REQUIRED_REPO_ENV_VARS="$DEVCONTAINER_DIR/required_settings.json"
+SCRIPTS_DIR="$(dirname "${0}")"
+REQUIRED_REPO_ENV_VARS="$SCRIPTS_DIR/required_settings.json"
 CONFIG_FILE=$(get_config_file_name)".json" # loaded in main()
 ENV_FILE=$(get_config_file_name)".env"     # loaded in launch.json
-
 # update_config function
 #
 
@@ -96,6 +103,7 @@ function update_config() {
     local shellscript_line
     local script_args
     local env_file
+    local length
 
     if [[ "$CONFIG_FILE" -nt "$REQUIRED_REPO_ENV_VARS" ]]; then
         echo_info "using existing $CONFIG_FILE"
@@ -107,19 +115,21 @@ function update_config() {
 
     required_settings=$(jq '.' "$REQUIRED_REPO_ENV_VARS")
     existing_settings=$(jq '.' "$CONFIG_FILE")
-    updated_settings="{}"                                           # Initialize as an empty JSON object
-    keys=$(echo "$required_settings" | jq -r 'to_entries[] | .key') #do it this way instead of .keys because the sort matters
+    updated_settings="{}" # Initialize as an empty JSON object
+    length=$(echo "$required_settings" | jq length)
+    keys_array=$(echo "$required_settings" | jq 'keys')
 
     # Iterate through the array
-    for key in $keys; do
-        echo "$key"
+    for ((i = 0; i < "$length"; i++)); do
+        key=$(echo "$keys_array" | jq -r ".[$i]")
+        trace "looping.  key=$key"
         description=$(echo "$required_settings" | jq -r ".${key}.description")
         shellscript_line=$(echo "$required_settings" | jq -r ".${key}.shellscript")
         default=$(echo "$required_settings" | jq -r ".${key}.default")
         environmentVariable=$(echo "$required_settings" | jq -r ".${key}.tempEnvironmentVariableName")
         requiredAsEnv=$(echo "$required_settings" | jq -r ".${key}.requiredAsEnv")
         value=""
-        echo "[key=$key][var=$environmentVariable][script=$shellscript_line]"
+        trace "[key=$key][var=$environmentVariable][script=$shellscript_line]"
         # Check if the key already exists in the original settings
         existing_value=$(echo "$existing_settings" | jq -r ".${key}")
 
@@ -138,6 +148,7 @@ function update_config() {
         fi
 
         if [[ "$existing_value" != "null" ]]; then
+            trace "using existing value: [key=$key][var=$environmentVariable][script=$shellscript_line][value=$value]"
             value="$existing_value" # If key exists, use its value.
         else
             if [[ -n "$shellscript" ]]; then
@@ -157,17 +168,24 @@ function update_config() {
             fi
         fi
         if [[ $requiredAsEnv == "true" ]]; then
-            echo "[key=$key][var=$environmentVariable][script=$shellscript_line][value=$value]"
+            trace "[key=$key][var=$environmentVariable][script=$shellscript_line][value=$value]"
             env_file+="$environmentVariable=$value"$'\n'
             export "$environmentVariable=$value"
-            echo "$env_file"
         fi
         value=$(eval echo "$value") # Resolve environment variables in the user_input
+        trace "adding $key=$value to settings"
         updated_settings=$(echo "$updated_settings" | jq --arg key "$key" --arg value "$value" '.[$key]=$value')
-    done < <(jq -r 'keys[]' "$REQUIRED_REPO_ENV_VARS")
 
-    echo "$updated_settings" >"$CONFIG_FILE"
-    echo "$env_file" >"$ENV_FILE"
+    done
+    trace "updated_settings:"
+    trace "$updated_settings"
+    if echo "$updated_settings" | jq .; then # no [[]] -- checking for sucess
+        trace "updating $CONFIG_FILE"
+        echo "$updated_settings" >"$CONFIG_FILE"
+        echo "$env_file" >"$ENV_FILE"
+    else
+        echo_error "bad data was generated."
+    fi
 }
 
 #
@@ -220,7 +238,8 @@ help)
     show_help
     ;;
 update)
-    pushd "$DEVCONTAINER_DIR" >/dev/null ||
+    trace "scripts directory: $SCRIPTS_DIR"
+    pushd "$SCRIPTS_DIR" >/dev/null ||
         {
             echo_error "Unable to change directory to $(dirname "$REQUIRED_REPO_ENV_VARS")"
 

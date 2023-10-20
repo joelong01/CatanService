@@ -2,6 +2,29 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "Execute collect_env.sh",
+            "type": "shell",
+            "command": "${workspaceFolder}/scripts/collect_env.sh",
+            "args": [
+                "update"
+            ],
+            "runOptions": {
+                "runOn": "folderOpen"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }, 
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            }
+        },
+        {
             "type": "shell",
             "label": "cargo make build",
             "command": "cargo fmt && cargo",

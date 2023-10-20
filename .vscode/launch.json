@@ -9,7 +9,7 @@
             "request": "launch",
             "name": "Bash-Debug collect_env.sh update",
             "cwd": "${workspaceFolder}",
-            "program": "${workspaceFolder}/.devcontainer/collect_env.sh",
+            "program": "${workspaceFolder}/scripts/collect_env.sh",
             "args": [
                 "update"
             ],

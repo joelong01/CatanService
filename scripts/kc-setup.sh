@@ -7,7 +7,6 @@ CREATE=0 # We initialize to false (0) here and only set it to true (1) when nece
 VERIFY=0
 DELETE=0
 
-# ... Rest of your code ...
 
 function bool_to_string {
     if [ "$1" -eq 1 ]; then
