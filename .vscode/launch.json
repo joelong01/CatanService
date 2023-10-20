@@ -5,35 +5,6 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Cargo launch",
-            "cargo": {
-                "args": [
-                    "build",
-                    "--lib"
-                ]
-            },
-            "args": []
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug full_game_test",
-            "cargo": {
-                "args": [
-                    "test",
-                    "--no-run",
-                    "--bin=catan_service"
-                ]
-            },
-            "program": "${cargo:program}",
-            "args": [
-                "full_game_test"
-            ],
-            "cwd": "${workspaceFolder}"
-        },
-        {
             "type": "bashdb",
             "request": "launch",
             "name": "Bash-Debug collect_env.sh update",
@@ -60,17 +31,19 @@
                 "args": [
                     "build",
                     "--bin=catan_service",
-                    "--package=catan_service"
+                    "--package=catan_service",
                 ],
                 "filter": {
                     "name": "catan_service",
                     "kind": "bin"
                 }
             },
-            "args": [],
-            "preLaunchTask": "update env",
-            "envFile": "/Users/joelong/.catanService.env",
-            "cwd": "${workspaceFolder}"
+            "args": [
+                "--config-file",
+                "${env:HOME}/.catanService.json"
+            ],
+            "cwd": "${workspaceFolder}",
+            "envFile": "${env:HOME}/.catanService.env"
         },
         {
             "type": "lldb",
@@ -88,8 +61,11 @@
                     "kind": "bin"
                 }
             },
-            "args": [],
-            "envFile": "$HOME/.localDevEnv.sh",
+            "args": [
+                "--config-file",
+                "${env:HOME}/.catanService.json"
+            ],
+            "envFile": "${env:HOME}/.catanService.env",
             "cwd": "${workspaceFolder}"
         }
     ]

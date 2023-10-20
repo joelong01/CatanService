@@ -52,12 +52,14 @@ function get_config_file_name() {
 
     # Get the current directory name, which is now two levels up from the original script's directory
     project_name="$(basename "$PWD")"
+    # convert to camelCase
+    project_name="$(echo "${project_name:0:1}" | awk '{print tolower($0)}')${project_name:1}"
 
     # Return to the original directory
     #shellcheck disable=SC2164
     popd >/dev/null
 
-    file_path="$HOME/.$project_name.json"
+    file_path="$HOME/.$project_name"
 
     # Only create the file if it doesn't already exist
     [[ ! -f "$file_path" ]] && touch "$file_path"
@@ -69,8 +71,8 @@ function get_config_file_name() {
 # we pushd to the directory that has the script -- so it needs to be in the same directory as $0 (collect_env.sh)
 DEVCONTAINER_DIR="$(dirname "${0}")"
 REQUIRED_REPO_ENV_VARS="$DEVCONTAINER_DIR/required_settings.json"
-CONFIG_FILE=$(get_config_file_name)
-
+CONFIG_FILE=$(get_config_file_name)".json" # loaded in main()
+ENV_FILE=$(get_config_file_name)".env"     # loaded in launch.json
 
 # update_config function
 #
@@ -82,14 +84,18 @@ CONFIG_FILE=$(get_config_file_name)
 #   5.	set the setting in the config file with the new value
 #
 function update_config() {
-    local required_settings   # the settings in required_settings.json
     local value               # the value of the new setting
     local environmentVariable # name of the env variable if there's a script that gets the setting
     local description
     local shellscript
     local default
+    local requiredAsEnv
     local updated_settings # all the settings accumulated so far
     local existing_value
+    local key
+    local shellscript_line
+    local script_args
+    local env_file
 
     if [[ "$CONFIG_FILE" -nt "$REQUIRED_REPO_ENV_VARS" ]]; then
         echo_info "using existing $CONFIG_FILE"
@@ -97,19 +103,23 @@ function update_config() {
     else
         echo_info "building config file $CONFIG_FILE"
     fi
+    env_file=""
 
     required_settings=$(jq '.' "$REQUIRED_REPO_ENV_VARS")
     existing_settings=$(jq '.' "$CONFIG_FILE")
-    updated_settings="{}" # Initialize as an empty JSON object
+    updated_settings="{}"                                           # Initialize as an empty JSON object
+    keys=$(echo "$required_settings" | jq -r 'to_entries[] | .key') #do it this way instead of .keys because the sort matters
 
     # Iterate through the array
-    for key in $(echo "$required_settings" | jq -r 'keys[]'); do
+    for key in $keys; do
+        echo "$key"
         description=$(echo "$required_settings" | jq -r ".${key}.description")
         shellscript_line=$(echo "$required_settings" | jq -r ".${key}.shellscript")
         default=$(echo "$required_settings" | jq -r ".${key}.default")
         environmentVariable=$(echo "$required_settings" | jq -r ".${key}.tempEnvironmentVariableName")
+        requiredAsEnv=$(echo "$required_settings" | jq -r ".${key}.requiredAsEnv")
         value=""
-
+        echo "[key=$key][var=$environmentVariable][script=$shellscript_line]"
         # Check if the key already exists in the original settings
         existing_value=$(echo "$existing_settings" | jq -r ".${key}")
 
@@ -146,13 +156,18 @@ function update_config() {
                 echo_warning "setting $key=$value"
             fi
         fi
-
-        # Add/update the key-value pair in the JSON
+        if [[ $requiredAsEnv == "true" ]]; then
+            echo "[key=$key][var=$environmentVariable][script=$shellscript_line][value=$value]"
+            env_file+="$environmentVariable=$value"$'\n'
+            export "$environmentVariable=$value"
+            echo "$env_file"
+        fi
+        value=$(eval echo "$value") # Resolve environment variables in the user_input
         updated_settings=$(echo "$updated_settings" | jq --arg key "$key" --arg value "$value" '.[$key]=$value')
-    done
-    # Write the updated JSON back to the config file
-    echo "$updated_settings" >"$CONFIG_FILE"
+    done < <(jq -r 'keys[]' "$REQUIRED_REPO_ENV_VARS")
 
+    echo "$updated_settings" >"$CONFIG_FILE"
+    echo "$env_file" >"$ENV_FILE"
 }
 
 #

@@ -12,20 +12,20 @@ mod user_service;
 
 use actix_web::{web, HttpResponse, HttpServer, Scope};
 
-use cosmos_db::database_abstractions::COLLECTION_NAME_VALUES;
+
 use games_service::actions::action_handlers;
 use games_service::long_poller::long_poller_handler::long_poll_handler;
-use shared::shared_models::ServiceError;
 
-use std::env;
+
 use std::net::ToSocketAddrs;
 
-use crate::azure_setup::azure_wrapper::verify_or_create_account;
-use crate::azure_setup::azure_wrapper::verify_or_create_collection;
-use crate::azure_setup::azure_wrapper::verify_or_create_database;
+
 use crate::games_service::lobby::lobby_handlers;
+use clap::Parser;
 use games_service::game_handlers;
 use lazy_static::lazy_static;
+pub use log::info;
+pub use log::trace;
 use log::{error, LevelFilter};
 use middleware::authn_mw::AuthenticationMiddlewareFactory;
 use middleware::service_config::SERVICE_CONFIG;
@@ -33,11 +33,14 @@ use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
 use std::sync::atomic::{AtomicBool, Ordering};
 use user_service::user_handlers;
 
-pub use log::info;
-pub use log::trace;
+#[derive(Parser, Debug)]
+struct Arguments {
+    #[clap(long)]
+    config_file: String,
+}
 
 fn get_host_ip_and_port() -> (String, String) {
-    let host_name = std::env::var("HOST_NAME").expect("HOST_NAME must be set");
+    let host_name = SERVICE_CONFIG.host_name.clone();
     let parts: Vec<&str> = host_name.split(':').collect();
 
     let hostname = parts[0];
@@ -61,30 +64,28 @@ fn get_host_ip_and_port() -> (String, String) {
  */
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    // Access CATAN_SECRETS to force initialization and potentially panic.
-    // print!("env_logger set with {:#?}\n", SERVICE_CONFIG.rust_log);
-    // print!("ssl key file {:#?}\n", SERVICE_CONFIG.ssl_key_location);
-    // print!("ssl cert file {:#?}\n", SERVICE_CONFIG.ssl_cert_location);
-    // env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+
+    // force the config to load of failfast
+    full_info!("using config_file: {}", &SERVICE_CONFIG.config_file);
+
+    //
+    //  make sure at least one of the required environment variables are there for a sanity check
+    let _ = std::env::var("COSMOS_AUTH_TOKEN").expect(
+        "environment variable named COSMOS_AUTH_TOKEN must be set for the cosmos SDK to work",
+    );
+
     init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
-    let args: Vec<String> = env::args().collect();
-
-    if args.len() > 1 && args[1] == "--setup" {
-        setup_cosmos().expect("Setup failed and the app cannot continue.");
-    }
-
     let (ip_address, port) = get_host_ip_and_port();
-
     println!("Binding to IP: {}:{}", ip_address, port);
 
     //
     //  SSL support
     let mut builder = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
     builder
-        .set_private_key_file(SERVICE_CONFIG.ssl_key_location.to_owned(), SslFiletype::PEM)
+        .set_private_key_file(SERVICE_CONFIG.ssl_key_file.to_owned(), SslFiletype::PEM)
         .unwrap();
     builder
-        .set_certificate_chain_file(SERVICE_CONFIG.ssl_cert_location.to_owned())
+        .set_certificate_chain_file(SERVICE_CONFIG.ssl_cert_file.to_owned())
         .unwrap();
 
     //
@@ -96,43 +97,43 @@ async fn main() -> std::io::Result<()> {
         .await
 }
 
-fn setup_cosmos() -> Result<(), ServiceError> {
-    verify_or_create_account(
-        &SERVICE_CONFIG.resource_group,
-        &SERVICE_CONFIG.cosmos_account,
-        &SERVICE_CONFIG.azure_location,
-    )?;
+// fn setup_cosmos() -> Result<(), ServiceError> {
+//     verify_or_create_account(
+//         &SERVICE_CONFIG.resource_group,
+//         &SERVICE_CONFIG.cosmos_account,
+//         &SERVICE_CONFIG.azure_location,
+//     )?;
 
-    verify_or_create_database(
-        &SERVICE_CONFIG.cosmos_account,
-        &SERVICE_CONFIG.cosmos_database_name,
-        &SERVICE_CONFIG.resource_group,
-    )?;
-    let test_db_name = SERVICE_CONFIG.cosmos_database_name.to_string() + "-test";
-    verify_or_create_database(
-        &SERVICE_CONFIG.cosmos_account,
-        &test_db_name,
-        &SERVICE_CONFIG.resource_group,
-    )?;
+//     verify_or_create_database(
+//         &SERVICE_CONFIG.cosmos_account,
+//         &SERVICE_CONFIG.cosmos_database_name,
+//         &SERVICE_CONFIG.resource_group,
+//     )?;
+//     let test_db_name = SERVICE_CONFIG.cosmos_database_name.to_string() + "-test";
+//     verify_or_create_database(
+//         &SERVICE_CONFIG.cosmos_account,
+//         &test_db_name,
+//         &SERVICE_CONFIG.resource_group,
+//     )?;
 
-    for collection in COLLECTION_NAME_VALUES.iter() {
-        verify_or_create_collection(
-            &SERVICE_CONFIG.cosmos_account,
-            &SERVICE_CONFIG.cosmos_database_name,
-            collection.value,
-            &SERVICE_CONFIG.resource_group,
-        )?;
+//     for collection in COLLECTION_NAME_VALUES.iter() {
+//         verify_or_create_collection(
+//             &SERVICE_CONFIG.cosmos_account,
+//             &SERVICE_CONFIG.cosmos_database_name,
+//             collection.value,
+//             &SERVICE_CONFIG.resource_group,
+//         )?;
 
-        let test_name = format!("{}-test", collection.value);
-        verify_or_create_collection(
-            &SERVICE_CONFIG.cosmos_account,
-            &test_db_name,
-            &test_name,
-            &SERVICE_CONFIG.resource_group,
-        )?;
-    }
-    Ok(())
-}
+//         let test_name = format!("{}-test", collection.value);
+//         verify_or_create_collection(
+//             &SERVICE_CONFIG.cosmos_account,
+//             &test_db_name,
+//             &test_name,
+//             &SERVICE_CONFIG.resource_group,
+//         )?;
+//     }
+//     Ok(())
+// }
 
 /**
  * this is the simplest possible GET handler that can be run from a browser to test connectivity
@@ -404,7 +405,7 @@ mod tests {
         games_service::game_container::game_messages::GameHeader,
         init_env_logger,
         middleware::service_config::SERVICE_CONFIG,
-        setup_cosmos, setup_test,
+        setup_test,
         test::{test_helpers::test::TestHelpers, test_proxy::TestProxy},
     };
 
@@ -436,9 +437,14 @@ mod tests {
         let mut proxy = TestProxy::new(&app);
 
         let test_users = TestHelpers::register_test_users(&mut proxy, None).await;
-      
-        let auth_token = proxy.test_login(&test_users[0].clone().pii.expect("pii should exist").email,
-            "password",).await.expect("success");
+
+        let auth_token = proxy
+            .test_login(
+                &test_users[0].clone().pii.expect("pii should exist").email,
+                "password",
+            )
+            .await
+            .expect("success");
 
         proxy.set_auth_token(Some(auth_token));
         let profile = proxy.get_profile("Self").await.expect("success");
@@ -482,7 +488,7 @@ mod tests {
         assert!(profile.pii.is_some());
         assert!(profile.user_id.is_some());
 
-         let auth_token = proxy
+        let auth_token = proxy
             .test_login(&profile.pii.as_ref().unwrap().email, "password")
             .await
             .expect("login should work and it should return the token");
@@ -495,7 +501,6 @@ mod tests {
         profile.pii.as_mut().unwrap().email = SERVICE_CONFIG.test_email.clone();
         // update the profile
         proxy.update_profile(&profile).await.expect("success");
-
 
         // we've change the email, which is encoded in the token and used as truth by the service -
         // so login again and get a new token
@@ -548,9 +553,5 @@ mod tests {
         // be different than the profile in the .json that is used to add test users and tests will assert.
         TestHelpers::delete_all_test_users(&mut proxy).await;
     }
-    #[tokio::test]
-    async fn test_setup() {
-        init_env_logger(log::LevelFilter::Trace, log::LevelFilter::Trace).await;
-        setup_cosmos().expect("can't continue if setup fails!");
-    }
+
 }

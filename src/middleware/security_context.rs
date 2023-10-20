@@ -1,7 +1,8 @@
 #![allow(dead_code)]
 use crate::{
     azure_setup::azure_wrapper::{key_vault_get_secret, key_vault_save_secret},
-    shared::service_models::Claims, full_info,
+    full_info,
+    shared::service_models::Claims,
 };
 
 use rand::RngCore;
@@ -119,13 +120,9 @@ impl SecurityContext {
         secrets.clone()
     }
     fn get_cache_file() -> Option<String> {
-        match std::env::var("TEST_CRED_CACHE_LOCATION") {
-            Ok(path) => {
-                let cred_cache = format!("{}/keys.json", path);
-                Some(cred_cache)
-            }
-            Err(_) => None,
-        }
+        let path = SERVICE_CONFIG.test_cred_cache_location.clone();
+        let cred_cache = format!("{}/keys.json", path);
+        Some(cred_cache)
     }
     pub(crate) fn new() -> Self {
         if let Some(cred_cache) = SecurityContext::get_cache_file() {
@@ -141,7 +138,10 @@ impl SecurityContext {
             }
         }
 
-        match key_vault_get_secret(&SERVICE_CONFIG.kv_name, Self::SECURITY_CONTEXT_SECRET_NAME) {
+        match key_vault_get_secret(
+            &SERVICE_CONFIG.key_vault_name,
+            Self::SECURITY_CONTEXT_SECRET_NAME,
+        ) {
             Ok(json) => match serde_json::from_str::<SecurityContext>(&json) {
                 Ok(sc) => sc,
                 Err(e) => {
@@ -171,7 +171,7 @@ impl SecurityContext {
         match serde_json::to_string(&security_context) {
             Ok(secrets) => {
                 if let Err(e) = key_vault_save_secret(
-                    &SERVICE_CONFIG.kv_name,
+                    &SERVICE_CONFIG.key_vault_name,
                     Self::SECURITY_CONTEXT_SECRET_NAME,
                     &secrets,
                 ) {
@@ -180,7 +180,7 @@ impl SecurityContext {
 
                 if let Some(cred_cache) = SecurityContext::get_cache_file() {
                     if let Ok(mut file) = File::open(&cred_cache) {
-                       let _ =  write!(file, "{}", secrets);
+                        let _ = write!(file, "{}", secrets);
                     }
                 }
             }

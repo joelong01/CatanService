@@ -1,134 +1,156 @@
 {
+    "resourceGroup": {
+        "description": "the Azure Resource Group for the app",
+        "shellscript": "",
+        "default": "",
+        "tempEnvironmentVariableName": "AZURE_RESOURCE_GROUP",
+        "requiredAsEnv": true
+    },
+    "cosmosAccount": {
+        "description": "the Cosmosdb account name",
+        "shellscript": "",
+        "default": "user-cosmos-account",
+        "tempEnvironmentVariableName": "COSMOS_ACCOUNT_NAME",
+        "requiredAsEnv": true
+    },
     "hostName": {
         "description": "the DNS name for the application",
         "shellscript": "",
         "default": "localhost:8080",
-        "tempEnvironmentVariableName": ""
-    },
-    "azureResourceGroup": {
-        "description": "the Azure Resource Group for the app",
-        "shellscript": "",
-        "default": "",
-        "tempEnvironmentVariableName": ""
+        "tempEnvironmentVariableName": "",
+        "requiredAsEnv": false
     },
     "azureLocation": {
         "description": "the location for your Azure Datacenter",
         "shellscript": "",
         "default": "uswest3",
-        "tempEnvironmentVariableName": ""
+        "tempEnvironmentVariableName": "",
+        "requiredAsEnv": false
     },
-    "kevVaultName": {
+    "keyVaultName": {
         "description": "the name of the keyvault used by the app",
         "shellscript": "",
         "default": "",
-        "tempEnvironmentVariableName": ""
-    },
-    "cosmosAccountName": {
-        "description": "the Cosmosdb account name",
-        "shellscript": "",
-        "default": "user-cosmos-account",
-        "tempEnvironmentVariableName": ""
+        "tempEnvironmentVariableName": "",
+        "requiredAsEnv": false
     },
     "cosmosDatabaseName": {
         "description": "the name of the User database",
         "shellscript": "",
         "default": "Users-db",
-        "tempEnvironmentVariableName": ""
+        "tempEnvironmentVariableName": "",
+        "requiredAsEnv": false
     },
     "adminEmail": {
         "description": "the email of the admin",
         "shellscript": "",
         "default": "",
-        "tempEnvironmentVariableName": ""
+        "tempEnvironmentVariableName": "",
+        "requiredAsEnv": false
     },
     "adminProfileJson": {
         "description": "the location of a JSON doc that has the admin profile",
         "shellscript": "",
         "default": "",
-        "tempEnvironmentVariableName": ""
+        "tempEnvironmentVariableName": "",
+        "requiredAsEnv": false
     },
     "testCredCacheLocation": {
         "description": "the location to store the cached creds when running tests",
         "shellscript": "",
-        "default": "",
-        "tempEnvironmentVariableName": ""
+        "default": "$HOME/.catanServiceCredCache",
+        "tempEnvironmentVariableName": "",
+        "requiredAsEnv": false
     },
     "adminPassword": {
         "description": "the password for the admin account",
         "shellscript": "",
         "default": "",
-        "tempEnvironmentVariableName": ""
+        "tempEnvironmentVariableName": "",
+        "requiredAsEnv": false
     },
     "testUsersJson": {
         "description": "the location of a JSON doc that has test users",
         "shellscript": "",
         "default": "./test_users.json",
-        "tempEnvironmentVariableName": ""
+        "tempEnvironmentVariableName": "",
+        "requiredAsEnv": false
     },
     "rustLog": {
         "description": "the settings for rust logger",
         "shellscript": "",
         "default": "actix_web=trace,actix_server=trace,rust=trace",
-        "tempEnvironmentVariableName": ""
+        "tempEnvironmentVariableName": "",
+        "requiredAsEnv": false
     },
     "testPhoneNumber": {
         "description": "the phone number to use in tests (*to*)",
         "shellscript": "",
         "default": "",
-        "tempEnvironmentVariableName": ""
+        "tempEnvironmentVariableName": "",
+        "requiredAsEnv": false
     },
     "servicePhoneNumber": {
         "description": "the phone number that the service uses (*from*)",
         "shellscript": "./get_azure_info.sh --phone-number",
         "default": "",
-        "tempEnvironmentVariableName": "SERVICE_PHONE_NUMBER"
+        "tempEnvironmentVariableName": "SERVICE_PHONE_NUMBER",
+        "requiredAsEnv": false
     },
     "testEmail": {
         "description": "the *to* email to use in tests",
         "shellscript": "",
         "default": "",
-        "tempEnvironmentVariableName": ""
+        "tempEnvironmentVariableName": "",
+        "requiredAsEnv": false
     },
-    "serviceFromEmail": {
+    "serviceEmail": {
         "description": "the Service *from* email",
         "shellscript": "",
         "default": "",
-        "tempEnvironmentVariableName": ""
+        "tempEnvironmentVariableName": "",
+        "requiredAsEnv": false
     },
-    "cosmosAuthToken": {
+    "cosmosToken": {
         "description": "the Cosmosdb authentication token (look for 'Keys' in the Azure Portal)",
         "shellscript": "./get_azure_info.sh --cosmos-token",
         "default": "",
-        "tempEnvironmentVariableName": "COSMOS_AUTH_TOKEN"
+        "tempEnvironmentVariableName": "COSMOS_AUTH_TOKEN",
+        "requiredAsEnv": true
     },
     "sslKeyFile": {
         "description": "the file containing the SSL key",
         "shellscript": "./generate_ssl_cert.sh",
         "default": "$HOME/catan_ssl_key.pem",
-        "tempEnvironmentVariableName": "SSL_KEY_FILE"
+        "tempEnvironmentVariableName": "SSL_KEY_FILE",
+        "requiredAsEnv": false
     },
     "sslCertFile": {
         "description": "the file containing the SSL certificate",
         "shellscript": "./generate_ssl_cert.sh",
         "default": "$HOME/catan_ssl_cert.pem",
-        "tempEnvironmentVariableName": "SSL_CERT_FILE"
+        "tempEnvironmentVariableName": "SSL_CERT_FILE",
+        "requiredAsEnv": false
     },
     "loginSecretKey": {
         "description": "the secret key used for login",
         "shellscript": "./get_azure_info.sh --login-secret-key",
         "default": "",
-        "tempEnvironmentVariableName": "LOGIN_SECRET_KEY"
+        "tempEnvironmentVariableName": "LOGIN_SECRET_KEY",
+        "requiredAsEnv": false
     },
     "validationSecretKey": {
         "description": "the secret key used for email validation",
         "shellscript": "./get_azure_info.sh --validation-secret-key",
         "default": "",
-        "tempEnvironmentVariableName": "VALIDATION_SECRET_KEY"
+        "tempEnvironmentVariableName": "VALIDATION_SECRET_KEY",
+        "requiredAsEnv": false
     },
     "azureCommunicationConnectionString": {
         "description": "the azure communication connection string",
         "shellscript": "./get_azure_info.sh --comm-string",
         "default": "",
-        "tempEnvironmentVariableName": "AZURE_COMMUNICATION_CONNECTION_STRING"
+        "tempEnvironmentVariableName": "AZURE_COMMUNICATION_CONNECTION_STRING",
+        "requiredAsEnv": true
     }
 }

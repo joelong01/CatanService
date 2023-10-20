@@ -489,7 +489,7 @@ pub fn get_validation_url(host: &str, claims: &Claims, request_context: &Request
 /// this and drop the Ok() response. the Ok() response is useful for the test cases.
 pub fn send_validation_email(request_context: &RequestContext) -> Result<(), ServiceError> {
     trace_function!("send_validation_email");
-    let host_name = std::env::var("HOST_NAME").expect("HOST_NAME must be set");
+    let host_name = SERVICE_CONFIG.host_name.clone();
     let claims = request_context
         .claims
         .clone()

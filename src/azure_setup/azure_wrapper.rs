@@ -1071,8 +1071,7 @@ mod tests {
         let randomize_end_of_name = &format!("{}", rand::thread_rng().gen_range(100_000..=999_999));
         let resource_group = "test-resource-group-".to_owned() + randomize_end_of_name;
         let location = &SERVICE_CONFIG.azure_location;
-        let kv_name =
-            std::env::var("KEV_VAULT_NAME").expect("KEV_VAULT_NAME not found in environment");
+        let kv_name = SERVICE_CONFIG.key_vault_name.clone();
         let cosmos_account_name = "test-cosmos-account-".to_owned() + randomize_end_of_name;
         let database_name = "test-cosmos-database-".to_owned() + randomize_end_of_name;
         let collection_name = "test-collection-".to_owned() + randomize_end_of_name;

@@ -6,8 +6,9 @@ pub mod test {
     use tracing::info;
 
     use crate::middleware::request_context_mw::RequestContext;
+    use crate::middleware::service_config::SERVICE_CONFIG;
     use crate::shared::shared_models::{
-        GameError, ProfileStorage, ResponseType, ServiceError, UserProfile, LoginHeaderData
+        GameError, LoginHeaderData, ProfileStorage, ResponseType, ServiceError, UserProfile,
     };
     use crate::test::test_proxy::TestProxy;
     use crate::user_service::users::{login, register_user};
@@ -20,7 +21,7 @@ pub mod test {
         Error,
     };
     use std::io::prelude::*;
-    use std::{env, fs::File};
+    use std::fs::File;
 
     #[tokio::test]
     async fn test_new_proxy() {
@@ -177,9 +178,7 @@ pub mod test {
             full_info!("logging in as admin");
             let profile = TestHelpers::load_admin_profile_from_config();
 
-            let admin_pwd = env::var("ADMIN_PASSWORD")
-                .expect("ADMIN_PASSWORD not found in environment - unable to continue");
-
+            let admin_pwd = SERVICE_CONFIG.admin_password.clone();
             let request_context = RequestContext::admin_default(&profile);
             let login_data = LoginHeaderData {
                 user_name: profile.get_email_or_panic().clone(),
@@ -204,9 +203,7 @@ pub mod test {
 
         fn load_admin_profile_from_config() -> UserProfile {
             // Fetch the location from the environment variable
-            let admin_json_path = env::var("ADMIN_PROFILE_JSON")
-                .expect("ADMIN_PROFILE_JSON not found in environment - unable to continue");
-
+            let admin_json_path = SERVICE_CONFIG.admin_profile_json.clone();
             // Read the file
             let mut file = File::open(admin_json_path.clone())
                 .expect("if this fails, update ADMIN_PROFILE_JSON to point to the right file");
@@ -223,11 +220,8 @@ pub mod test {
         }
 
         fn load_test_users_from_config() -> Vec<UserProfile> {
-            let test_users_path = env::var("TEST_USERS_JSON")
-                .expect("TEST_USERS_JSON not found in environment - unable to continue");
-
             // Read the file
-            let mut file = File::open(test_users_path)
+            let mut file = File::open(&SERVICE_CONFIG.test_users_json)
                 .expect("if this fails, update ADMIN_PROFILE_JSON to point to the right file");
             let mut contents = String::new();
             file.read_to_string(&mut contents)
@@ -267,9 +261,7 @@ pub mod test {
             let mut profiles = Vec::new();
 
             for user_profile in test_users.iter() {
-                let result = proxy
-                    .register_test_user(user_profile, "password")
-                    .await;
+                let result = proxy.register_test_user(user_profile, "password").await;
                 match result {
                     Ok(profile) => {
                         profiles.push(profile.clone());
