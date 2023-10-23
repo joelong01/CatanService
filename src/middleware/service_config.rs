@@ -1,3 +1,4 @@
+
 #![allow(dead_code)]
 
 use std::{collections::HashMap, fs::File, io::Read};
@@ -13,16 +14,60 @@ use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::Arguments;
+use crate::{Arguments, full_info};
+use std::env;
+use std::path::{Path, PathBuf};
+/**
+ * we need this function because of how the config system works in tests.  when you use rust-analyzer and click on "Run"
+ * of "Debug", it will look in .vscode/settings.json where we have the location of the config file
+ * 
+ *   "rust-analyzer.runnables.extraEnv": {"CATAN_CONFIG_FILE": "$HOME/.catanService.json"},   
+ * 
+ *  $HOME is where the ./scrips/collect_env.sh update will put the config file, where the name is the name of the directory
+ *  the project is in.  in the checked in code, it uses the name CatanServices.  But File::open() doesn't know how to deal
+ *  with the $HOME string, so we use this function to expand any environment variables that happen to be in that setting
+ */
+
+
+fn expand_env_in_path(input: &str) -> String {
+    let path = Path::new(input);
+    let mut expanded_path = PathBuf::new();
+
+    for segment in path.iter() {
+        let segment_str = segment.to_str().unwrap_or("");
+        if segment_str.starts_with('$') || segment_str.starts_with('~') {
+            let var_name = &segment_str[1..];
+            if let Ok(val) = env::var(var_name) {
+                expanded_path.push(val);
+            } else {
+                expanded_path.push(segment); // push original segment if env variable not found
+            }
+        } else {
+            expanded_path.push(segment);
+        }
+    }
+    expanded_path.to_string_lossy().into_owned()
+}
 
 // load the environment variables once and only once the first time they are accessed (which is in main() in this case)
 lazy_static! {
     pub static ref SERVICE_CONFIG: ServiceConfig = {
-        let args = Arguments::parse();
-        ServiceConfig::from_file(&args.config_file).expect(&format!("Failed to load ServiceConfig from {}", args.config_file))
+        let config_file = match Arguments::try_parse() {
+        Ok(args) => args.config_file.to_string(),
+        Err(_) => {
+            //
+                    //  could not find the command line -- check invironment:
+                    let config_file = std::env::var("CATAN_CONFIG_FILE").expect("--config-file not passed in and could not \
+                            find CATAN_CONFIG_FILE in the environment.  this should set in the .vscode/settings.json file. \
+                            eg. \"rust-analyzer.runnables.extraEnv\": {\"CATAN_CONFIG_FILE\": \"$HOME/.catanService.json\"}");
+                    expand_env_in_path(&config_file)
+
+                },
+            };
+        full_info!("Loading config from {}", config_file);
+        ServiceConfig::from_file(&config_file).expect(&format!("Failed to load ServiceConfig from {}", &config_file))
     };
 }
-
 
 /**
  *  the .devcontainer/required-secrets.json contains the list of secrets needed to run this application.  this stuctu
@@ -55,8 +100,8 @@ pub struct ServiceConfig {
     pub validation_secret_key: String,
     #[serde(skip)]
     pub name_value_map: HashMap<String, String>,
-     #[serde(skip)]
-    pub config_file: String
+    #[serde(skip)]
+    pub config_file: String,
 }
 
 impl ServiceConfig {
@@ -116,7 +161,7 @@ impl Default for ServiceConfig {
             test_users_json: String::default(),
             validation_secret_key: String::default(),
             name_value_map: HashMap::new(),
-            config_file: String::default()
+            config_file: String::default(),
         }
     }
 }

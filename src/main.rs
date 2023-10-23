@@ -12,13 +12,10 @@ mod user_service;
 
 use actix_web::{web, HttpResponse, HttpServer, Scope};
 
-
 use games_service::actions::action_handlers;
 use games_service::long_poller::long_poller_handler::long_poll_handler;
 
-
 use std::net::ToSocketAddrs;
-
 
 use crate::games_service::lobby::lobby_handlers;
 use clap::Parser;
@@ -64,7 +61,6 @@ fn get_host_ip_and_port() -> (String, String) {
  */
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-
     // force the config to load of failfast
     full_info!("using config_file: {}", &SERVICE_CONFIG.config_file);
 
@@ -76,7 +72,11 @@ async fn main() -> std::io::Result<()> {
 
     init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
     let (ip_address, port) = get_host_ip_and_port();
+
     println!("Binding to IP: {}:{}", ip_address, port);
+
+    full_info!("ssl_key_file: {}", SERVICE_CONFIG.ssl_key_file);
+    full_info!("ssl_cert_file: {}", SERVICE_CONFIG.ssl_cert_file);
 
     //
     //  SSL support
@@ -400,8 +400,9 @@ pub async fn init_env_logger(min_level: LevelFilter, cosmos_log_level: LevelFilt
 
 #[cfg(test)]
 mod tests {
+    #![allow(unused_imports)]
     use crate::{
-        create_service, create_test_service,
+        create_service, create_test_service, full_info,
         games_service::game_container::game_messages::GameHeader,
         init_env_logger,
         middleware::service_config::SERVICE_CONFIG,
@@ -409,7 +410,9 @@ mod tests {
         test::{test_helpers::test::TestHelpers, test_proxy::TestProxy},
     };
 
+    use crate::Arguments;
     use actix_web::test;
+    use clap::Parser;
     use reqwest::StatusCode;
 
     #[tokio::test]

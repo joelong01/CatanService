@@ -2,6 +2,7 @@
     "rust-analyzer.linkedProjects": [
         "./Cargo.toml",
     ],
+    "rust-analyzer.runnables.extraEnv": {"CATAN_CONFIG_FILE": "$HOME/.catanService.json"},   
     "terminal.integrated.profiles.osx": {
         "bash": {
             "path": "bash",

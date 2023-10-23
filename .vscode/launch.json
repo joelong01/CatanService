@@ -54,7 +54,7 @@
                     "test",
                     "--no-run",
                     "--bin=catan_service",
-                    "--package=catan_service"
+                    "--package=catan_service",
                 ],
                 "filter": {
                     "name": "catan_service",

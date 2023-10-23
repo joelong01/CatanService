@@ -78,7 +78,7 @@ function get_config_file_name() {
 # a this is a config file in json format where we use jq to find/store settings
 # we pushd to the directory that has the script -- so it needs to be in the same directory as $0 (collect_env.sh)
 SCRIPTS_DIR="$(dirname "${0}")"
-REQUIRED_REPO_ENV_VARS="$SCRIPTS_DIR/required_settings.json"
+REQUIRED_REPO_ENV_VARS="required_settings.json"
 CONFIG_FILE=$(get_config_file_name)".json" # loaded in main()
 ENV_FILE=$(get_config_file_name)".env"     # loaded in launch.json
 # update_config function
@@ -111,7 +111,7 @@ function update_config() {
     else
         echo_info "building config file $CONFIG_FILE"
     fi
-    env_file=""
+    env_file="CONFIG_FILE=$CONFIG_FILE"$'\n'
 
     required_settings=$(jq '.' "$REQUIRED_REPO_ENV_VARS")
     existing_settings=$(jq '.' "$CONFIG_FILE")
