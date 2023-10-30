@@ -152,5 +152,54 @@
         "default": "",
         "tempEnvironmentVariableName": "AZURE_COMMUNICATION_CONNECTION_STRING",
         "requiredAsEnv": true
-    }
+    },
+    "keyCloakClientSecret": {
+        "description": "the secret the service needs to be a key clock 'client'",
+        "shellscript": "",
+        "default": "",
+        "tempEnvironmentVariableName": "",
+        "requiredAsEnv": false
+    },
+    "keyCloakHost": {
+        "description": "the host (with port and prefix) for the Key Cloak Service",
+        "shellscript": "",
+        "default": "http://localhost:8080",
+        "tempEnvironmentVariableName": "",
+        "requiredAsEnv": false
+    },
+    "keyCloakRealm": {
+        "description": "the KeyCloak realm",
+        "shellscript": "",
+        "default": "longshot-realm",
+        "tempEnvironmentVariableName": "",
+        "requiredAsEnv": false
+    },
+    "keyCloakClientId": {
+        "description": "the id (name) of the KeyCloak client",
+        "shellscript": "",
+        "default": "catan-service",
+        "tempEnvironmentVariableName": "",
+        "requiredAsEnv": false
+    },
+    "keyCloakAdminUserName": {
+        "description": "the login name for the KeyCloak admin",
+        "shellscript": "",
+        "default": "admin",
+        "tempEnvironmentVariableName": "",
+        "requiredAsEnv": false
+    },
+    "keyCloakAdminPassword": {
+        "description": "the password for the KeyCloak admin account",
+        "shellscript": "",
+        "default": "",
+        "tempEnvironmentVariableName": "",
+        "requiredAsEnv": false
+    },
+    "keyCloakTestPassword": {
+        "description": "the password for the KeyCloak test client(s)",
+        "shellscript": "",
+        "default": "",
+        "tempEnvironmentVariableName": "",
+        "requiredAsEnv": false
+    }  
 }

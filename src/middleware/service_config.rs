@@ -1,4 +1,3 @@
-
 #![allow(dead_code)]
 
 use std::{collections::HashMap, fs::File, io::Read};
@@ -14,20 +13,19 @@ use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{Arguments, full_info};
+use crate::{full_info, Arguments};
 use std::env;
 use std::path::{Path, PathBuf};
 /**
  * we need this function because of how the config system works in tests.  when you use rust-analyzer and click on "Run"
  * of "Debug", it will look in .vscode/settings.json where we have the location of the config file
- * 
+ *
  *   "rust-analyzer.runnables.extraEnv": {"CATAN_CONFIG_FILE": "$HOME/.catanService.json"},   
- * 
+ *
  *  $HOME is where the ./scrips/collect_env.sh update will put the config file, where the name is the name of the directory
  *  the project is in.  in the checked in code, it uses the name CatanServices.  But File::open() doesn't know how to deal
  *  with the $HOME string, so we use this function to expand any environment variables that happen to be in that setting
  */
-
 
 fn expand_env_in_path(input: &str) -> String {
     let path = Path::new(input);
@@ -98,6 +96,13 @@ pub struct ServiceConfig {
     pub test_phone_number: String,
     pub test_users_json: String,
     pub validation_secret_key: String,
+    pub key_cloak_admin_password: String,
+    pub key_cloak_admin_user_name: String,
+    pub key_cloak_client_id: String,
+    pub key_cloak_client_secret: String,
+    pub key_cloak_host: String,
+    pub key_cloak_realm: String,
+    pub key_cloak_test_password: String,
     #[serde(skip)]
     pub name_value_map: HashMap<String, String>,
     #[serde(skip)]
@@ -162,6 +167,13 @@ impl Default for ServiceConfig {
             validation_secret_key: String::default(),
             name_value_map: HashMap::new(),
             config_file: String::default(),
+            key_cloak_admin_password: String::default(),
+            key_cloak_admin_user_name: String::default(),
+            key_cloak_client_id: String::default(),
+            key_cloak_client_secret: String::default(),
+            key_cloak_host: String::default(),
+            key_cloak_realm: String::default(),
+            key_cloak_test_password: String::default(),
         }
     }
 }

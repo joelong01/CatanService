@@ -3,7 +3,7 @@ use core::panic;
 use jsonwebtoken::{decode, Algorithm, DecodingKey, TokenData, Validation};
 use reqwest::{Client, Method, RequestBuilder};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt::Debug;
 
@@ -273,24 +273,55 @@ impl KeyCloakProxy {
         let pk = value["public_key"].as_str().unwrap();
         Ok(pk.to_string())
     }
-
-    pub async fn get_roles(&self) -> Result<Vec<KeyCloakRole>, ServiceError> {
+    //
+    // get the roles for the specified client
+    pub async fn get_roles(&self, client_uuid: &str) -> Result<Vec<KeyCloakRole>, ServiceError> {
         let url = format!(
-            "{}/auth/admin/realms/{}/roles",
-            &self.host_name, &self.realm
+            "{}/auth/admin/realms/{}/clients/{}/roles",
+            &self.host_name, &self.realm, client_uuid
         );
         let roles: Vec<KeyCloakRole> = self.get(&url, None, None).await?;
         Ok(roles)
     }
 
+    ///
+    /// get the client id for the given name.  assume that self.host_name, self.realm are set correctly
+    pub async fn get_client_id(&self, name: &str) -> Result<String, ServiceError> {
+        let url = format!(
+            "{}/auth/admin/realms/{}/clients?clientId={}",
+            &self.host_name, &self.realm, name
+        );
+        let value = self.get::<Value>(&url, None, None).await?;
+        if let Value::Array(arr) = &value {
+            if arr.len() != 1 {
+                return Err(ServiceError::new_bad_request("Array length is not 1."));
+            }
+            let first_element = &arr[0];
+            if let Some(id_value) = first_element.get("id") {
+                if let Value::String(id_str) = id_value {
+                    return Ok(id_str.to_string());
+                } else {
+                    return Err(ServiceError::new_bad_request("'id' value is not a string."));
+                }
+            } else {
+                return Err(ServiceError::new_bad_request("'id' not found in first element."));
+            }
+        } else {
+            return Err(ServiceError::new_bad_request("Value is not an array."));
+        }
+    }
+    ///
+    /// this is a *client role* not a realm role
     pub async fn add_user_to_role(
         &self,
         user_id: &str,
+        client_id: &str,
         roles: &Vec<&KeyCloakRole>,
     ) -> Result<(), ServiceError> {
+        //   {{HOST_NAME}}/auth/admin/realms/{{REALM}}/users/{{POSTMAN_USER_ID}}/role-mappings/clients/{{CLIENT_UUID}}
         let url = format!(
-            "{}/auth/admin/realms/{}/users/{}/role-mappings/realm",
-            &self.host_name, &self.realm, &user_id
+            "{}/auth/admin/realms/{}/users/{}/role-mappings/clients/{}",
+            &self.host_name, &self.realm, user_id, client_id
         );
         let _ = self
             .post::<&Vec<&KeyCloakRole>, ()>(&url, None, None, Some(roles))

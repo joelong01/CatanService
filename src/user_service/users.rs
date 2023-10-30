@@ -896,6 +896,7 @@ mod tests {
         create_test_service, full_info, init_env_logger,
         keycloak::kc_proxy::{KeyCloakKeyResponse, KeyCloakProxy, UserCreateRequest},
         middleware::request_context_mw::TestCallContext,
+        middleware::service_config::SERVICE_CONFIG,
         test::{test_helpers::test::*, test_proxy::TestProxy},
     };
 
@@ -918,38 +919,41 @@ mod tests {
     use jsonwebtoken::{decode, DecodingKey, Validation};
     use reqwest;
     use serde_json::{json, Value};
-    const CLIENT_SECRET: &str = "MIICpzCCAY8CBgGLY4+MIICqTCCAZECBgGLZ7BAvDANBgkqhkiG9w0BAQsFADAYMRYwFAYDVQQDDA1jYXRhbi1zZXJ2aWNlMB4XDTIzMTAyNTE2MzMwNloXDTMzMTAyNTE2MzQ0NlowGDEWMBQGA1UEAwwNY2F0YW4tc2VydmljZTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAIL0WIhXGNSZ3e93wK8SRgt4UoSaLI4bdqZW6ChmS55Y5dahJLRTMGTzIapZNOA/RDMZKwcE0PBwPsaZQ4qbQO+xOXXufMBud4kWnna2t3fsscnKm6T9Em/ddrBO2i0P58nQUO/bUbG5ECUx28VN59WExmdXnmo4sOs0VzSCAxubxnKisNwUnWkGYwhYCi1XxdPjriXHB99w0rfP+kppV+7a/YkW15aKbXpQvMHvs/Qgyz4Z1E3Vh73tor+oNEAHrq2dNIoOi1WYop/yGfS3G94n/Q4ydio0NXrMVNuzHnSLCA6Ar+vJQ5EBe2Z65DNxULa1ily7QxsbaaTyDqUObocCAwEAATANBgkqhkiG9w0BAQsFAAOCAQEALK4YcuNU8W1brlnLLK7zUPuCLabYN4RT553sJ3MFv2KqqH3hWhO14eMLHtAJ59ECiKl/EfzF02lJt7trevtXET4q1I74o7u5iixqGdxCnrhzve+AN0ZDA+s73BjSDrlZD6BR4bar3l0e9xDf8a/lUZzq2lP08K5IbSQ1l3eJ6Yl2stmyHGtN7sCAz9U2fyeIrhm4Br4scSQUJuVzHx9tJEOYr1raa9VNe5RL04kCV9xBblFfzfYwAIH+29oIl2XiLn1+TtRxLMC60/s+VNMk6eDag5bhQdbRMn6YcEXsy25RphP11/NS0H0Eq9VMoqQgsos1L1XepCIbWYr5fzrKzA==+1wh28+dKaVIXt03C1mqb1CAwN32BAUCDr2icNFc6vknY7TDJRoNLThGAU8PZ0ptB82Xgm02kn2vR3J6iYzkCMw2Aj2hsYvsbZIUzw8vmdbVMXsVAZZ/tyyALVkZXukLazq3dT7gFc1tWMQoIELWxHT3Qo+svwMseZ0oWpudStEKReYZs316/NMJGViKWAg4M8ku1Hcbci1jhKbKgxl8lVRo7bLMbRfe02ZED+XpSOLRXYLeCEaQu6yo/MpYXer0m8NiEUg2hYRxRRanMF3/ac5mN+Acbq/O5hlglAgMBAAEwDQYJKoZIhvcNAQELBQADggEBAIKaGpSzGK6GHVEB7CLSQSiI0mpq6P/hp2rXq4ldywDS+gxQe4/8HC7WcAiQ7U67uAwdCHTOlDvIb4IyjCkGpMJH4TGs3Jvmov3+in4ZdWr/X/MLHJUzT/ceh0yYX90TxC594jTSZhFFXDY/SR/0nQyDV2nqWxJtrIkuw55hJ25b4ri71v27N+yVYS+dkk8SoIvdow7BNjCmXPAG+fbEXoijy+7ZBiS0oFhqLMcBw3pwnyeZD80UVBGXhnM9nA/ZHQUCDYA5TZiKe0VnxYxbNcEBsCJyvhLQ82L5MXR6Y0bm0Yi7DVXrw6vhNKzvcN7cP//dEV/qi7GGoTaBSIi2MCA=";
-
-    const KEYCLOAK_HOST: &str = "http://localhost:8080";
-    const REALM: &str = "longshot-realm";
-    const CLIENT_ID: &str = "catan-service";
-    const ADMIN_USERNAME: &str = "admin";
-    const ADMIN_PASSWORD: &str = "4Times4=16";
-    const TEST_PASSWORD: &str = "2+2=4";
 
     #[tokio::test]
     async fn test_keycloak_flow() {
         init_env_logger(log::LevelFilter::Info, log::LevelFilter::Error).await;
         // 1. Get Admin Token
 
-        let mut proxy = KeyCloakProxy::new(KEYCLOAK_HOST, "master");
+        let mut proxy = KeyCloakProxy::new(&SERVICE_CONFIG.key_cloak_host, "master");
         let login_info = proxy
-            .login(ADMIN_USERNAME, ADMIN_PASSWORD)
+            .login(
+                &SERVICE_CONFIG.key_cloak_admin_user_name,
+                &SERVICE_CONFIG.key_cloak_admin_password,
+            )
             .await
             .expect("admin login shoudl work");
 
         let admin_token = &login_info.access_token;
         proxy.set_auth_token(Some(admin_token.to_string()));
-        proxy.set_realm(REALM);
+        proxy.set_realm(&SERVICE_CONFIG.key_cloak_realm);
 
-        //1a. Get the roles for the keycloak "client"
+        // 1a: get the id for the client CLIENT_NAME
+        let client_uuid = proxy
+            .get_client_id(&SERVICE_CONFIG.key_cloak_client_id)
+            .await
+            .expect("the client should be configured in KeyCloak");
+
+        full_info!("Client_uuid: {}", client_uuid);
+
+        //1b. Get the roles for the keycloak "client"
 
         let roles = proxy
-            .get_roles()
+            .get_roles(&client_uuid)
             .await
             .expect("the admin should be able to get the roles");
 
-         let test_role = roles
+        let test_role = roles
             .iter()
             .find(|r| r.role_name == "TestUser")
             .expect("The CatanService should be configured to have a TestRole");
@@ -985,8 +989,8 @@ mod tests {
         let user_id = profile.id.clone();
         full_info!("user_id: {}", user_id);
 
-        //2a Set the client password -- this isn't done via create, but via a PUT to the account
-        let result = proxy.set_password(&user_id, TEST_PASSWORD).await;
+        //2a Set the user password -- this isn't done via create, but via a PUT to the account
+        let result = proxy.set_password(&user_id, &SERVICE_CONFIG.key_cloak_test_password).await;
         if result.is_err() {
             full_info!("set_password returned error: {:#?}", result);
             panic!("can't continue");
@@ -994,7 +998,9 @@ mod tests {
 
         // 2b. Put the user in the TestRole
 
-        let result = proxy.add_user_to_role(&user_id, &vec!(test_role)).await;
+        let result = proxy
+            .add_user_to_role(&user_id, &client_uuid, &vec![test_role])
+            .await;
         if result.is_err() {
             panic!("role assignment can't fail: {:#?}", result);
         }
@@ -1003,7 +1009,7 @@ mod tests {
         proxy.set_auth_token(None);
 
         let login_info = proxy
-            .login(&profile.email, TEST_PASSWORD)
+            .login(&profile.email, &SERVICE_CONFIG.key_cloak_test_password)
             .await
             .expect("admin login shoudl work");
 
@@ -1021,7 +1027,7 @@ mod tests {
             .expect("get public key should work");
         let claims = KeyCloakProxy::validate_token(&test_auth_token, &pk)
             .expect("test token should be valid");
-        full_info!("claims: {:#?}", claims);
+        full_info!("claims: {:#?}", &claims);
         proxy.set_auth_token(Some(admin_token.to_string()));
 
         // 4b. get the key cloak keys...we don't use them, but make sure we can get them.
@@ -1037,15 +1043,15 @@ mod tests {
         // 5. (Optional) Logout User - skipping for this example
 
         // 6. Delete Test User
-        reqwest::Client::new()
-            .delete(&format!(
-                "{}/auth/admin/realms/{}/users/{}",
-                KEYCLOAK_HOST, REALM, user_id
-            ))
-            .bearer_auth(admin_token)
-            .send()
-            .await
-            .unwrap();
+        // reqwest::Client::new()
+        //     .delete(&format!(
+        //         "{}/auth/admin/realms/{}/users/{}",
+        //         KEYCLOAK_HOST, REALM, user_id
+        //     ))
+        //     .bearer_auth(admin_token)
+        //     .send()
+        //     .await
+        //     .unwrap();
     }
 
     // Test the login function
