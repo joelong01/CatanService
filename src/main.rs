@@ -9,7 +9,7 @@ mod middleware;
 mod shared;
 mod test;
 mod user_service;
-
+mod keycloak;
 use actix_web::{web, HttpResponse, HttpServer, Scope};
 
 use games_service::actions::action_handlers;

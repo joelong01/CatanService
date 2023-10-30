@@ -1,5 +1,8 @@
 #![allow(dead_code)]
 use super::service_models::PersistUser;
+use crate::{
+    games_service::shared::game_enums::CatanGameType, shared::shared_models::ResponseType::AzError,
+};
 /**
  * this is the module where I define the structures needed for the data in Cosmos
  */
@@ -9,7 +12,6 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::{fmt, fmt::Display, fmt::Formatter};
 use strum_macros::Display;
-use crate::{shared::shared_models::ResponseType::AzError, games_service::shared::game_enums::CatanGameType};
 //
 //  this also supports Eq, PartialEq, Clone, Serialize, and Deserialize via custom implementation
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Clone)]
@@ -23,13 +25,14 @@ pub enum GameError {
     TooFewPlayers(usize),
     TooManyPlayers(usize),
     ReqwestError(String),
+    StdErr,
     NoError(String),
     HttpError,
     AzError(String),
     JsonError(String),
     AzureCoreError(String),
     ContainerError(String),
-    UnsupportedGame(String)
+    UnsupportedGame(String),
 }
 
 // we need a From<> for each error type we add to use the error propagation ?
@@ -75,11 +78,12 @@ impl fmt::Display for GameError {
             GameError::ReqwestError(c) => write!(f, "ReqwestError error: {}", c),
             GameError::NoError(s) => write!(f, "Success!: {}", s),
             GameError::HttpError => write!(f, "HttpError"),
+            GameError::StdErr => write!(f, "StdError"),
             GameError::AzError(e) => write!(f, "AzError: {:#?}", e),
             GameError::JsonError(e) => write!(f, "Serde Error: {:#?}", e),
             GameError::AzureCoreError(e) => write!(f, "Azure Core error: {:#?}", e),
             GameError::ContainerError(e) => write!(f, "GameContainer Error: {:#?}", e),
-             GameError::UnsupportedGame(e) => write!(f, "Game Not Supported: {:#?}", e),
+            GameError::UnsupportedGame(e) => write!(f, "Game Not Supported: {:#?}", e),
         }
     }
 }
@@ -367,6 +371,14 @@ impl ServiceError {
             game_error: GameError::HttpError,
         }
     }
+    pub fn new_http_error(msg: &str, status: StatusCode) -> Self {
+        ServiceError {
+            message: msg.to_owned(),
+            status: status.to_owned(),
+            response_type: ResponseType::NoData,
+            game_error: GameError::HttpError,
+        }
+    }
     pub fn new_unauthorized(msg: &str) -> Self {
         ServiceError {
             message: msg.to_owned(),
@@ -378,7 +390,7 @@ impl ServiceError {
 
     pub fn new_az_error(msg: &str) -> Self {
         ServiceError {
-        message: String::default(),
+            message: String::default(),
             status: StatusCode::BAD_REQUEST,
             response_type: AzError(msg.to_string()),
             game_error: GameError::AzError(msg.to_string()),
@@ -420,6 +432,27 @@ impl ServiceError {
             game_error: GameError::JsonError(format!("{:#?}", error)),
         }
     }
+
+    pub fn new_reqwest_error(msg: &str, error: &reqwest::Error) -> Self {
+        ServiceError {
+            message: msg.to_string(),
+            status: error
+                .status()
+                .expect("reqwest errors should have status set!"),
+            response_type: ResponseType::ErrorInfo(error.to_string()),
+            game_error: GameError::ReqwestError(format!("{:#?}", error)),
+        }
+    }
+
+    pub fn new_std_error(msg: &str, error: &dyn std::error::Error) -> Self {
+        ServiceError {
+            message: msg.to_string(),
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            response_type: ResponseType::ErrorInfo(error.to_string()),
+            game_error: GameError::StdErr,
+        }
+    }
+
     pub fn new_azure_core_error(msg: &str, error: &azure_core::Error) -> Self {
         ServiceError {
             message: msg.to_string(),
@@ -475,9 +508,8 @@ where
 pub enum ProfileStorage {
     CosmosDb,
     CosmosDbTest,
-    MockDb
+    MockDb,
 }
-
 
 ///
 /// when you login, you give a "hint" on where the profile is stored. if the client sends in the wrong
@@ -485,26 +517,25 @@ pub enum ProfileStorage {
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginHeaderData {
-   pub profile_location: ProfileStorage,
-   pub user_name: String, 
-   pub password: String
+    pub profile_location: ProfileStorage,
+    pub user_name: String,
+    pub password: String,
 }
 
 impl LoginHeaderData {
-    pub fn new ( user_name: &str, password: &str, profile_location: ProfileStorage) -> Self{
+    pub fn new(user_name: &str, password: &str, profile_location: ProfileStorage) -> Self {
         Self {
-
             user_name: user_name.to_owned(),
             password: password.to_owned(),
-            profile_location
+            profile_location,
         }
     }
 
-    pub fn test_default(user_name: &str, password: &str) -> Self{
+    pub fn test_default(user_name: &str, password: &str) -> Self {
         Self {
             profile_location: ProfileStorage::CosmosDbTest,
             user_name: user_name.to_owned(),
-            password: password.to_owned()
+            password: password.to_owned(),
         }
     }
 }
