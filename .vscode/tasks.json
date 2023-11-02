@@ -1,8 +1,9 @@
 {
     "version": "2.0.0",
     "tasks": [
+       
         {
-            "label": "Execute collect_env.sh",
+            "label": "CollectEnvironment",
             "type": "shell",
             "command": "${workspaceFolder}/scripts/collect_env.sh",
             "args": [

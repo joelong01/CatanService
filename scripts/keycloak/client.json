@@ -1,0 +1,13 @@
+{
+    "clientId": "test-client",
+    "name": "Test Client",
+    "description": "This is my new client so we can test KeyCloak",
+    "enabled": true,
+    "redirectUris": [
+        "http://localhost:8088/myapp/*"
+    ],
+    "webOrigins": [
+        "http://localhost:8088"
+    ],
+    "protocol": "openid-connect"
+}

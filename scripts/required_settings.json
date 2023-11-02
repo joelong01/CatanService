@@ -164,36 +164,36 @@
         "description": "the host (with port and prefix) for the Key Cloak Service",
         "shellscript": "",
         "default": "http://localhost:8080",
-        "tempEnvironmentVariableName": "",
-        "requiredAsEnv": false
+        "tempEnvironmentVariableName": "KEYCLOAK_HOST",
+        "requiredAsEnv": true
     },
     "keyCloakRealm": {
         "description": "the KeyCloak realm",
         "shellscript": "",
         "default": "longshot-realm",
-        "tempEnvironmentVariableName": "",
-        "requiredAsEnv": false
+        "tempEnvironmentVariableName": "KEYCLOAK_REALM",
+        "requiredAsEnv": true
     },
     "keyCloakClientId": {
         "description": "the id (name) of the KeyCloak client",
         "shellscript": "",
-        "default": "catan-service",
-        "tempEnvironmentVariableName": "",
-        "requiredAsEnv": false
+        "default": "test-client",
+        "tempEnvironmentVariableName": "KEYCLOAK_CLIENT_ID",
+        "requiredAsEnv": true
     },
     "keyCloakAdminUserName": {
         "description": "the login name for the KeyCloak admin",
         "shellscript": "",
         "default": "admin",
-        "tempEnvironmentVariableName": "",
-        "requiredAsEnv": false
+        "tempEnvironmentVariableName": "KEYCLOAK_ADMIN_USERNAME",
+        "requiredAsEnv": true
     },
     "keyCloakAdminPassword": {
         "description": "the password for the KeyCloak admin account",
         "shellscript": "",
         "default": "",
-        "tempEnvironmentVariableName": "",
-        "requiredAsEnv": false
+        "tempEnvironmentVariableName": "KEYCLOAK_ADMIN_PASSWORD",
+        "requiredAsEnv": true
     },
     "keyCloakTestPassword": {
         "description": "the password for the KeyCloak test client(s)",
@@ -201,5 +201,12 @@
         "default": "",
         "tempEnvironmentVariableName": "",
         "requiredAsEnv": false
-    }  
+    },
+    "keyCloakResourceGroup": {
+        "description": "the Resource Group to install Key Cloak into",
+        "shellscript": "",
+        "default": "",
+        "tempEnvironmentVariableName": "KEYCLOAK_RESOURCE_GROUP",
+        "requiredAsEnv": true
+    }
 }

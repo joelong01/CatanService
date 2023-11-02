@@ -47,7 +47,7 @@ function get_real_path() {
         return 0
     fi
     echo_error "can't find $file. Run $0 from the project root directory"
-    exit 1
+
 }
 
 function get_config_file_name() {
