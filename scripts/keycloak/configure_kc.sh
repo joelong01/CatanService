@@ -76,7 +76,7 @@ function fn_print_input {
 function fn_print_help {
     echo_info "Usage: ./configure_kc.sh [ACTION] [OPTIONS]"
     echo_info "example:"
-    echo_info "./configure_kc.sh create --host $KEYCLOAK_HOST --admin-username $KEYCLOAK_ADMIN_USER_NAME --admin-password $KEYCLOAK_ADMIN_PASSWORD --realm $KEYCLOAK_REALM --client_id $KEYCLOAK_CLIENT_ID"
+    echo_info "./configure_kc.sh create delete verify --host $KEYCLOAK_HOST --admin-username $KEYCLOAK_ADMIN_USER_NAME --admin-password $KEYCLOAK_ADMIN_PASSWORD --realm $KEYCLOAK_REALM --client_id $KEYCLOAK_CLIENT_ID"
     echo_info
     echo_info "Actions:"
     echo_info "  create              Create the resources"
@@ -361,7 +361,23 @@ fn_create() {
 }
 
 fn_verify() {
-    echo "todo!"
+     # login with the test creds
+    kcadm.sh config credentials --server "$keyCloakHost/auth" \
+        --realm "$keyCloakRealm" \
+        --client "$client_id" \
+        --user "$keyCloakTestUserName" \
+        --password "$keyCloakTestPassword"
+
+    # get the token from the key cloak config file
+    token=$(jq -r ".endpoints.\"$keyCloakHost/auth\".\"$keyCloakRealm\".token" <"$HOME"/.keycloak/kcadm.config)
+
+    # make sure the client role is there
+    if [[ $(is_caller_in_role "$token" "$client_id" "TestUser") != true ]]; then
+        echo_error "TestUser not found in $keyCloakTestUserName acocount!  run delete and then create"
+    else
+        echo_info "Successfully logged in as $keyCloakTestUserName and verified TestUser role - Configuration is correct"
+    fi
+
 }
 
 fn_delete() {
